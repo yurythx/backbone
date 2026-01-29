@@ -1,0 +1,49 @@
+JWT Middleware Error: Token is invalid
+Traceback (most recent call last):
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\jwt\api_jws.py", line 269, in _load
+    signing_input, crypto_segment = jwt.rsplit(b".", 1)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: not enough values to unpack (expected 2, got 1)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\rest_framework_simplejwt\backends.py", line 160, in decode
+    return jwt.decode(
+           ^^^^^^^^^^^
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\jwt\api_jwt.py", line 222, in decode
+    decoded = self.decode_complete(
+              ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\jwt\api_jwt.py", line 156, in decode_complete
+    decoded = api_jws.decode_complete(
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\jwt\api_jws.py", line 209, in decode_complete
+    payload, signing_input, header, signature = self._load(jwt)
+                                                ^^^^^^^^^^^^^^^
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\jwt\api_jws.py", line 272, in _load
+    raise DecodeError("Not enough segments") from err
+jwt.exceptions.DecodeError: Not enough segments
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\rest_framework_simplejwt\tokens.py", line 65, in __init__
+    self.payload = token_backend.decode(token, verify=verify)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\rest_framework_simplejwt\backends.py", line 177, in decode
+    raise TokenBackendError(_("Token is invalid")) from e
+rest_framework_simplejwt.exceptions.TokenBackendError: Token is invalid
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\allle\OneDrive\Área de Trabalho\Projetos\backbone\backend\shared_kernel\channels_middleware.py", line 39, in __call__
+    UntypedToken(token)
+  File "C:\Users\allle\AppData\Local\Programs\Python\Python312\Lib\site-packages\rest_framework_simplejwt\tokens.py", line 69, in __init__
+    raise TokenError(_("Token is invalid")) from e
+rest_framework_simplejwt.exceptions.TokenError: Token is invalid
+
+JWT Middleware: No token provided
+User set to: other
+Conversation 3 not found for user 6
+User set to: ws_user
