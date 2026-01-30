@@ -1,134 +1,158 @@
 # Backbone SaaS - Backend API
 
-Este repositório contém a API Backend do ecossistema SaaS BlackBone. O sistema é construído com Django, Django Rest Framework (DRF) e Django Channels, utilizando uma arquitetura multi-tenant isolada logicamente.
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Django](https://img.shields.io/badge/Django-5.0-green)
+![Coverage](https://img.shields.io/badge/Coverage-93%25-brightgreen)
+![Status](https://img.shields.io/badge/Status-Stable-success)
 
-## 🚀 Como Iniciar
+Bem-vindo ao repositório backend do **BlackBone**, uma plataforma SaaS Multi-tenant robusta e escalável.
+
+## 📋 Sobre o Projeto
+
+O BlackBone é um sistema projetado para atender múltiplas empresas (Tenants) simultaneamente, com total isolamento de dados lógico. Ele oferece uma arquitetura modular onde features podem ser habilitadas ou desabilitadas conforme o plano contratado.
+
+### Principais Funcionalidades
+*   **Multi-tenancy Lógico**: Isolamento de dados via `company_id` em todas as tabelas críticas.
+*   **Gestão de Assinaturas e Planos**: Controle de features via licenças (Free, Pro, Enterprise).
+*   **Módulos Dinâmicos**: Ativação/desativação de módulos (Pages, Articles, Messenger) por tenant.
+*   **Comunicação em Tempo Real**: Chat WebSocket utilizando Django Channels e Redis.
+*   **Processamento Assíncrono**: Filas de tarefas com Celery para operações pesadas.
+*   **Armazenamento de Objetos**: Compatibilidade com S3 (AWS/MinIO) para uploads.
+*   **Monitoramento**: Integração nativa com Sentry para rastreamento de erros.
+
+---
+
+## 🏗️ Arquitetura e Tecnologias
+
+O sistema segue uma arquitetura baseada em **Shared Database, Shared Schema**, onde o contexto do tenant é resolvido via Middleware.
+
+### Stack Tecnológico
+*   **Framework**: Django 5.0 + Django Rest Framework
+*   **Banco de Dados**: PostgreSQL 16
+*   **Cache & Broker**: Redis 7
+*   **Async/WebSockets**: Daphne + Channels + Celery
+*   **Storage**: MinIO (Dev) / AWS S3 (Prod)
+*   **Qualidade**: Ruff (Linting) + Coverage (Testes)
+
+### Documentação Detalhada
+Para detalhes profundos sobre cada ferramenta do ecossistema, consulte:
+👉 **[Ecossistema Técnico e Ferramentas](docs/ECOSYSTEM.md)**
+
+---
+
+## 🚀 Como Executar (Docker) - Recomendado
+
+A maneira mais fácil de rodar a aplicação é utilizando Docker Compose, que sobe todo o ambiente (Banco, Redis, MinIO, Backend, Workers).
 
 ### Pré-requisitos
-*   Python 3.12+
-*   Redis (Obrigatório para WebSockets/Channels e Cache)
-*   PostgreSQL (Recomendado) ou SQLite (Dev)
+*   Docker e Docker Compose instalados.
 
-### Instalação
+### Passos
+1.  **Clonar o repositório**
+2.  **Configurar Variáveis**: O projeto já vem com configurações padrão para Docker no `docker-compose.yml`.
+3.  **Subir os serviços**:
+    ```bash
+    docker-compose up -d --build
+    ```
+4.  **Acessar a API**: `http://localhost:8000`
+
+### Serviços Disponíveis
+*   **API**: `http://localhost:8000`
+*   **MinIO Console** (Arquivos): `http://localhost:9001` (User/Pass: `minioadmin`)
+*   **Swagger/Docs**: `http://localhost:8000/api/schema/swagger-ui/`
+
+---
+
+## 💻 Desenvolvimento Local
+
+Se preferir rodar localmente (sem Docker para o backend), você ainda precisará do Postgres e Redis rodando.
 
 1.  **Ambiente Virtual**:
     ```bash
     python -m venv venv
     .\venv\Scripts\activate  # Windows
+    # source venv/bin/activate  # Linux/Mac
     ```
-
-2.  **Dependências**:
+2.  **Instalar Dependências**:
     ```bash
     pip install -r requirements.txt
     ```
-
-3.  **Variáveis de Ambiente**:
-    Copie o `.env.example` para `.env` e configure o banco de dados e Redis.
-
-4.  **Banco de Dados e Dados Iniciais**:
+3.  **Configurar .env**: Copie `.env.example` para `.env` e ajuste as credenciais do banco.
+4.  **Migrações e Dados Iniciais**:
     ```bash
     python manage.py migrate
-    python manage.py seed_data  # Cria empresas, planos e usuários padrão
+    python manage.py seed_data  # Cria empresas e usuários de teste
     ```
-
-5.  **Executar Servidor**:
+5.  **Rodar Servidor**:
     ```bash
     python manage.py runserver
     ```
 
 ---
 
-## 🔑 Autenticação e Multi-tenancy (Regras de Negócio)
+## 🧪 Testes e Qualidade
 
-O sistema segue um modelo de isolamento lógico onde **cada requisição deve identificar explicitamente o tenant (empresa)**.
+O projeto possui alta cobertura de testes automatizados (93%+).
 
-### 1. Headers Obrigatórios
-O Frontend **DEVE** enviar os seguintes headers em todas as requisições autenticadas (exceto login/registro):
+### Rodar Testes
+```bash
+# Via Docker (Recomendado)
+docker-compose exec backend coverage run manage.py test
 
-| Header | Valor | Descrição |
-| :--- | :--- | :--- |
-| `Authorization` | `Bearer <access_token>` | Token JWT obtido no login. |
-| `X-Company-Slug` | `<company_slug>` | Slug da empresa atual (ex: `blackbone`, `ironminds`). |
+# Localmente
+coverage run manage.py test
+```
 
-> **Regra de Negócio**: Se o header `X-Company-Slug` não for enviado, a API retornará **404 Not Found** ou **403 Forbidden**, pois o sistema não saberá qual banco de dados lógico consultar.
+### Verificar Cobertura
+```bash
+# Gerar relatório no terminal
+docker-compose exec backend coverage report
 
-### 2. Login e Seleção de Contexto
-1.  O usuário faz login (`/api/accounts/token/`) sem contexto de tenant.
-2.  O backend retorna o Token JWT e, opcionalmente, a lista de empresas do usuário (se for multi-empresa) ou sua empresa padrão.
-3.  O Frontend armazena o `company_slug` e o injeta no header `X-Company-Slug` para as chamadas subsequentes.
+# Gerar HTML detalhado
+docker-compose exec backend coverage html
+```
 
----
-
-## 📦 Módulos e Permissões
-
-O sistema é modular. Empresas contratam "Planos" que dão acesso a "Módulos" (Features).
-
-### Verificação de Acesso (Backend)
-Toda View de módulo (ex: `ArticlesViewSet`, `MessengerViewSet`) é protegida pela permissão `HasModuleAccess`.
-
-*   **Fluxo**:
-    1.  API recebe requisição para `/api/articles/`.
-    2.  Verifica header `X-Company-Slug`.
-    3.  Verifica na tabela `TenantModule` se o módulo `articles` está ativo para esta empresa.
-    4.  **Se Inativo**: Retorna `403 Forbidden`.
-    5.  **Frontend**: Deve capturar o 403 e mostrar mensagem "Módulo não contratado" ou redirecionar para upgrade.
+### Linting (Ruff)
+O código é verificado automaticamente via Pre-commit hooks.
+```bash
+# Rodar verificação manual
+python -m ruff check .
+```
 
 ---
 
-## 💬 WebSockets (Messenger)
+## 🔑 Guia de Uso da API
 
-O chat em tempo real possui regras específicas de autenticação devido limitações do protocolo WS no browser.
+### Headers Obrigatórios
+Como o sistema é multi-tenant, você deve informar qual empresa está acessando os dados.
 
-### Conexão
-*   **URL**: `ws://localhost:8000/ws/chat/<conversation_id>/?token=<jwt_access_token>`
-*   **Auth**: Token passado via Query Param (`?token=...`).
+| Header | Valor | Obrigatório | Descrição |
+| :--- | :--- | :--- | :--- |
+| `Authorization` | `Bearer <token>` | Sim (exceto login) | Token JWT de acesso. |
+| `X-Company-Slug` | `<slug_da_empresa>` | Sim | Identifica o Tenant (ex: `blackbone`, `ironminds`). |
 
-### Regras de Segurança WS
-1.  **Participação**: O usuário só conecta se for participante da `conversation_id`.
-2.  **Anti-Spoofing**: O backend ignora o campo `sender` enviado pelo front. A mensagem sempre será assinada com o usuário do token JWT.
-
----
-
-## 🛠️ Dados de Desenvolvimento (Seed Data)
-
-Ao rodar `python manage.py seed_data`, o sistema cria o seguinte cenário:
-
-### Empresas (Tenants)
-1.  **BlackBone HQ** (slug: `blackbone`)
-    *   Plano: **Pro** (Todos os módulos ativos: Pages, Articles, Messenger).
-    *   Admin: `admin_blackbone` / `password123`
-2.  **IronMinds Ltd** (slug: `ironminds`)
-    *   Plano: **Basic** (Apenas Pages e Articles. **Sem Messenger**).
-    *   Admin: `admin_ironminds` / `password123`
-
-> **Teste de Integração**: Tente acessar o módulo Messenger logado como `admin_ironminds`. A API deve retornar 403.
+### Fluxo de Autenticação
+1.  **Login**: `POST /api/accounts/token/` (Recebe Access e Refresh Token).
+2.  **Obter Perfil**: `GET /api/accounts/users/me/` (Descobre quais empresas o usuário pertence).
+3.  **Usar API**: Nas próximas chamadas, envie o `X-Company-Slug` escolhido.
 
 ---
 
-## 📚 Documentação da API
+## 📂 Estrutura de Pastas
 
-Com o servidor rodando, acesse a documentação interativa para ver todos os endpoints e schemas JSON:
-
-*   **Swagger UI**: [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
-*   **ReDoc**: [http://localhost:8000/api/redoc/](http://localhost:8000/api/redoc/)
-
----
-
-## ⚠️ Checklist para o Frontend
-
-1.  [ ] **Interceptor Axios/Fetch**: Configurar para injetar `X-Company-Slug` automaticamente.
-2.  [ ] **Tratamento de Erros**:
-    *   `401`: Refresh Token.
-    *   `403`: Verificar se é erro de permissão ou módulo inativo.
-3.  [ ] **WebSocket**: Implementar reconexão automática e passar token na URL.
-4.  [ ] **Uploads**: Usar as URLs completas retornadas pela API (abstração de S3/Local).
+*   `apps/`: Aplicações Django (Core, Accounts, Licensing, Messenger, etc).
+*   `config/`: Configurações globais do projeto (Settings, Celery, URLs).
+*   `shared_kernel/`: Códigos reutilizáveis e Core do Multi-tenancy (Middleware, Base Models).
+*   `docs/`: Documentação complementar.
 
 ---
 
-## 📂 Estrutura Principal
+## 🛡️ Segurança
 
-*   `apps/core`: Modelos base (Company), Health Check.
-*   `apps/accounts`: Usuários customizados, Auth.
-*   `apps/module_manager`: Lógica de ativação/desativação de módulos.
-*   `apps/messenger`: Chat real-time (HTTP + WS).
-*   `shared_kernel`: Middlewares (Tenant, Logging), Utils.
+*   **Senhas**: Hashing via PBKDF2 (Padrão Django).
+*   **Permissões**: RBAC (Role Based Access Control) + Verificação de Módulo Contratado.
+*   **Dados**: Isolamento lógico forçado pelo `TenantManager`.
+
+---
+
+**Desenvolvido com ❤️ pela equipe BlackBone.**

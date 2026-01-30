@@ -1,5 +1,5 @@
 from rest_framework import permissions
-from .models import Module, TenantModule
+from .models import TenantModule
 
 class HasModuleAccess(permissions.BasePermission):
     """
@@ -14,14 +14,14 @@ class HasModuleAccess(permissions.BasePermission):
         if not hasattr(view, 'module_code') or not view.module_code:
             return True # No module restriction defined
             
-        if not request.company:
+        if not getattr(request, 'company', None):
             return False # Must be in a company context
             
         # Check if module exists and is active for this tenant
         try:
-            # We check if TenantModule exists and is_active=True
-            # Also check if Module global definition exists
-            is_allowed = TenantModule.objects.filter(
+            # We use all_objects to bypass TenantManager auto-filtering because we 
+            # explicitly filter by request.company here.
+            is_allowed = TenantModule.all_objects.filter(
                 company=request.company,
                 module__code=view.module_code,
                 is_active=True

@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 156 10% 10%;
+  --primary: 156 73% 17%;
+  /* Django Green default */
+  --primary-foreground: 0 0% 100%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 156 10% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 156 10% 10%;
+
+  --muted: 156 10% 96%;
+  --muted-foreground: 156 10% 40%;
+  --accent: 156 20% 94%;
+  --accent-foreground: 156 73% 17%;
+
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 156 20% 90%;
+  --input: 156 20% 90%;
+  --ring: 156 73% 17%;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 156 30% 6%;
+  --foreground: 156 10% 98%;
+  --primary: 156 50% 45%;
+  --primary-foreground: 0 0% 100%;
+
+  --card: 156 30% 8%;
+  --card-foreground: 156 10% 98%;
+  --popover: 156 30% 8%;
+  --popover-foreground: 156 10% 98%;
+
+  --muted: 156 20% 15%;
+  --muted-foreground: 156 10% 65%;
+  --accent: 156 20% 18%;
+  --accent-foreground: 156 10% 98%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 156 20% 20%;
+  --input: 156 20% 20%;
+  --ring: 156 50% 45%;
+}
+
+/* Theme Palettes Utility Classes */
+[data-palette="django-green"] {
+  --primary: 156 73% 17%;
+  --ring: 156 73% 17%;
+}
+
+[data-palette="ocean-blue"] {
+  --primary: 201 96% 32%;
+  --ring: 201 96% 32%;
+}
+
+[data-palette="royal-purple"] {
+  --primary: 263 83% 58%;
+  --ring: 263 83% 58%;
+}
+
+[data-palette="sunset-orange"] {
+  --primary: 20 83% 47%;
+  --ring: 20 83% 47%;
+}
+
+[data-palette="forest-green"] {
+  --primary: 143 64% 24%;
+  --ring: 143 64% 24%;
+}
+
+[data-palette="slate-gray"] {
+  --primary: 215 19% 35%;
+  --ring: 215 19% 35%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--color-foreground);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}

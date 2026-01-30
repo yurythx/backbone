@@ -1,0 +1,89 @@
+ERROR 2026-01-29 16:23:50,075 logging_middleware [public] [anon] GET /health/ 503
+ERROR 2026-01-29 16:23:50,078 log Service Unavailable: /health/
+ERROR 2026-01-29 16:23:50,093 logging_middleware [public] [anon] GET /health/ 503
+ERROR 2026-01-29 16:23:50,094 log Service Unavailable: /health/
+WARNING 2026-01-29 16:23:50,808 logging_middleware [tech-corp] [3] GET /api/articles/ 403
+WARNING 2026-01-29 16:23:50,809 log Forbidden: /api/articles/
+WARNING 2026-01-29 16:23:52,313 logging_middleware [comp-b] [8] GET /api/articles/3/ 404
+WARNING 2026-01-29 16:23:52,314 log Not Found: /api/articles/3/
+WARNING 2026-01-29 16:23:53,846 logging_middleware [comp-a] [11] GET /api/messenger/conversations/ 403
+WARNING 2026-01-29 16:23:53,847 log Forbidden: /api/messenger/conversations/
+WARNING 2026-01-29 16:23:57,116 logging_middleware [company-a] [22] GET /api/messenger/conversations/3/ 404
+WARNING 2026-01-29 16:23:57,117 log Not Found: /api/messenger/conversations/3/
+WARNING 2026-01-29 16:24:01,737 logging_middleware [tech-corp] [37] POST /api/messenger/conversations/9/send_message/ 404
+WARNING 2026-01-29 16:24:01,738 log Not Found: /api/messenger/conversations/9/send_message/
+ERROR 2026-01-29 16:28:08,266 logging_middleware [public] [anon] GET /health/ 503
+ERROR 2026-01-29 16:28:08,268 log Service Unavailable: /health/
+ERROR 2026-01-29 16:28:08,286 logging_middleware [public] [anon] GET /health/ 503
+ERROR 2026-01-29 16:28:08,287 log Service Unavailable: /health/
+WARNING 2026-01-29 16:28:09,369 logging_middleware [tech-corp] [3] GET /api/articles/ 403
+WARNING 2026-01-29 16:28:09,383 log Forbidden: /api/articles/
+WARNING 2026-01-29 16:28:11,244 logging_middleware [comp-b] [8] GET /api/articles/3/ 404
+WARNING 2026-01-29 16:28:11,245 log Not Found: /api/articles/3/
+WARNING 2026-01-29 16:28:12,505 logging_middleware [comp-a] [11] GET /api/messenger/conversations/ 403
+WARNING 2026-01-29 16:28:12,506 log Forbidden: /api/messenger/conversations/
+WARNING 2026-01-29 16:28:16,020 logging_middleware [company-a] [22] GET /api/messenger/conversations/3/ 404
+WARNING 2026-01-29 16:28:16,022 log Not Found: /api/messenger/conversations/3/
+WARNING 2026-01-29 16:28:20,795 logging_middleware [tech-corp] [37] POST /api/messenger/conversations/9/send_message/ 404
+WARNING 2026-01-29 16:28:20,796 log Not Found: /api/messenger/conversations/9/send_message/
+ERROR 2026-01-29 16:29:51,549 logging_middleware [public] [anon] GET /health/ 503
+ERROR 2026-01-29 16:29:51,552 log Service Unavailable: /health/
+ERROR 2026-01-29 16:29:51,569 logging_middleware [public] [anon] GET /health/ 503
+ERROR 2026-01-29 16:29:51,569 log Service Unavailable: /health/
+WARNING 2026-01-29 16:29:52,359 logging_middleware [tech-corp] [3] GET /api/articles/ 403
+WARNING 2026-01-29 16:29:52,359 log Forbidden: /api/articles/
+WARNING 2026-01-29 16:29:54,103 logging_middleware [comp-b] [8] GET /api/articles/3/ 404
+WARNING 2026-01-29 16:29:54,104 log Not Found: /api/articles/3/
+WARNING 2026-01-29 16:29:55,159 logging_middleware [comp-a] [11] GET /api/messenger/conversations/ 403
+WARNING 2026-01-29 16:29:55,160 log Forbidden: /api/messenger/conversations/
+WARNING 2026-01-29 16:29:58,583 logging_middleware [company-a] [22] GET /api/messenger/conversations/3/ 404
+WARNING 2026-01-29 16:29:58,584 log Not Found: /api/messenger/conversations/3/
+WARNING 2026-01-29 16:30:03,083 logging_middleware [tech-corp] [37] POST /api/messenger/conversations/9/send_message/ 404
+WARNING 2026-01-29 16:30:03,084 log Not Found: /api/messenger/conversations/9/send_message/
+ERROR 2026-01-29 16:30:41,891 logging_middleware [public] [anon] GET /health/ 503
+ERROR 2026-01-29 16:30:41,893 log Service Unavailable: /health/
+ERROR 2026-01-29 16:30:41,906 logging_middleware [public] [anon] GET /health/ 503
+ERROR 2026-01-29 16:30:41,907 log Service Unavailable: /health/
+WARNING 2026-01-29 16:30:42,555 logging_middleware [tech-corp] [3] GET /api/articles/ 403
+WARNING 2026-01-29 16:30:42,556 log Forbidden: /api/articles/
+WARNING 2026-01-29 16:30:44,139 logging_middleware [comp-b] [8] GET /api/articles/3/ 404
+WARNING 2026-01-29 16:30:44,140 log Not Found: /api/articles/3/
+WARNING 2026-01-29 16:30:45,288 logging_middleware [comp-a] [11] GET /api/messenger/conversations/ 403
+WARNING 2026-01-29 16:30:45,288 log Forbidden: /api/messenger/conversations/
+WARNING 2026-01-29 16:30:48,469 logging_middleware [company-a] [22] GET /api/messenger/conversations/3/ 404
+WARNING 2026-01-29 16:30:48,469 log Not Found: /api/messenger/conversations/3/
+WARNING 2026-01-29 16:30:53,031 logging_middleware [tech-corp] [37] POST /api/messenger/conversations/9/send_message/ 404
+WARNING 2026-01-29 16:30:53,031 log Not Found: /api/messenger/conversations/9/send_message/
+WARNING 2026-01-29 17:53:04,570 logging_middleware [public] [anon] GET / 404
+WARNING 2026-01-29 17:53:04,572 log Not Found: /
+WARNING 2026-01-29 17:53:04,574 basehttp "GET / HTTP/1.1" 404 3921
+WARNING 2026-01-29 17:53:04,630 logging_middleware [public] [anon] GET /favicon.ico 404
+WARNING 2026-01-29 17:53:04,631 log Not Found: /favicon.ico
+WARNING 2026-01-29 17:53:04,632 basehttp "GET /favicon.ico HTTP/1.1" 404 3972
+WARNING 2026-01-29 17:57:24,823 logging_middleware [public] [anon] GET /favicon.ico 404
+WARNING 2026-01-29 17:57:24,823 log Not Found: /favicon.ico
+WARNING 2026-01-29 17:57:24,824 basehttp "GET /favicon.ico HTTP/1.1" 404 3972
+WARNING 2026-01-29 18:03:36,362 logging_middleware [public] [anon] GET / 404
+WARNING 2026-01-29 18:03:36,363 log Not Found: /
+WARNING 2026-01-29 18:03:36,364 basehttp "GET / HTTP/1.1" 404 3921
+WARNING 2026-01-29 18:03:45,238 logging_middleware [public] [anon] GET /api/articles/ 401
+WARNING 2026-01-29 18:03:45,239 log Unauthorized: /api/articles/
+WARNING 2026-01-29 18:03:45,241 basehttp "GET /api/articles/ HTTP/1.1" 401 5084
+WARNING 2026-01-29 18:06:27,346 logging_middleware [public] [401] GET /favicon.ico 404
+WARNING 2026-01-29 18:06:27,347 log Not Found: /favicon.ico
+WARNING 2026-01-29 18:06:27,348 basehttp "GET /favicon.ico HTTP/1.1" 404 3972
+WARNING 2026-01-29 18:14:32,062 logging_middleware [public] [401] GET /favicon.ico 404
+WARNING 2026-01-29 18:14:32,062 log Not Found: /favicon.ico
+WARNING 2026-01-29 18:14:32,063 basehttp "GET /favicon.ico HTTP/1.1" 404 3972
+WARNING 2026-01-29 14:38:27,859 logging_middleware [company-a] [1] GET /api/messenger/conversations/2/ 404
+WARNING 2026-01-29 14:38:27,859 log Not Found: /api/messenger/conversations/2/
+WARNING 2026-01-29 14:38:38,375 logging_middleware [tech-corp] [1] POST /api/messenger/conversations/1/send_message/ 404
+WARNING 2026-01-29 14:38:38,376 log Not Found: /api/messenger/conversations/1/send_message/
+WARNING 2026-01-29 14:51:21,026 logging_middleware [company-a] [1] GET /api/messenger/conversations/2/ 404
+WARNING 2026-01-29 14:51:21,028 log Not Found: /api/messenger/conversations/2/
+WARNING 2026-01-29 14:51:30,836 logging_middleware [tech-corp] [1] POST /api/messenger/conversations/1/send_message/ 404
+WARNING 2026-01-29 14:51:30,837 log Not Found: /api/messenger/conversations/1/send_message/
+WARNING 2026-01-29 15:32:19,779 logging_middleware [company-a] [1] GET /api/messenger/conversations/2/ 404
+WARNING 2026-01-29 15:32:19,780 log Not Found: /api/messenger/conversations/2/
+WARNING 2026-01-29 15:32:30,875 logging_middleware [tech-corp] [1] POST /api/messenger/conversations/1/send_message/ 404
+WARNING 2026-01-29 15:32:30,875 log Not Found: /api/messenger/conversations/1/send_message/

@@ -1,5 +1,6 @@
 import environ
 import os
+import os
 from pathlib import Path
 from datetime import timedelta
 
@@ -12,7 +13,9 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-508()j_z$te^bm*y#kqjz&)q4n-hz)&hln4d^5-)2-q+gy9$cg")
 DEBUG = env("DEBUG")
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["http://localhost:3005"])
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -28,9 +31,10 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "drf_spectacular",
     "storages",  # Django Storages
+    "django_celery_beat",
     # Local apps
     "apps.core",
-    "apps.accounts",
+    "apps.accounts.apps.AccountsConfig",
     "apps.licensing",
     "apps.module_manager",
     "apps.pages",
@@ -67,8 +71,8 @@ REST_FRAMEWORK = {
         'shared_kernel.throttling.TenantRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'tenant': '1000/day',  # Padrão, pode ser sobrescrito por tenant se implementado
-        'anon': '100/day',
+        'tenant': '100000/day', 
+        'anon': '10000/day',
     }
 }
 
@@ -101,10 +105,29 @@ SPECTACULAR_SETTINGS = {
     'SECURITY': [{'ApiKeyAuth': []}],
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = True # Temporário para dev
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3005"])
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "x-company-slug",
+    "X-Company-Slug",
+    "X-COMPANY-SLUG",
+]
 
 # Static & Media Files
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# Desabilitado para evitar 500 por falta de manifesto em dev
+STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
 # MinIO / S3 Configuration
 USE_S3 = env.bool("USE_S3", default=False)
@@ -220,3 +243,59 @@ USE_TZ = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# Sentry Configuration
+# SENTRY_DSN = env("SENTRY_DSN", default=None)
+# if SENTRY_DSN:
+#     import sentry_sdk
+#     from sentry_sdk.integrations.django import DjangoIntegration
+#     sentry_sdk.init(
+#         dsn=SENTRY_DSN,
+#         integrations=[DjangoIntegration()],
+#         traces_sample_rate=0.1,
+#         send_default_pii=True,
+#         environment=env("SENTRY_ENVIRONMENT", default="production"),
+#     )
+
+# Celery Configuration
+CELERY_BROKER_URL = REDIS_URL or "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = REDIS_URL or "redis://localhost:6379/0"
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE

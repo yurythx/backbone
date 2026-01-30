@@ -1,6 +1,22 @@
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from .models import Conversation, Message
-from apps.accounts.serializers import UserSerializer # Supondo que exista ou usar um simplificado
+
+User = get_user_model()
+
+class ContactSerializer(serializers.ModelSerializer):
+    is_online = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_online']
+        
+    def get_is_online(self, obj):
+        # Cache key matches what we set in PresenceConsumer
+        # Note: Tenant context is already set in the view, so make_key_with_tenant works automatically
+        key = f"user_presence:{obj.id}"
+        return cache.get(key) == "online"
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source='sender.username', read_only=True)

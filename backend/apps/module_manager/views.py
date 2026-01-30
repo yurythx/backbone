@@ -11,6 +11,7 @@ class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Module.objects.all().order_by('name')
     serializer_class = ModuleSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
 class TenantModuleViewSet(viewsets.ModelViewSet):
     """
@@ -18,6 +19,7 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
     """
     serializer_class = TenantModuleSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         return TenantModule.objects.filter(company=self.request.company).order_by('module__name')

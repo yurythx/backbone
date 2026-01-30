@@ -1,5 +1,4 @@
 from rest_framework.throttling import SimpleRateThrottle
-from shared_kernel.tenant_context import get_current_company
 
 class TenantRateThrottle(SimpleRateThrottle):
     """

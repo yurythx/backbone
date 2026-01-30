@@ -1,21 +1,21 @@
 import os
 from django.utils.encoding import smart_str
+from django.utils.deconstruct import deconstructible
 from shared_kernel.tenant_context import get_current_company
 
-def tenant_upload_to(directory):
-    """
-    Returns a function to be used as upload_to in FileField/ImageField.
-    The path will be: tenants/{company_slug}/{directory}/{filename}
-    """
-    def upload_handler(instance, filename):
+@deconstructible
+class TenantUploadTo:
+    def __init__(self, directory):
+        self.directory = directory
+
+    def __call__(self, instance, filename):
         company_slug = 'public'
         if hasattr(instance, 'company') and instance.company:
             company_slug = instance.company.slug
-        
-        # Ensure unique filename if needed, but for now just keep original
-        return os.path.join(f'tenants/{company_slug}', directory, filename)
-    
-    return upload_handler
+        return os.path.join(f'tenants/{company_slug}', self.directory, filename)
+
+def tenant_upload_to(directory):
+    return TenantUploadTo(directory)
 
 def make_key_with_tenant(key, key_prefix, version):
     """

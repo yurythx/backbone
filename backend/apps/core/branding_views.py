@@ -1,0 +1,182 @@
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from shared_kernel.tenant_context import get_current_company
+from .models import TenantBranding
+from .serializers import TenantBrandingSerializer
+
+
+class TenantBrandingViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gerenciar branding da empresa (tenant).
+    
+    Endpoints:
+    - GET /api/core/branding/ - Lista todas as configurações de branding (admin)
+    - GET /api/core/branding/current/ - Obtém branding do tenant atual
+    - PUT /api/core/branding/current/ - Atualiza branding do tenant atual (admin)
+    - POST /api/core/branding/upload-logo/ - Upload de logo
+    - POST /api/core/branding/upload-icon/ - Upload de ícone
+    - GET /api/core/branding/palettes/ - Lista paletas disponíveis
+    """
+    queryset = TenantBranding.objects.all()
+    serializer_class = TenantBrandingSerializer
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """Obtém branding do tenant atual"""
+        company = get_current_company()
+        if not company:
+            return Response(
+                {'error': 'No company context found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        branding, created = TenantBranding.objects.get_or_create(
+            company=company,
+            defaults={
+                'company_name': company.name,
+                'theme_palette': 'django-green'
+            }
+        )
+        
+        serializer = self.get_serializer(branding)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['put'])
+    def update_current(self, request):
+        """Atualiza branding do tenant atual (apenas admins)"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Only admins can modify branding'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        company = get_current_company()
+        if not company:
+            return Response(
+                {'error': 'No company context found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        branding, created = TenantBranding.objects.get_or_create(
+            company=company,
+            defaults={'company_name': company.name}
+        )
+        
+        serializer = self.get_serializer(branding, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def upload_logo(self, request):
+        """Upload de logo da empresa"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Only admins can upload logo'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        company = get_current_company()
+        if not company:
+            return Response(
+                {'error': 'No company context found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        branding, created = TenantBranding.objects.get_or_create(
+            company=company,
+            defaults={'company_name': company.name}
+        )
+        
+        if 'logo' not in request.FILES:
+            return Response(
+                {'error': 'No logo file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        branding.logo = request.FILES['logo']
+        branding.save()
+        
+        serializer = self.get_serializer(branding)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'])
+    def upload_icon(self, request):
+        """Upload de ícone/favicon da empresa"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Only admins can upload icon'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        company = get_current_company()
+        if not company:
+            return Response(
+                {'error': 'No company context found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        branding, created = TenantBranding.objects.get_or_create(
+            company=company,
+            defaults={'company_name': company.name}
+        )
+        
+        if 'icon' not in request.FILES:
+            return Response(
+                {'error': 'No icon file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        branding.icon = request.FILES['icon']
+        branding.save()
+        
+        serializer = self.get_serializer(branding)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def palettes(self, request):
+        """Lista paletas de cores disponíveis"""
+        palettes = [
+            {
+                'code': 'django-green',
+                'name': 'Django Green',
+                'primary_color': '#0C4B33',
+                'description': 'Paleta clássica do Django'
+            },
+            {
+                'code': 'ocean-blue',
+                'name': 'Ocean Blue',
+                'primary_color': '#0369A1',
+                'description': 'Azul mar profundo'
+            },
+            {
+                'code': 'royal-purple',
+                'name': 'Royal Purple',
+                'primary_color': '#7C3AED',
+                'description': 'Roxo real vibrante'
+            },
+            {
+                'code': 'sunset-orange',
+                'name': 'Sunset Orange',
+                'primary_color': '#EA580C',
+                'description': 'Laranja pôr do sol'
+            },
+            {
+                'code': 'forest-green',
+                'name': 'Forest Green',
+                'primary_color': '#166534',
+                'description': 'Verde floresta'
+            },
+            {
+                'code': 'slate-gray',
+                'name': 'Slate Gray',
+                'primary_color': '#475569',
+                'description': 'Cinza ardósia moderno'
+            },
+        ]
+        return Response(palettes)

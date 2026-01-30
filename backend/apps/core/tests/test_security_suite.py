@@ -1,6 +1,4 @@
-from django.test import TestCase, Client
-from django.urls import reverse
-from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 from apps.core.models import Company
@@ -102,8 +100,8 @@ class SecuritySuiteTest(TestCase):
         
         upload_handler = tenant_upload_to('articles')
         path = upload_handler(instance, filename)
-        
-        expected = r"tenants/comp-a/articles/image.jpg"
+
+        # expected = r"tenants/comp-a/articles/image.jpg"
         # Handle OS path separators if needed, but output usually forward slash in Django storage
         # normalize for comparison
         self.assertTrue("comp-a" in path)

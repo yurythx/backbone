@@ -30,16 +30,24 @@ class LicensingTests(TestCase):
 
     def test_assign_license(self):
         # Assign license to company
-        data = {
-            "plan_id": self.plan.id
-        }
-        # Assuming we have an endpoint to assign/update license, or we test model directly if API is admin-only.
-        # Let's check API first. If standard CRUD, it might be under /api/licenses/
+        # We don't have a public endpoint for license assignment yet, 
+        # but we should test the model logic ensuring the company gets the plan features.
         
-        # Test Model directly first for logic
-        license = License.objects.create(company=self.company, plan=self.plan)
+        # 1. Create a License via Model (Admin action simulation)
+        license = License.objects.create(
+            company=self.company, 
+            plan=self.plan,
+            is_active=True
+        )
+        
+        # 2. Verify License creation
         self.assertEqual(license.plan.name, "Pro Plan")
         self.assertTrue(license.is_active)
+        self.assertEqual(License.all_objects.filter(company=self.company).count(), 1)
+        
+        # 3. Verify access to features (Logic check)
+        # Assuming we might have a helper to check features, for now just checking the relation
+        self.assertTrue(self.plan.features.filter(code="max_users").exists())
 
     def test_feature_check(self):
         # Verify if plan has feature

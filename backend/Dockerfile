@@ -19,8 +19,27 @@ RUN pip install -r requirements.txt
 # Copy project
 COPY . /app/
 
+# Create a non-root user
+RUN addgroup --system app && adduser --system --group app
+
+# Create staticfiles directory and set permissions
+RUN mkdir -p /app/staticfiles && chown -R app:app /app
+
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Switch to non-root user
+USER app
+
+# Collect static files
+RUN DATABASE_URL="" REDIS_URL="" python manage.py collectstatic --noinput
+
 # Expose port
 EXPOSE 8000
+
+# Set entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Default command (can be overridden in docker-compose)
 CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]

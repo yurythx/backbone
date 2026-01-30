@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.core.models import Company
+from .models import UserThemePreference
 
 User = get_user_model()
 
@@ -35,3 +36,20 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name']
+
+
+class UserThemePreferenceSerializer(serializers.ModelSerializer):
+    """
+    Serializer para preferências de tema do usuário.
+    """
+    user_details = UserSerializer(source='user', read_only=True)
+    
+    class Meta:
+        model = UserThemePreference
+        fields = [
+            'id', 'user', 'user_details',
+            'theme_palette', 'use_tenant_theme',
+            'dark_mode_preference',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']

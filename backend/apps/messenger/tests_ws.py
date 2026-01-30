@@ -5,7 +5,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.models import Company
 from apps.messenger.models import Conversation
 from config.asgi import application
-import json
 
 User = get_user_model()
 
