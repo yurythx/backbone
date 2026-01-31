@@ -15,6 +15,7 @@ class Page(BaseTenantModel):
     # SEO fields
     meta_title = models.CharField(max_length=200, blank=True)
     meta_description = models.CharField(max_length=500, blank=True)
+    meta_keywords = models.CharField(max_length=500, blank=True)
 
     class Meta:
         unique_together = ('company', 'slug')

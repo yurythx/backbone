@@ -28,8 +28,8 @@ export function PageList({ onEdit, onCreate }: PageListProps) {
     const { data: pages, isLoading } = useQuery({
         queryKey: ['pages'],
         queryFn: async () => {
-            const res = await api.get<Page[]>('/api/pages/')
-            return res.data
+            const res = await api.get<any>('/api/pages/')
+            return Array.isArray(res.data) ? res.data : res.data.results || []
         }
     })
 

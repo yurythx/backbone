@@ -128,13 +128,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     # Receive message from room group
     async def chat_message(self, event):
-        message = event['message']
-        sender = event['sender']
-
         # Send message to WebSocket
         await self.send(text_data=json.dumps({
-            'message': message,
-            'sender': sender
+            'message': event['message'],
+            'sender_id': event['sender_id'],
+            'sender_username': event['sender_username'],
+            'message_id': event['message_id'],
+            'created_at': event['created_at'],
+            'file_url': event.get('file_url'),
+            'file_name': event.get('file_name'),
+            'file_type': event.get('file_type'),
+            'file_size': event.get('file_size'),
         }))
 
     @database_sync_to_async

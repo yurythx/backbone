@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "apps.pages",
     "apps.articles",
     "apps.messenger",
+    "apps.media",
 ]
 
 MIDDLEWARE = [

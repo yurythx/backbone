@@ -12,6 +12,8 @@ export interface Contact {
   username: string;
   email: string;
   is_online: boolean;
+  group_names: string[];
+  is_staff: boolean;
 }
 
 export interface Message {
@@ -20,6 +22,10 @@ export interface Message {
   sender: number;
   conversation: number;
   created_at: string;
+  file_url?: string;
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
 }
 
 export interface Conversation {
@@ -89,6 +95,9 @@ export interface Article {
   created_at: string;
   updated_at: string;
   image?: string | null;
+  meta_title?: string;
+  meta_description?: string;
+  meta_keywords?: string;
 }
 
 export interface Plan {
@@ -129,4 +138,7 @@ export interface Page {
   company: string; // UUID
   created_at: string;
   updated_at: string;
+  meta_title?: string;
+  meta_description?: string;
+  meta_keywords?: string;
 }

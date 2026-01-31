@@ -32,8 +32,8 @@ export default function CMSPage() {
   return (
     <div className="h-full">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">CMS - Gestão de Páginas</h1>
-        <p className="text-muted-foreground">Gerencie o conteúdo institucional do seu portal.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Gestão de Páginas</h1>
+        <p className="text-muted-foreground">Gerencie o conteúdo institucional e páginas estáticas do seu portal.</p>
       </div>
 
       {view === 'list' && (

@@ -31,6 +31,24 @@ const sidebarItems: SidebarItem[] = [
     icon: LayoutDashboard,
   },
   {
+    title: "Mensagens",
+    href: "/messenger",
+    icon: MessageSquare,
+    module: "messenger",
+  },
+  {
+    title: "Páginas",
+    href: "/cms",
+    icon: ShieldCheck,
+    module: "pages",
+  },
+  {
+    title: "Artigos",
+    href: "/artigos",
+    icon: FileText,
+    module: "articles",
+  },
+  {
     title: "Gestão de Módulos",
     href: "/admin/modules",
     icon: Box,

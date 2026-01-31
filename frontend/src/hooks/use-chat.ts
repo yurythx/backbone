@@ -10,15 +10,15 @@ export function useChat(conversationId: number | null) {
   useEffect(() => {
     // Reset realtime messages when conversation changes
     setRealtimeMessages([]);
-    
+
     if (!conversationId) return;
 
     const token = localStorage.getItem('accessToken');
     if (!token) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // const host = window.location.host; 
-    const wsUrl = `ws://localhost:8000/ws/chat/chat_${conversationId}/?token=${token}`;
+    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+    const wsUrl = `${protocol}//${host}/ws/chat/chat_${conversationId}/?token=${token}`;
 
     const ws = new WebSocket(wsUrl);
     socketRef.current = ws;
@@ -36,27 +36,24 @@ export function useChat(conversationId: number | null) {
         // Based on typical Django Channels tutorials, it might be just payload.
         // Let's assume it sends a structure compatible with Message interface or we map it.
         // For now, let's assume the backend broadcasts the serialized message.
-        
+
         if (data.message) {
-           // We need to shape this into a Message object if it isn't one.
-           // Since we are building from scratch, let's assume we'll fix backend to send proper data
-           // OR we handle what we defined in HANDOFF: { message: "...", sender: "alice" }
-           // But our Message type has id, created_at etc.
-           // For a robust UI, we should refetch or optimistically add.
-           // Let's optimistically add a "received" message.
-           
-           const newMessage: Message = {
-             id: Date.now(), // Temp ID
-             content: data.message,
-             sender: typeof data.sender === 'string' ? 0 : data.sender, // We might need sender ID
-             conversation: conversationId,
-             created_at: new Date().toISOString()
-           };
-           
-           setRealtimeMessages((prev) => [...prev, newMessage]);
-           
-           // Invalidate query to fetch latest from DB to ensure consistency
-           queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+          const newMessage: Message = {
+            id: data.message_id || Date.now(),
+            content: data.message,
+            sender: data.sender_id,
+            conversation: conversationId,
+            created_at: data.created_at || new Date().toISOString(),
+            file_url: data.file_url,
+            file_name: data.file_name,
+            file_type: data.file_type,
+            file_size: data.file_size
+          };
+
+          setRealtimeMessages((prev) => [...prev, newMessage]);
+
+          // Invalidate query to fetch latest from DB to ensure consistency
+          queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
         }
       } catch (err) {
         console.error('Chat WebSocket error:', err);

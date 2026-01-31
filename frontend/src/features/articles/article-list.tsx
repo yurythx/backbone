@@ -29,16 +29,17 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
   const { data: articles, isLoading } = useQuery({
     queryKey: ['articles'],
     queryFn: async () => {
-      const res = await api.get<Article[]>('/api/articles/articles/')
-      return res.data
+      const res = await api.get<any>('/api/articles/articles/')
+      // Handle both paginated and non-paginated responses
+      return Array.isArray(res.data) ? res.data : res.data.results || []
     }
   })
 
   const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
-      const res = await api.get<Category[]>('/api/articles/categories/')
-      return res.data
+      const res = await api.get<any>('/api/articles/categories/')
+      return Array.isArray(res.data) ? res.data : res.data.results || []
     }
   })
 
@@ -53,7 +54,7 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
 
   const getCategoryName = (id: number | null) => {
     if (!id || !categories) return "-"
-    return categories.find(c => c.id === id)?.name || "-"
+    return (categories as Category[]).find((c: Category) => c.id === id)?.name || "-"
   }
 
   const columns: ColumnDef<Article>[] = [
@@ -87,7 +88,7 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
       id: "actions",
       cell: ({ row }) => {
         const article = row.original
- 
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -101,7 +102,7 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
               <DropdownMenuItem onClick={() => onEdit(article)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={() => {
                   if (confirm('Are you sure?')) deleteMutation.mutate(article.id)
                 }}
@@ -125,10 +126,10 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
         </Button>
       </div>
 
-      <DataTable 
-        columns={columns} 
-        data={articles || []} 
-        isLoading={isLoading} 
+      <DataTable
+        columns={columns}
+        data={articles || []}
+        isLoading={isLoading}
         searchKey="title"
       />
     </div>

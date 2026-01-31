@@ -64,6 +64,17 @@ class TenantBranding(models.Model):
         help_text="Paleta de cores pré-estabelecida"
     )
     
+    # Footer Customization
+    footer_text = models.CharField(
+        max_length=255, 
+        blank=True, 
+        help_text="Texto exibido no rodapé (ex: Todos os direitos reservados)"
+    )
+    facebook_url = models.URLField(blank=True, null=True)
+    instagram_url = models.URLField(blank=True, null=True)
+    linkedin_url = models.URLField(blank=True, null=True)
+    twitter_url = models.URLField(blank=True, null=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -73,6 +84,30 @@ class TenantBranding(models.Model):
 
     def __str__(self):
         return f"Branding for {self.company.name}"
+
+
+class TenantEmailConfig(models.Model):
+    """
+    Configurações de SMTP customizado por tenant.
+    """
+    company = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='email_config'
+    )
+    use_custom_smtp = models.BooleanField(
+        default=False,
+        help_text="Se ativado, utiliza as configurações abaixo em vez do SMTP padrão do sistema."
+    )
+    smtp_host = models.CharField(max_length=255, blank=True)
+    smtp_port = models.IntegerField(default=587)
+    smtp_user = models.CharField(max_length=255, blank=True)
+    smtp_password = models.CharField(max_length=255, blank=True, help_text="Senha do servidor SMTP")
+    smtp_use_tls = models.BooleanField(default=True)
+    from_email = models.EmailField(blank=True, help_text="E-mail remetente (ex: contato@empresa.com)")
+
+    def __str__(self):
+        return f"SMTP Config for {self.company.name}"
 
 
 class AuditLog(BaseTenantModel):

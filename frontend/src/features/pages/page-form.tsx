@@ -19,6 +19,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import { RichEditor } from "@/components/ui/rich-editor"
+import { PreviewDialog } from "@/components/cms/preview-dialog"
 import { Loader2, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 
@@ -27,6 +29,9 @@ const formSchema = z.object({
     slug: z.string().min(3, "O slug deve ter pelo menos 3 caracteres.").regex(/^[a-z0-9-]+$/, "O slug deve conter apenas letras minúsculas, números e hífens."),
     content: z.string().min(10, "O conteúdo deve ter pelo menos 10 caracteres."),
     is_active: z.boolean(),
+    meta_title: z.string().max(70, "O título SEO deve ter no máximo 70 caracteres.").optional(),
+    meta_description: z.string().max(160, "A descrição SEO deve ter no máximo 160 caracteres.").optional(),
+    meta_keywords: z.string().optional(),
 })
 
 interface PageFormProps {
@@ -45,6 +50,9 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
             slug: initialData?.slug || "",
             content: initialData?.content || "",
             is_active: initialData?.is_active ?? true,
+            meta_title: initialData?.meta_title || "",
+            meta_description: initialData?.meta_description || "",
+            meta_keywords: initialData?.meta_keywords || "",
         },
     })
 
@@ -120,7 +128,11 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
                             <FormItem>
                                 <FormLabel>Conteúdo</FormLabel>
                                 <FormControl>
-                                    <Textarea placeholder="Escreva o conteúdo da página..." className="min-h-[300px]" {...field} />
+                                    <RichEditor
+                                        content={field.value}
+                                        onChange={field.onChange}
+                                        placeholder="Escreva o conteúdo da página..."
+                                    />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -150,11 +162,65 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
                         )}
                     />
 
+                    <div className="pt-6 border-t">
+                        <h3 className="text-lg font-medium mb-4">SEO e Meta Tags</h3>
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                            <FormField
+                                control={form.control}
+                                name="meta_title"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Título SEO</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="Título otimizado para buscadores" {...field} />
+                                        </FormControl>
+                                        <FormDescription>Recomendado: até 70 caracteres.</FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="meta_description"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Descrição SEO</FormLabel>
+                                        <FormControl>
+                                            <Textarea placeholder="Breve descrição da página..." {...field} />
+                                        </FormControl>
+                                        <FormDescription>Recomendado: até 160 caracteres.</FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="meta_keywords"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Palavras-chave</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="ex: ecommerce, saas, automação" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    </div>
+
                     <div className="flex gap-4">
                         <Button type="submit" disabled={mutation.isPending}>
                             {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Salvar Página
                         </Button>
+                        <PreviewDialog
+                            type="page"
+                            title={form.getValues("title")}
+                            content={form.getValues("content")}
+                        />
                         <Button type="button" variant="outline" onClick={onCancel}>
                             Cancelar
                         </Button>

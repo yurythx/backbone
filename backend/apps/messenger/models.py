@@ -25,7 +25,14 @@ class Message(BaseTenantModel):
     """
     conversation = models.ForeignKey(Conversation, related_name='messages', on_delete=models.CASCADE)
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_messages', on_delete=models.CASCADE)
-    content = models.TextField()
+    content = models.TextField(blank=True, null=True)
+    
+    # File attachments
+    file = models.FileField(upload_to='chat/attachments/', blank=True, null=True)
+    file_name = models.CharField(max_length=255, blank=True, null=True)
+    file_type = models.CharField(max_length=100, blank=True, null=True)
+    file_size = models.BigIntegerField(blank=True, null=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
 

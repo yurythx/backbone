@@ -7,24 +7,40 @@ User = get_user_model()
 
 class ContactSerializer(serializers.ModelSerializer):
     is_online = serializers.SerializerMethodField()
+    group_names = serializers.SerializerMethodField()
+    is_staff = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_online']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_online', 'group_names', 'is_staff']
         
     def get_is_online(self, obj):
-        # Cache key matches what we set in PresenceConsumer
-        # Note: Tenant context is already set in the view, so make_key_with_tenant works automatically
         key = f"user_presence:{obj.id}"
         return cache.get(key) == "online"
 
+    def get_group_names(self, obj):
+        return [g.name for g in obj.groups.all()]
+
 class MessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source='sender.username', read_only=True)
+    file_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['id', 'conversation', 'sender', 'sender_username', 'content', 'created_at', 'is_read']
+        fields = [
+            'id', 'conversation', 'sender', 'sender_username', 
+            'content', 'file', 'file_url', 'file_name', 
+            'file_type', 'file_size', 'created_at', 'is_read'
+        ]
         read_only_fields = ['sender', 'conversation']
+
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None
 
 class ConversationSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()

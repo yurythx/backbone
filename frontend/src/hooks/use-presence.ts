@@ -16,17 +16,9 @@ export function usePresence() {
     const token = localStorage.getItem('accessToken');
     if (!token) return;
 
-    // For local dev with Docker, we mapped 8005 -> 8000
-    let wsUrl = '';
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-    if (isLocalhost) {
-      wsUrl = `ws://localhost:8005/ws/presence/?token=${token}`;
-    } else {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const wsBase = apiUrl.replace(/^http/, 'ws');
-      wsUrl = `${wsBase}/ws/presence/?token=${token}`;
-    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+    const wsUrl = `${protocol}//${host}/ws/presence/?token=${token}`;
 
     console.log('Connecting to Presence WS:', wsUrl);
 

@@ -26,6 +26,11 @@ class Article(BaseTenantModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     image = models.ImageField(upload_to=tenant_upload_to('articles'), null=True, blank=True)
+    
+    # SEO fields
+    meta_title = models.CharField(max_length=200, blank=True)
+    meta_description = models.TextField(blank=True)
+    meta_keywords = models.CharField(max_length=500, blank=True)
 
     class Meta:
         unique_together = ('company', 'slug')

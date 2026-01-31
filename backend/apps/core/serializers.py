@@ -24,9 +24,24 @@ class TenantBrandingSerializer(serializers.ModelSerializer):
             'id', 'company', 'company_details', 'company_name',
             'logo', 'logo_url', 'icon', 'icon_url',
             'primary_color', 'theme_palette',
+            'footer_text', 'facebook_url', 'instagram_url',
+            'linkedin_url', 'twitter_url',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'company']
+
+
+class TenantEmailConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import TenantEmailConfig
+        model = TenantEmailConfig
+        fields = [
+            'id', 'use_custom_smtp', 'smtp_host', 'smtp_port',
+            'smtp_user', 'smtp_password', 'smtp_use_tls', 'from_email'
+        ]
+        extra_kwargs = {
+            'smtp_password': {'write_only': True}
+        }
     
     def get_logo_url(self, obj):
         if obj.logo:

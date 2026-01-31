@@ -22,14 +22,19 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
+import { RichEditor } from "@/components/ui/rich-editor"
+import { PreviewDialog } from "@/components/cms/preview-dialog"
 
 const formSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters."),
   slug: z.string().min(3, "Slug must be at least 3 characters.").regex(/^[a-z0-9-]+$/, "Slug must contain only lowercase letters, numbers, and hyphens."),
   content: z.string().min(10, "Content must be at least 10 characters."),
   excerpt: z.string().optional(),
-  category: z.string().optional(), // Using string for Select value, then parse to number
+  category: z.string().optional(),
   is_published: z.boolean(),
+  meta_title: z.string().max(70, "SEO Title should be under 70 characters.").optional(),
+  meta_description: z.string().max(160, "SEO Description should be under 160 characters.").optional(),
+  meta_keywords: z.string().optional(),
 })
 
 interface ArticleFormProps {
@@ -44,8 +49,9 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
   const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
-      const res = await api.get<Category[]>('/api/articles/categories/')
-      return res.data
+      const res = await api.get<any>('/api/articles/categories/')
+      // Handle both paginated and non-paginated responses
+      return Array.isArray(res.data) ? res.data : res.data.results || []
     }
   })
 
@@ -58,6 +64,9 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       excerpt: initialData?.excerpt || "",
       category: initialData?.category ? String(initialData.category) : undefined,
       is_published: initialData?.is_published || false,
+      meta_title: initialData?.meta_title || "",
+      meta_description: initialData?.meta_description || "",
+      meta_keywords: initialData?.meta_keywords || "",
     },
   })
 
@@ -67,7 +76,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
         ...values,
         category: values.category ? parseInt(values.category) : null,
       }
-      
+
       if (initialData) {
         await api.put(`/api/articles/articles/${initialData.id}/`, payload)
       } else {
@@ -80,8 +89,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       onSuccess()
     },
     onError: (error) => {
-        toast.error("Failed to save article")
-        console.error(error)
+      toast.error("Failed to save article")
+      console.error(error)
     }
   })
 
@@ -144,7 +153,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {categories?.map((cat) => (
+                    {categories?.map((cat: Category) => (
                       <SelectItem key={cat.id} value={String(cat.id)}>
                         {cat.name}
                       </SelectItem>
@@ -177,7 +186,11 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
               <FormItem>
                 <FormLabel>Content</FormLabel>
                 <FormControl>
-                  <Textarea placeholder="Write your article here..." className="min-h-[200px]" {...field} />
+                  <RichEditor
+                    content={field.value}
+                    onChange={field.onChange}
+                    placeholder="Escreva seu artigo aqui..."
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -207,11 +220,68 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
             )}
           />
 
+          <div className="pt-6 border-t">
+            <h3 className="text-lg font-medium mb-4">SEO & Social Media</h3>
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+              <FormField
+                control={form.control}
+                name="meta_title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SEO Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Título para o Google" {...field} />
+                    </FormControl>
+                    <FormDescription>Máximo 70 caracteres.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="meta_description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SEO Description</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Breve resumo para buscadores..." {...field} />
+                    </FormControl>
+                    <FormDescription>Máximo 160 caracteres.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="meta_keywords"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Keywords</FormLabel>
+                    <FormControl>
+                      <Input placeholder="tag1, tag2, tag3" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+
           <div className="flex gap-4">
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Article
             </Button>
+            <PreviewDialog
+              type="article"
+              title={form.getValues("title")}
+              content={form.getValues("content")}
+              excerpt={form.getValues("excerpt")}
+              categoryName={categories?.find((c: Category) => String(c.id) === form.getValues("category"))?.name}
+              date={new Date().toLocaleDateString('pt-BR')}
+            />
             <Button type="button" variant="outline" onClick={onCancel}>
               Cancel
             </Button>

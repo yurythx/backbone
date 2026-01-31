@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/licensing/", include("apps.licensing.urls")),
     path("api/modules/", include("apps.module_manager.urls")),
     path("api/messenger/", include("apps.messenger.urls")),
+    path("api/media/", include("apps.media.urls")),
     path("api/pages/", include("apps.pages.urls")),
     path("api/articles/", include("apps.articles.urls")),
     

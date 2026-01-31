@@ -138,6 +138,73 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(branding)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['get', 'put'])
+    def email_config(self, request):
+        """Gerencia configurações de SMTP do tenant atual"""
+        if request.method == 'PUT' and not request.user.is_staff:
+            return Response(
+                {'error': 'Only admins can modify email config'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        company = get_current_company()
+        from .models import TenantEmailConfig
+        from .serializers import TenantEmailConfigSerializer
+        
+        config, created = TenantEmailConfig.objects.get_or_create(company=company)
+        
+        if request.method == 'PUT':
+            serializer = TenantEmailConfigSerializer(config, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = TenantEmailConfigSerializer(config)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def test_smtp(self, request):
+        """Testa as configurações de SMTP enviando um e-mail de teste"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Only admins can test SMTP'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        company = get_current_company()
+        from .models import TenantEmailConfig
+        config = get_object_or_404(TenantEmailConfig, company=company)
+        
+        if not config.use_custom_smtp or not config.smtp_host:
+            return Response(
+                {'error': 'Custom SMTP is not configured or enabled'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            from django.core.mail import get_connection, EmailMessage
+            
+            connection = get_connection(
+                host=config.smtp_host,
+                port=config.smtp_port,
+                username=config.smtp_user,
+                password=config.smtp_password,
+                use_tls=config.smtp_use_tls
+            )
+            
+            email = EmailMessage(
+                subject=f'Teste de SMTP - {company.name}',
+                body='Se você recebeu este e-mail, as configurações de SMTP do seu tenant estão funcionando corretamente!',
+                from_email=config.from_email or settings.DEFAULT_FROM_EMAIL,
+                to=[request.user.email],
+                connection=connection
+            )
+            email.send()
+            return Response({'message': 'E-mail de teste enviado com sucesso!'})
+        except Exception as e:
+            return Response({'error': f'Falha ao enviar e-mail: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=False, methods=['get'])
     def palettes(self, request):
         """Lista paletas de cores disponíveis"""

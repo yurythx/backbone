@@ -8,6 +8,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, HasModuleAccess]
     module_code = 'articles'
     lookup_field = 'slug'
+    pagination_class = None
 
     def get_queryset(self):
         return Category.objects.all().order_by('name')
