@@ -10,8 +10,8 @@
 
 ```
 Sprint 1: ██████████ 8/8   (100%) ✅ COMPLETO!
-Sprint 2: ░░░░░░░░░░ 0/6   (0%)   - Segurança e Estabilidade
-Sprint 3: ░░░░░░░░░░ 0/7   (0%)   - UX Essencial
+Sprint 2: ██████████ 6/6   (100%) ✅ COMPLETO!
+Sprint 3: █░░░░░░░░░ 1/7   (14%)   - UX Essencial
 Sprint 4: ░░░░░░░░░░ 0/7   (0%)   - Features Core
 Sprint 5: ░░░░░░░░░░ 0/7   (0%)   - Performance e Qualidade
 Sprint 6: ░░░░░░░░░░ 0/5   (0%)   - Messenger e Real-time
@@ -220,7 +220,7 @@ TOTAL: ██░░░░░░░░ 8/51  (16%)
 **Objetivo**: Polimento da experiência do usuário  
 **Status**: 🔴 Não Iniciado
 
-- [ ] **IMPL-005**: Rich Text Editor
+- [x] **IMPL-005**: Rich Text Editor
   - **Arquivos**: 
     - `frontend/src/components/ui/rich-editor.tsx` (atualizar)
     - `frontend/package.json`
@@ -231,8 +231,8 @@ TOTAL: ██░░░░░░░░ 8/51  (16%)
     - Configurar extensões (bold, italic, lists, links, images)
     - Preview side-by-side
     - Integrar em ArticleForm e PageForm
-  - **Responsável**: _____
-  - **Data conclusão**: _____
+  - **Responsável**: Antigravity
+  - **Data conclusão**: 2026-02-01
 
 - [ ] **IMPL-007**: Media Library
   - **Arquivos**: 
