@@ -9,7 +9,7 @@
 ## 📊 Progresso Geral
 
 ```
-Sprint 1: ██░░░░░░░░ 2/8   (25%)  - Correções Críticas
+Sprint 1: █████░░░░░ 4/8   (50%)  - Correções Críticas
 Sprint 2: ░░░░░░░░░░ 0/6   (0%)   - Segurança e Estabilidade
 Sprint 3: ░░░░░░░░░░ 0/7   (0%)   - UX Essencial
 Sprint 4: ░░░░░░░░░░ 0/7   (0%)   - Features Core
@@ -18,7 +18,7 @@ Sprint 6: ░░░░░░░░░░ 0/5   (0%)   - Messenger e Real-time
 Sprint 7: ░░░░░░░░░░ 0/5   (0%)   - Analytics e Licensing
 Sprint 8: ░░░░░░░░░░ 0/6   (0%)   - Advanced Features
 
-TOTAL: ██░░░░░░░░ 2/51  (4%)
+TOTAL: ██░░░░░░░░ 4/51  (8%)
 ```
 
 ---
@@ -36,13 +36,13 @@ TOTAL: ██░░░░░░░░ 2/51  (4%)
   - **Responsável**: Concluído
   - **Data conclusão**: 2026-02-01
 
-- [ ] **CORR-002**: Configurar CORS condicional por ambiente
+- [x] **CORR-002**: Configurar CORS condicional por ambiente
   - **Arquivo**: `backend/config/settings.py` (linha 109)
   - **Prioridade**: 🔴 Crítica
   - **Tempo estimado**: 30 min
   - **Ação**: Criar condicional `if DEBUG` para ALLOW_ALL vs lista específica
-  - **Responsável**: _____
-  - **Data conclusão**: _____
+  - **Responsável**: Concluído
+  - **Data conclusão**: 2026-02-01
 
 - [x] **CORR-003**: Gerar e configurar Secret Key segura
   - **Arquivo**: `backend/.env`, `backend/config/settings.py`
@@ -54,13 +54,13 @@ TOTAL: ██░░░░░░░░ 2/51  (4%)
   - **Responsável**: Concluído
   - **Data conclusão**: 2026-02-01
 
-- [ ] **CORR-004**: Ajustar Rate Limiting
+- [x] **CORR-004**: Ajustar Rate Limiting
   - **Arquivo**: `backend/config/settings.py` (linha 75)
   - **Prioridade**: 🔴 Alta
   - **Tempo estimado**: 15 min
   - **Ação**: Mudar de 100000/day para 1000/day (tenant) e 100/day (anon)
-  - **Responsável**: _____
-  - **Data conclusão**: _____
+  - **Responsável**: Concluído
+  - **Data conclusão**: 2026-02-01
 
 - [ ] **CORR-005**: Implementar validação de upload de arquivos
   - **Arquivos**: 
