@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from shared_kernel.models import BaseTenantModel
 from shared_kernel.utils import tenant_upload_to
+from shared_kernel.validators import validate_image
 
 class Category(BaseTenantModel):
     name = models.CharField(max_length=100)
@@ -25,7 +26,13 @@ class Article(BaseTenantModel):
     published_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    image = models.ImageField(upload_to=tenant_upload_to('articles'), null=True, blank=True)
+    image = models.ImageField(
+        upload_to=tenant_upload_to('articles'),
+        null=True,
+        blank=True,
+        validators=[validate_image],
+        help_text="Imagem de destaque (max 10MB, formatos: JPEG, PNG, GIF, WebP)"
+    )
     
     # SEO fields
     meta_title = models.CharField(max_length=200, blank=True)

@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from shared_kernel.models import BaseTenantModel
+from shared_kernel.validators import validate_chat_file
 
 class Conversation(BaseTenantModel):
     """
@@ -28,7 +29,13 @@ class Message(BaseTenantModel):
     content = models.TextField(blank=True, null=True)
     
     # File attachments
-    file = models.FileField(upload_to='chat/attachments/', blank=True, null=True)
+    file = models.FileField(
+        upload_to='chat/attachments/',
+        blank=True,
+        null=True,
+        validators=[validate_chat_file],
+        help_text="Anexo (Imagens/Documentos, max 5MB)"
+    )
     file_name = models.CharField(max_length=255, blank=True, null=True)
     file_type = models.CharField(max_length=100, blank=True, null=True)
     file_size = models.BigIntegerField(blank=True, null=True)
