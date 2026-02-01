@@ -108,8 +108,21 @@ SPECTACULAR_SETTINGS = {
     'SECURITY': [{'ApiKeyAuth': []}],
 }
 
-CORS_ALLOW_ALL_ORIGINS = True # Temporário para dev
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3005"])
+# CORS Configuration - Conditional by environment
+# SECURITY WARNING: Allowing all origins is dangerous in production!
+if DEBUG:
+    # Development: Allow all origins for easier testing
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    # Production: Only allow specific origins
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = env.list(
+        "CORS_ALLOWED_ORIGINS",
+        default=[
+            "https://yourdomain.com",
+            "https://www.yourdomain.com",
+        ]
+    )
 
 CORS_ALLOW_HEADERS = [
     "accept",
