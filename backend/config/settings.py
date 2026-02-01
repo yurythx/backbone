@@ -71,8 +71,11 @@ REST_FRAMEWORK = {
         'shared_kernel.throttling.TenantRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'tenant': '100000/day', 
-        'anon': '10000/day',
+        # SECURITY: Adjusted to realistic values to prevent abuse
+        # tenant: authenticated users per company (1000 req/day = ~1 req/90sec)
+        # anon: unauthenticated requests (100 req/day for onboarding, public endpoints)
+        'tenant': '1000/day', 
+        'anon': '100/day',
     }
 }
 
