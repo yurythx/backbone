@@ -48,6 +48,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "csp.middleware.CSPMiddleware",  # Content Security Policy
     "shared_kernel.middleware.TenantMiddleware",
     "shared_kernel.logging_middleware.StructuredLoggingMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -315,3 +316,7 @@ CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
+# Content Security Policy (CSP)
+from .csp_config import *  # noqa
+
