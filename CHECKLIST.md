@@ -9,7 +9,7 @@
 ## 📊 Progresso Geral
 
 ```
-Sprint 1: █████░░░░░ 4/8   (50%)  - Correções Críticas
+Sprint 1: ███████░░░ 6/8   (75%)  - Correções Críticas
 Sprint 2: ░░░░░░░░░░ 0/6   (0%)   - Segurança e Estabilidade
 Sprint 3: ░░░░░░░░░░ 0/7   (0%)   - UX Essencial
 Sprint 4: ░░░░░░░░░░ 0/7   (0%)   - Features Core
@@ -18,7 +18,7 @@ Sprint 6: ░░░░░░░░░░ 0/5   (0%)   - Messenger e Real-time
 Sprint 7: ░░░░░░░░░░ 0/5   (0%)   - Analytics e Licensing
 Sprint 8: ░░░░░░░░░░ 0/6   (0%)   - Advanced Features
 
-TOTAL: ██░░░░░░░░ 4/51  (8%)
+TOTAL: ██░░░░░░░░ 6/51  (12%)
 ```
 
 ---
@@ -79,7 +79,7 @@ TOTAL: ██░░░░░░░░ 4/51  (8%)
 
 ### Frontend - Correções
 
-- [ ] **CORR-008**: Implementar Error Boundary global
+- [x] **CORR-008**: Implementar Error Boundary global
   - **Arquivos**: 
     - `frontend/src/app/error.tsx` (criar)
     - `frontend/src/components/error-boundary.tsx` (criar)
@@ -89,10 +89,10 @@ TOTAL: ██░░░░░░░░ 4/51  (8%)
     - Error boundary component
     - Toast notifications para erros de API
     - Página de erro 500 customizada
-  - **Responsável**: _____
-  - **Data conclusão**: _____
+  - **Responsável**: Concluído
+  - **Data conclusão**: 2026-02-01
 
-- [ ] **CORR-009**: Adicionar Loading States consistentes
+- [x] **CORR-009**: Adicionar Loading States consistentes
   - **Arquivos**: 
     - `frontend/src/components/ui/skeleton.tsx` (criar)
     - `frontend/src/features/**/*.tsx` (atualizar todos)
@@ -102,8 +102,8 @@ TOTAL: ██░░░░░░░░ 4/51  (8%)
     - Criar skeleton loaders
     - Adicionar em todas as queries
     - Loading spinners em mutations
-  - **Responsável**: _____
-  - **Data conclusão**: _____
+  - **Responsável**: Concluído
+  - **Data conclusão**: 2026-02-01
 
 ### DevOps
 
