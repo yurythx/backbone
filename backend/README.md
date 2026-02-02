@@ -4,6 +4,7 @@
 ![Django](https://img.shields.io/badge/Django-5.0-green)
 ![Coverage](https://img.shields.io/badge/Coverage-93%25-brightgreen)
 ![Status](https://img.shields.io/badge/Status-Stable-success)
+![CI](https://github.com/yurythx/backbone/actions/workflows/ci.yml/badge.svg)
 
 Bem-vindo ao repositório backend do **BlackBone**, uma plataforma SaaS Multi-tenant robusta e escalável.
 
@@ -118,6 +119,21 @@ O código é verificado automaticamente via Pre-commit hooks.
 # Rodar verificação manual
 python -m ruff check .
 ```
+
+### Pre-commit Hooks
+Para garantir padronização automática antes de cada commit:
+```bash
+pip install pre-commit
+pre-commit install
+# Rodar em todo o repositório
+pre-commit run --all-files
+```
+
+### CI
+Cada PR/Push roda:
+- Lint (ruff, black, isort, pre-commit)
+- Testes Django (manage.py test)
+Workflow: `.github/workflows/ci.yml`
 
 ---
 
