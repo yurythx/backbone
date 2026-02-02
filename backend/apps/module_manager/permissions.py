@@ -8,8 +8,9 @@ class HasModuleAccess(permissions.BasePermission):
     """
     
     def has_permission(self, request, view):
-        # Allow superusers or safe methods? No, if module is disabled, it should be fully hidden.
-        # But wait, maybe Admin needs access. For now, let's enforce for all tenant users.
+        # Superuser bypass: suporte/admin podem acessar independentemente do estado do módulo
+        if getattr(request.user, 'is_superuser', False):
+            return True
         
         if not hasattr(view, 'module_code') or not view.module_code:
             return True # No module restriction defined

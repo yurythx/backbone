@@ -17,17 +17,17 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { Loader2, Building2, User, Mail, Lock, Sparkles, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { cn } from "@/lib/utils"
 
 const registerSchema = z.object({
-  username: z.string().min(2, "Username must be at least 2 characters."),
-  email: z.string().email("Invalid email address."),
-  password: z.string().min(6, "Password must be at least 6 characters."),
-  company_name: z.string().min(2, "Company name is required."),
-  company_slug: z.string().min(3, "Slug must be at least 3 characters.").regex(/^[a-z0-9-]+$/, "Slug must contain only lowercase letters, numbers, and hyphens."),
+  username: z.string().min(2, "O nome de usuário deve ter pelo menos 2 caracteres."),
+  email: z.string().email("Endereço de e-mail inválido."),
+  password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
+  company_name: z.string().min(2, "O nome da empresa é obrigatório."),
+  company_slug: z.string().min(3, "O slug deve ter pelo menos 3 caracteres.").regex(/^[a-z0-9-]+$/, "O slug deve conter apenas letras minúsculas, números e hífens."),
 })
 
 export function RegisterForm() {
@@ -47,14 +47,14 @@ export function RegisterForm() {
 
   async function onSubmit(values: z.infer<typeof registerSchema>) {
     setIsLoading(true)
-    
+
     try {
       await api.post('/api/accounts/register/', values)
-      toast.success("Account created successfully! Please login.")
+      toast.success("Conta criada com sucesso! Você já pode entrar.")
       router.push('/login')
     } catch (err: any) {
       console.error(err)
-      const message = err.response?.data?.detail || "Registration failed. Please try again."
+      const message = err.response?.data?.detail || "Falha no registro. Por favor, tente novamente."
       toast.error(message)
     } finally {
       setIsLoading(false)
@@ -62,24 +62,32 @@ export function RegisterForm() {
   }
 
   return (
-    <Card className="w-[400px]">
-      <CardHeader>
-        <CardTitle>Create Account</CardTitle>
-        <CardDescription>Start your 14-day free trial.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <div className="space-y-6 w-full max-w-[450px]">
+      <div className="space-y-2 text-center">
+        <h1 className="text-3xl font-bold tracking-tight">Crie sua conta</h1>
+        <p className="text-muted-foreground text-sm flex items-center justify-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          Comece seu teste gratuito de 14 dias agora.
+        </p>
+      </div>
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="p-4 border rounded-2xl bg-muted/5 space-y-4">
+            <h3 className="text-sm font-bold flex items-center gap-2 px-1">
+              <Building2 className="h-4 w-4 text-primary" />
+              Empresa
+            </h3>
+
             <FormField
               control={form.control}
               name="company_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Company Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Acme Corp" {...field} />
+                    <Input placeholder="Nome da Empresa (ex: Acme Corp)" className="bg-background" {...field} />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
@@ -89,26 +97,37 @@ export function RegisterForm() {
               name="company_slug"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Company Slug</FormLabel>
                   <FormControl>
-                    <Input placeholder="acme-corp" {...field} />
+                    <div className="relative group">
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground/50">.backbone.io</span>
+                      <Input placeholder="slug-da-empresa" className="bg-background pr-24" {...field} />
+                    </div>
                   </FormControl>
-                  <FormDescription>Used for your unique login URL.</FormDescription>
-                  <FormMessage />
+                  <FormDescription className="text-[10px] px-1">Seu URL exclusivo: slug.backbone.io</FormDescription>
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
+          </div>
+
+          <div className="p-4 border rounded-2xl bg-muted/5 space-y-4">
+            <h3 className="text-sm font-bold flex items-center gap-2 px-1">
+              <User className="h-4 w-4 text-primary" />
+              Administrador
+            </h3>
 
             <FormField
               control={form.control}
               name="username"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Username</FormLabel>
                   <FormControl>
-                    <Input placeholder="admin" {...field} />
+                    <div className="relative group">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <Input placeholder="Nome de usuário" className="bg-background pl-10" {...field} />
+                    </div>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
@@ -118,43 +137,60 @@ export function RegisterForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="admin@acme.com" {...field} />
+                    <div className="relative group">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <Input type="email" placeholder="email@empresa.com" className="bg-background pl-10" {...field} />
+                    </div>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" {...field} />
+                    <div className="relative group">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <Input type="password" placeholder="Sua senha secreta" className="bg-background pl-10" {...field} />
+                    </div>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
-            
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Account
-            </Button>
+          </div>
 
-            <div className="text-center text-sm">
-              Already have an account?{" "}
-              <Link href="/login" className="underline hover:text-primary">
-                Login
-              </Link>
-            </div>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+          <Button
+            type="submit"
+            className="w-full h-14 text-lg font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98] group"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                Criando conta...
+              </>
+            ) : (
+              <span className="flex items-center gap-2">
+                Começar agora
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </span>
+            )}
+          </Button>
+
+          <div className="text-center text-sm text-muted-foreground pt-4">
+            Já tem uma conta?{" "}
+            <Link href="/login" className="font-bold text-primary hover:underline underline-offset-4">
+              Faça login
+            </Link>
+          </div>
+        </form>
+      </Form>
+    </div>
   )
 }

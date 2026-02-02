@@ -69,6 +69,9 @@ export function Sidebar() {
       const res = await api.get<TenantModule[]>('/api/modules/my-modules/')
       return res.data
     },
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   })
 
   const { data: allModules } = useQuery({
@@ -76,11 +79,14 @@ export function Sidebar() {
     queryFn: async () => {
       const res = await api.get<any[]>('/api/modules/available/')
       return res.data
-    }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   })
 
   return (
-    <aside className="w-64 border-r bg-background h-[calc(100vh-5rem)] sticky top-20 flex flex-col p-4 shrink-0">
+    <aside className="hidden md:flex w-64 border-r bg-gradient-to-b from-background via-background/95 to-background/90 backdrop-blur h-[calc(100vh-4rem)] sticky top-16 flex-col p-4 shrink-0 overflow-y-auto">
       <nav className="flex-1 space-y-1">
         {sidebarItems.map((item) => {
           // Visibility Logic
@@ -102,11 +108,12 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all group",
+                "flex items-center gap-3 px-3 py-2 rounded-full text-sm font-medium transition-all group",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  ? "bg-primary/15 text-primary shadow-sm"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
               )}
             >
               <Icon className={cn(
@@ -115,7 +122,7 @@ export function Sidebar() {
               )} />
               <span>{item.title}</span>
               {isActive && (
-                <div className="ml-auto w-1 h-4 bg-primary rounded-full" />
+                <div className="ml-auto w-1 h-4 bg-primary/70 rounded-full" aria-hidden="true" />
               )}
             </Link>
           )
@@ -123,7 +130,7 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto px-3 py-2">
-        <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
+        <div className="bg-primary/8 rounded-2xl p-4 border border-primary/10 shadow-sm">
           <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Backbone v1.0</p>
           <p className="text-xs text-muted-foreground leading-relaxed">Arquitetura modular equilibrada.</p>
         </div>

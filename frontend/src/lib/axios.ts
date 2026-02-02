@@ -41,6 +41,7 @@ api.interceptors.request.use(
 
     if (companySlug) {
       config.headers['x-company-slug'] = companySlug;
+      config.headers['X-Company-Slug'] = companySlug;
     }
 
     return config;
@@ -94,7 +95,7 @@ api.interceptors.response.use(
         const response = await axios.post(`${API_URL}/api/accounts/token/refresh/`, {
           refresh: refreshToken,
         }, {
-          headers: companySlug ? { 'x-company-slug': companySlug } : {}
+          headers: companySlug ? { 'x-company-slug': companySlug, 'X-Company-Slug': companySlug } : {}
         });
 
         const { access } = response.data;

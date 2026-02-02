@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from shared_kernel.tenant_context import get_current_company
 from .models import TenantBranding
 from .serializers import TenantBrandingSerializer
+from shared_kernel.cache import tenant_cached, invalidate_tenant_cache
 
 
 class TenantBrandingViewSet(viewsets.ModelViewSet):
@@ -24,6 +25,7 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     serializer_class = TenantBrandingSerializer
     permission_classes = [IsAuthenticated]
     
+    @tenant_cached(timeout=3600, key_prefix='branding')
     @action(detail=False, methods=['get'])
     def current(self, request):
         """Obtém branding do tenant atual"""
@@ -69,6 +71,8 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(branding, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            # Invalida o cache ao atualizar
+            invalidate_tenant_cache('branding', company.slug)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -102,6 +106,9 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         branding.logo = request.FILES['logo']
         branding.save()
         
+        # Invalida o cache ao fazer upload
+        invalidate_tenant_cache('branding', company.slug)
+        
         serializer = self.get_serializer(branding)
         return Response(serializer.data)
     
@@ -134,6 +141,9 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         
         branding.icon = request.FILES['icon']
         branding.save()
+        
+        # Invalida o cache ao fazer upload
+        invalidate_tenant_cache('branding', company.slug)
         
         serializer = self.get_serializer(branding)
         return Response(serializer.data)

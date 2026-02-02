@@ -16,6 +16,14 @@ export interface Contact {
   is_staff: boolean;
 }
 
+export interface MessageReaction {
+  id: number;
+  user: number;
+  user_username: string;
+  emoji: string;
+  created_at: string;
+}
+
 export interface Message {
   id: number;
   content: string;
@@ -26,6 +34,7 @@ export interface Message {
   file_name?: string;
   file_type?: string;
   file_size?: number;
+  reactions?: MessageReaction[];
 }
 
 export interface Conversation {
@@ -83,6 +92,12 @@ export interface Category {
   slug: string;
 }
 
+export interface Tag {
+  id: number;
+  name: string;
+  slug: string;
+}
+
 export interface Article {
   id: number;
   title: string;
@@ -90,8 +105,12 @@ export interface Article {
   content: string;
   excerpt?: string;
   is_published: boolean;
+  published_at?: string;
+  status: 'draft' | 'pending' | 'published' | 'rejected';
   author: number; // ID
   category: number | null; // ID
+  tags: number[]; // IDs
+  tag_list?: Tag[]; // Full objects if read
   created_at: string;
   updated_at: string;
   image?: string | null;
@@ -100,22 +119,30 @@ export interface Article {
   meta_keywords?: string;
 }
 
+export interface PlanFeature {
+  feature_code: string;
+  feature_name: string;
+  value: string;
+}
+
 export interface Plan {
   id: number;
   name: string;
   price: string;
+  features: PlanFeature[];
 }
 
 export interface License {
   id: number;
   plan: number; // Plan ID
+  plan_name: string;
   start_date: string;
   end_date?: string;
   is_active: boolean;
-  plan_details?: Plan; // Optional expanded plan
 }
 
 export interface Module {
+  id: number;
   code: string;
   name: string;
   description: string;

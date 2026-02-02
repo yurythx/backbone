@@ -42,22 +42,28 @@ export function useThemeConfig() {
             if (e.key === 'accessToken') {
                 fetchConfig()
             }
+            if (e.key === 'companySlug') {
+                fetchConfig()
+            }
         }
         window.addEventListener('storage', handleStorageChange)
 
         // Custom event for same-tab login (since storage event doesn't fire in the same window)
         const handleLogin = () => fetchConfig()
+        const handleCompanyChange = () => fetchConfig()
         window.addEventListener('app-login', handleLogin)
+        window.addEventListener('app-company-changed', handleCompanyChange)
 
         return () => {
             window.removeEventListener('storage', handleStorageChange)
             window.removeEventListener('app-login', handleLogin)
+            window.removeEventListener('app-company-changed', handleCompanyChange)
         }
     }, [fetchConfig])
 
     const updatePalette = async (palette: string) => {
         try {
-            const res = await api.put('/api/accounts/preferences/theme/current/', {
+            const res = await api.put('/api/accounts/preferences/theme/update_current/', {
                 theme_palette: palette,
                 use_tenant_theme: false
             })

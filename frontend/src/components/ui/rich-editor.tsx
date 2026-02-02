@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
+import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
     Bold,
@@ -14,34 +15,62 @@ import {
     ListOrdered,
     Heading1,
     Heading2,
+    Heading3,
     Quote,
     Undo,
     Redo,
     Link as LinkIcon,
-    ImageIcon
+    ImageIcon,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
+    AlignJustify,
+    Code
 } from 'lucide-react'
 import { MediaDialog } from "@/features/media/media-dialog"
 import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
 import { Separator } from '@/components/ui/separator'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger
+} from "@/components/ui/tooltip"
 
 interface RichEditorProps {
     content: string
     onChange: (content: string) => void
     placeholder?: string
+    className?: string
 }
 
-export function RichEditor({ content, onChange, placeholder }: RichEditorProps) {
+export function RichEditor({ content, onChange, placeholder, className }: RichEditorProps) {
     const editor = useEditor({
         extensions: [
-            StarterKit,
+            StarterKit.configure({
+                heading: {
+                    levels: [1, 2, 3],
+                },
+            }),
             Underline,
-            Image,
+            Image.configure({
+                HTMLAttributes: {
+                    class: 'rounded-lg border border-border shadow-sm max-w-full h-auto my-4',
+                },
+            }),
+            TextAlign.configure({
+                types: ['heading', 'paragraph'],
+            }),
             Link.configure({
                 openOnClick: false,
+                HTMLAttributes: {
+                    class: 'text-primary underline font-medium decoration-primary/30 underline-offset-4 hover:decoration-primary transition-all',
+                },
             }),
             Placeholder.configure({
-                placeholder: placeholder || 'Comece a escrever...',
+                placeholder: placeholder || 'Comece a escrever a magia...',
+                emptyEditorClass: 'is-editor-empty before:text-muted-foreground before:content-[attr(data-placeholder)] before:float-left before:h-0 before:pointer-events-none',
             }),
         ],
         content: content,
@@ -50,130 +79,200 @@ export function RichEditor({ content, onChange, placeholder }: RichEditorProps) 
         },
         editorProps: {
             attributes: {
-                class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[200px] px-3 py-2',
+                class: 'prose prose-sm sm:prose-base dark:prose-invert max-w-none focus:outline-none min-h-[300px] px-4 py-4 scroll-smooth selection:bg-primary/20',
             },
         },
+        immediatelyRender: false,
     })
 
     if (!editor) {
         return null
     }
 
-    return (
-        <div className="border rounded-md bg-background focus-within:ring-1 focus-within:ring-ring transition-all">
-            <div className="flex flex-wrap items-center gap-1 p-1 border-b bg-muted/30">
+    const ToolbarButton = ({
+        onClick,
+        isActive,
+        icon: Icon,
+        tooltip,
+        disabled = false
+    }: {
+        onClick: () => void,
+        isActive?: boolean,
+        icon: any,
+        tooltip: string,
+        disabled?: boolean
+    }) => (
+        <Tooltip>
+            <TooltipTrigger asChild>
                 <Toggle
                     size="sm"
-                    pressed={editor.isActive('heading', { level: 1 })}
-                    onPressedChange={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                >
-                    <Heading1 className="h-4 w-4" />
-                </Toggle>
-                <Toggle
-                    size="sm"
-                    pressed={editor.isActive('heading', { level: 2 })}
-                    onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                >
-                    <Heading2 className="h-4 w-4" />
-                </Toggle>
-
-                <Separator orientation="vertical" className="h-6 mx-1" />
-
-                <Toggle
-                    size="sm"
-                    pressed={editor.isActive('bold')}
-                    onPressedChange={() => editor.chain().focus().toggleBold().run()}
-                >
-                    <Bold className="h-4 w-4" />
-                </Toggle>
-                <Toggle
-                    size="sm"
-                    pressed={editor.isActive('italic')}
-                    onPressedChange={() => editor.chain().focus().toggleItalic().run()}
-                >
-                    <Italic className="h-4 w-4" />
-                </Toggle>
-                <Toggle
-                    size="sm"
-                    pressed={editor.isActive('underline')}
-                    onPressedChange={() => editor.chain().focus().toggleUnderline().run()}
-                >
-                    <UnderlineIcon className="h-4 w-4" />
-                </Toggle>
-
-                <Separator orientation="vertical" className="h-6 mx-1" />
-
-                <Toggle
-                    size="sm"
-                    pressed={editor.isActive('bulletList')}
-                    onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
-                >
-                    <List className="h-4 w-4" />
-                </Toggle>
-                <Toggle
-                    size="sm"
-                    pressed={editor.isActive('orderedList')}
-                    onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
-                >
-                    <ListOrdered className="h-4 w-4" />
-                </Toggle>
-                <Toggle
-                    size="sm"
-                    pressed={editor.isActive('blockquote')}
-                    onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
-                >
-                    <Quote className="h-4 w-4" />
-                </Toggle>
-
-                <Separator orientation="vertical" className="h-6 mx-1" />
-
-                <MediaDialog
-                    onSelect={(url) => {
-                        editor.chain().focus().setImage({ src: url }).run()
-                    }}
-                    trigger={
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <ImageIcon className="h-4 w-4" />
-                        </Button>
-                    }
-                />
-
-                <Button
-                    variant="ghost"
-                    size="sm"
+                    pressed={isActive}
+                    onPressedChange={onClick}
+                    disabled={disabled}
                     className="h-8 w-8 p-0"
-                    onClick={() => {
-                        const url = window.prompt('URL do link:')
-                        if (url) {
-                            editor.chain().focus().setLink({ href: url }).run()
-                        }
-                    }}
                 >
-                    <LinkIcon className="h-4 w-4" />
-                </Button>
+                    <Icon className="h-4 w-4" />
+                </Toggle>
+            </TooltipTrigger>
+            <TooltipContent>
+                <p>{tooltip}</p>
+            </TooltipContent>
+        </Tooltip>
+    )
 
-                <div className="ml-auto flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => editor.chain().focus().undo().run()}
-                        disabled={!editor.can().undo()}
-                    >
-                        <Undo className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => editor.chain().focus().redo().run()}
-                        disabled={!editor.can().redo()}
-                    >
-                        <Redo className="h-4 w-4" />
-                    </Button>
+    return (
+        <TooltipProvider delayDuration={400}>
+            <div className={`flex flex-col border rounded-xl bg-background shadow-sm overflow-hidden transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/40 ${className}`}>
+                <div className="flex flex-wrap items-center gap-0.5 p-1.5 border-b bg-muted/20 backdrop-blur-sm sticky top-0 z-10">
+                    <ToolbarButton
+                        icon={Heading1}
+                        tooltip="Título 1"
+                        isActive={editor.isActive('heading', { level: 1 })}
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                    />
+                    <ToolbarButton
+                        icon={Heading2}
+                        tooltip="Título 2"
+                        isActive={editor.isActive('heading', { level: 2 })}
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                    />
+                    <ToolbarButton
+                        icon={Heading3}
+                        tooltip="Título 3"
+                        isActive={editor.isActive('heading', { level: 3 })}
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                    />
+
+                    <Separator orientation="vertical" className="h-6 mx-1 bg-border/60" />
+
+                    <ToolbarButton
+                        icon={Bold}
+                        tooltip="Negrito"
+                        isActive={editor.isActive('bold')}
+                        onClick={() => editor.chain().focus().toggleBold().run()}
+                    />
+                    <ToolbarButton
+                        icon={Italic}
+                        tooltip="Itálico"
+                        isActive={editor.isActive('italic')}
+                        onClick={() => editor.chain().focus().toggleItalic().run()}
+                    />
+                    <ToolbarButton
+                        icon={UnderlineIcon}
+                        tooltip="Sublinhado"
+                        isActive={editor.isActive('underline')}
+                        onClick={() => editor.chain().focus().toggleUnderline().run()}
+                    />
+                    <ToolbarButton
+                        icon={Code}
+                        tooltip="Código"
+                        isActive={editor.isActive('code')}
+                        onClick={() => editor.chain().focus().toggleCode().run()}
+                    />
+
+                    <Separator orientation="vertical" className="h-6 mx-1 bg-border/60" />
+
+                    <ToolbarButton
+                        icon={AlignLeft}
+                        tooltip="Alinhar à Esquerda"
+                        isActive={editor.isActive({ textAlign: 'left' })}
+                        onClick={() => editor.chain().focus().setTextAlign('left').run()}
+                    />
+                    <ToolbarButton
+                        icon={AlignCenter}
+                        tooltip="Centralizar"
+                        isActive={editor.isActive({ textAlign: 'center' })}
+                        onClick={() => editor.chain().focus().setTextAlign('center').run()}
+                    />
+                    <ToolbarButton
+                        icon={AlignRight}
+                        tooltip="Alinhar à Direita"
+                        isActive={editor.isActive({ textAlign: 'right' })}
+                        onClick={() => editor.chain().focus().setTextAlign('right').run()}
+                    />
+                    <ToolbarButton
+                        icon={AlignJustify}
+                        tooltip="Justificar"
+                        isActive={editor.isActive({ textAlign: 'justify' })}
+                        onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+                    />
+
+                    <Separator orientation="vertical" className="h-6 mx-1 bg-border/60" />
+
+                    <ToolbarButton
+                        icon={List}
+                        tooltip="Lista com Marcadores"
+                        isActive={editor.isActive('bulletList')}
+                        onClick={() => editor.chain().focus().toggleBulletList().run()}
+                    />
+                    <ToolbarButton
+                        icon={ListOrdered}
+                        tooltip="Lista Numerada"
+                        isActive={editor.isActive('orderedList')}
+                        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                    />
+                    <ToolbarButton
+                        icon={Quote}
+                        tooltip="Citação"
+                        isActive={editor.isActive('blockquote')}
+                        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                    />
+
+                    <Separator orientation="vertical" className="h-6 mx-1 bg-border/60" />
+
+                    <MediaDialog
+                        onSelect={(url) => {
+                            editor.chain().focus().setImage({ src: url }).run()
+                        }}
+                        trigger={
+                            <div className="contents">
+                                <ToolbarButton
+                                    icon={ImageIcon}
+                                    tooltip="Imagem"
+                                    onClick={() => { }}
+                                />
+                            </div>
+                        }
+                    />
+
+                    <ToolbarButton
+                        icon={LinkIcon}
+                        tooltip="Adicionar Link"
+                        isActive={editor.isActive('link')}
+                        onClick={() => {
+                            const previousUrl = editor.getAttributes('link').href
+                            const url = window.prompt('URL do link:', previousUrl)
+
+                            if (url === null) return
+                            if (url === '') {
+                                editor.chain().focus().extendMarkRange('link').unsetLink().run()
+                                return
+                            }
+
+                            editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+                        }}
+                    />
+
+                    <div className="ml-auto flex items-center gap-0.5">
+                        <ToolbarButton
+                            icon={Undo}
+                            tooltip="Desfazer"
+                            disabled={!editor.can().undo()}
+                            onClick={() => editor.chain().focus().undo().run()}
+                        />
+                        <ToolbarButton
+                            icon={Redo}
+                            tooltip="Refazer"
+                            disabled={!editor.can().redo()}
+                            onClick={() => editor.chain().focus().redo().run()}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex-1 relative overflow-auto p-2 bg-gradient-to-b from-transparent to-muted/5">
+                    <EditorContent editor={editor} />
                 </div>
             </div>
-            <EditorContent editor={editor} />
-        </div>
+        </TooltipProvider>
     )
 }

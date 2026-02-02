@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Company, TenantBranding
+from .models import Company, TenantBranding, AuditLog
+from django.contrib.auth import get_user_model
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -30,19 +31,6 @@ class TenantBrandingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'company']
 
-
-class TenantEmailConfigSerializer(serializers.ModelSerializer):
-    class Meta:
-        from .models import TenantEmailConfig
-        model = TenantEmailConfig
-        fields = [
-            'id', 'use_custom_smtp', 'smtp_host', 'smtp_port',
-            'smtp_user', 'smtp_password', 'smtp_use_tls', 'from_email'
-        ]
-        extra_kwargs = {
-            'smtp_password': {'write_only': True}
-        }
-    
     def get_logo_url(self, obj):
         if obj.logo:
             request = self.context.get('request')
@@ -58,3 +46,28 @@ class TenantEmailConfigSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.icon.url)
             return obj.icon.url
         return None
+
+
+class TenantEmailConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import TenantEmailConfig
+        model = TenantEmailConfig
+        fields = [
+            'id', 'use_custom_smtp', 'smtp_host', 'smtp_port',
+            'smtp_user', 'smtp_password', 'smtp_use_tls', 'from_email'
+        ]
+        extra_kwargs = {
+            'smtp_password': {'write_only': True}
+        }
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+
+    class Meta:
+        model = AuditLog
+        fields = [
+            'id', 'user', 'user_name', 'user_email', 'action', 
+            'resource', 'resource_id', 'details', 'ip_address', 'created_at'
+        ]
+        read_only_fields = fields

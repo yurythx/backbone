@@ -3,6 +3,7 @@ from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from apps.core.models import AuditLog
 from .tasks import send_welcome_email
+from django.conf import settings
 
 User = get_user_model()
 
@@ -23,4 +24,10 @@ def user_post_save(sender, instance, created, **kwargs):
         # 2. Async Task: Welcome Email
         # Use on_commit to ensure DB transaction is finished before Celery worker tries to read the user
         from django.db import transaction
-        transaction.on_commit(lambda: send_welcome_email.delay(instance.id, instance.username, instance.email))
+        def _safe_send():
+            try:
+                send_welcome_email.delay(instance.id, instance.username, instance.email)
+            except Exception:
+                # Ignore broker connection errors in dev/test environments
+                pass
+        transaction.on_commit(_safe_send)

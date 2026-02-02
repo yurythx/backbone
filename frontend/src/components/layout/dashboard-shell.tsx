@@ -19,8 +19,8 @@ export function DashboardShell({
       <div className="flex flex-1">
         {isAdminRoute && <Sidebar />}
         <main className={cn(
-          "flex-1 p-8 bg-background overflow-auto",
-          !isAdminRoute && "max-w-7xl mx-auto w-full" // Center content if no sidebar
+          "flex-1 p-4 md:p-8 bg-background overflow-x-hidden",
+          !isAdminRoute && "max-w-7xl mx-auto w-full"
         )}>
           {children}
         </main>

@@ -18,24 +18,22 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { Loader2, Building2, Globe, Palette, Save } from "lucide-react"
 import { toast } from "sonner"
 import { useEffect } from "react"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const companySchema = z.object({
-  name: z.string().min(2, "Company name is required."),
-  domain: z.string().optional(),
+  name: z.string().min(2, "O nome da empresa deve ter pelo menos 2 caracteres."),
+  domain: z.string().regex(/^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,11}?$/, "Insira um domínio válido (ex: app.acme.com)").optional().or(z.literal("")),
   branding: z.object({
-    primaryColor: z.string().optional(),
-    logoUrl: z.string().optional(),
+    primaryColor: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, "Insira um código Hex válido (ex: #000000)").optional().or(z.literal("")),
+    logoUrl: z.string().url("Insira um URL de imagem válido").optional().or(z.literal("")),
   }).optional(),
 })
 
 export function CompanyForm() {
   const queryClient = useQueryClient()
-  // We need the slug to fetch the company. 
-  // In a real app, we might get this from the user profile or context.
-  // Here we use localStorage as stored during login.
   const slug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
 
   const { data: company, isLoading } = useQuery({
@@ -54,113 +52,159 @@ export function CompanyForm() {
       name: "",
       domain: "",
       branding: {
-        primaryColor: "",
+        primaryColor: "#000000",
         logoUrl: "",
       },
     }
   })
 
-  // Update form when data loads
   useEffect(() => {
     if (company) {
-        form.reset({
-            name: company.name,
-            domain: company.domain || "",
-            branding: {
-                primaryColor: company.branding?.primaryColor || "",
-                logoUrl: company.branding?.logoUrl || "",
-            }
-        })
+      form.reset({
+        name: company.name,
+        domain: company.domain || "",
+        branding: {
+          primaryColor: company.branding?.primaryColor || "#000000",
+          logoUrl: company.branding?.logoUrl || "",
+        }
+      })
     }
   }, [company, form])
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof companySchema>) => {
-      if (!slug) throw new Error("No company slug")
+      if (!slug) throw new Error("A identificação da empresa não foi encontrada.")
       await api.patch(`/api/core/companies/${slug}/`, values)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] })
-      toast.success("Company settings updated")
+      toast.success("Configurações da empresa atualizadas!")
     },
     onError: (error) => {
-        toast.error("Failed to update company settings")
-        console.error(error)
+      toast.error("Falha ao salvar configurações")
+      console.error(error)
     }
   })
+
+  if (isLoading) {
+    return (
+      <Card className="border-none shadow-none bg-transparent">
+        <CardHeader className="px-0">
+          <Skeleton className="h-8 w-1/3 mb-2" />
+          <Skeleton className="h-4 w-1/2" />
+        </CardHeader>
+        <CardContent className="px-0 space-y-6">
+          <Skeleton className="h-12 w-full max-w-2xl" />
+          <Skeleton className="h-12 w-full max-w-2xl" />
+          <Skeleton className="h-12 w-32" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!company) return null
 
   function onSubmit(values: z.infer<typeof companySchema>) {
     mutation.mutate(values)
   }
 
-  if (isLoading) return <div>Loading company settings...</div>
-  if (!company) return null // Or some empty state
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Company Settings</CardTitle>
-        <CardDescription>Manage your organization details and branding.</CardDescription>
+    <Card className="border-none shadow-none bg-transparent">
+      <CardHeader className="px-0">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <Building2 className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <CardTitle className="text-2xl">Perfil da Organização</CardTitle>
+            <CardDescription>Configure a identidade visual e domínio da sua empresa.</CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-0 pt-4">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Company Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-2xl">
+            <div className="space-y-6 p-6 border rounded-2xl bg-muted/5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5">
+                <Building2 className="h-24 w-24" />
+              </div>
 
-            <FormField
-              control={form.control}
-              name="domain"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Custom Domain</FormLabel>
-                  <FormControl>
-                    <Input placeholder="app.acme.com" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    Your custom domain for white-labeling.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="branding.primaryColor"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Primary Color (Hex)</FormLabel>
-                      <FormControl>
-                        <div className="flex gap-2">
-                            <div 
-                                className="w-10 h-10 rounded border" 
-                                style={{ backgroundColor: field.value || '#000000' }}
-                            />
-                            <Input placeholder="#000000" {...field} />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold">Nome da Empresa</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Nome Comercial" className="h-11 bg-background" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="domain"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold">Domínio Personalizado</FormLabel>
+                    <FormControl>
+                      <div className="relative group">
+                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <Input placeholder="app.suaempresa.com" className="pl-10 h-11 bg-background" {...field} />
+                      </div>
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      Configure o CNAME do seu domínio apontando para <b>app.backbone.com</b>
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Company Settings
+            <div className="space-y-6 p-6 border rounded-2xl bg-primary/5 relative overflow-hidden">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <Palette className="h-4 w-4 text-primary" />
+                Branding e Cores
+              </h3>
+
+              <FormField
+                control={form.control}
+                name="branding.primaryColor"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Cor Primária (Hexadecimal)</FormLabel>
+                    <FormControl>
+                      <div className="flex gap-3">
+                        <div
+                          className="w-11 h-11 rounded-xl border shadow-sm transition-transform hover:scale-105"
+                          style={{ backgroundColor: field.value || '#000000' }}
+                        />
+                        <div className="relative flex-1 group">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono text-muted-foreground">#</span>
+                          <Input placeholder="EE00FF" className="pl-7 h-11 bg-background font-mono uppercase" {...field} onChange={(e) => {
+                            let val = e.target.value;
+                            if (!val.startsWith('#')) val = '#' + val;
+                            field.onChange(val);
+                          }} value={field.value?.replace('#', '')} />
+                        </div>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Button type="submit" size="lg" className="px-8 shadow-lg shadow-primary/20" disabled={mutation.isPending}>
+              {mutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Salvar Alterações
             </Button>
           </form>
         </Form>

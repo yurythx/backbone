@@ -171,3 +171,90 @@ Um arquivo completo da especificação da API foi gerado em `docs/schema.yaml`. 
 ## 7. Observações Finais
 - **Erros 403 Forbidden**: Geralmente significam falta de acesso ao módulo (verifique `HasModuleAccess`) ou tentativa de acessar dados de outro grupo/empresa.
 - **Timezone**: O backend opera em UTC. O frontend deve converter para hora local ao exibir.
+
+---
+
+## 8. Exemplos Práticos para o Frontend
+
+### 8.1 Interceptors com Axios
+
+```ts
+import axios from 'axios'
+
+export const api = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+})
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token')
+  const slug = localStorage.getItem('company_slug') || 'blackbone'
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  config.headers['X-Company-Slug'] = slug
+  return config
+})
+
+api.interceptors.response.use(
+  (res) => res,
+  async (err) => {
+    if (err.response?.status === 401) {
+      // opcional: tentar refresh token
+      // redirecionar para login
+    }
+    if (err.response?.status === 403) {
+      // módulo desativado ou acesso negado
+    }
+    return Promise.reject(err)
+  }
+)
+```
+
+### 8.2 Uso dos Endpoints (Messenger)
+
+```ts
+// listar conversas
+const { data: conversations } = await api.get('/api/messenger/conversations/')
+
+// enviar mensagem
+await api.post(`/api/messenger/conversations/${conversationId}/send_message/`, {
+  content: 'Olá!',
+})
+
+// listar mensagens com paginação temporal
+const ts = new Date().toISOString()
+const { data: messages } = await api.get(`/api/messenger/conversations/${conversationId}/messages/?before=${ts}`)
+
+// marcar mensagem como lida
+await api.post(`/api/messenger/messages/${messageId}/mark_read/`)
+```
+
+### 8.3 Conexão WebSocket (Chat)
+
+```ts
+const token = localStorage.getItem('access_token')
+const ws = new WebSocket(`ws://localhost:8000/ws/chat/${conversationId}/?token=${token}`)
+
+ws.onopen = () => {
+  console.log('WS connected')
+}
+
+ws.onmessage = (event) => {
+  const payload = JSON.parse(event.data)
+  // payload: { message, sender }
+}
+
+ws.onclose = () => {
+  console.log('WS closed, try to reconnect...')
+}
+```
+
+### 8.4 Gerando Cliente a partir do OpenAPI
+
+Opcional: usar `openapi-typescript-codegen` para gerar tipos e serviços.
+
+```bash
+npx openapi-typescript-codegen --input ./backend/docs/schema.yaml --output ./frontend/src/api
+```
+
+Depois, importe os serviços gerados no frontend e use com os interceptors configurados.
