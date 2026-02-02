@@ -47,6 +47,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         # Apply Django's password validators
+        # Normalize fields
+        if 'email' in attrs and attrs['email']:
+            attrs['email'] = attrs['email'].strip().lower()
+        if 'username' in attrs and attrs['username']:
+            attrs['username'] = attrs['username'].strip()
         password = attrs.get('password')
         # Provide context user for validators that check similarity
         context_user = User(username=attrs.get('username'), email=attrs.get('email'), first_name=attrs.get('first_name'), last_name=attrs.get('last_name'))
