@@ -60,6 +60,9 @@ const sidebarItems: SidebarItem[] = [
   },
 ]
 
+import { SlideUp } from "@/components/ui/motion"
+import { motion } from "framer-motion"
+
 export function Sidebar() {
   const pathname = usePathname()
 
@@ -80,12 +83,11 @@ export function Sidebar() {
   })
 
   return (
-    <aside className="w-64 border-r bg-background h-[calc(100vh-5rem)] sticky top-20 flex flex-col p-4 shrink-0">
-      <nav className="flex-1 space-y-1">
-        {sidebarItems.map((item) => {
+    <aside className="w-64 glass-morphism h-[calc(100vh-5rem)] sticky top-20 flex flex-col p-4 shrink-0 border-r-0 shadow-lg z-40 transition-all duration-500">
+      <nav className="flex-1 space-y-2">
+        {sidebarItems.map((item, index) => {
           // Visibility Logic
           if (item.module) {
-            // Backend may return direct array or paginated object { results: [] }
             const moduleList = Array.isArray(allModules) ? allModules : (allModules as any)?.results || []
             const activeList = Array.isArray(tenantModules) ? tenantModules : (tenantModules as any)?.results || []
 
@@ -99,35 +101,43 @@ export function Sidebar() {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
 
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all group",
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
-              <Icon className={cn(
-                "h-4 w-4 transition-transform group-hover:scale-110",
-                isActive ? "text-primary" : "text-muted-foreground"
-              )} />
-              <span>{item.title}</span>
-              {isActive && (
-                <div className="ml-auto w-1 h-4 bg-primary rounded-full" />
-              )}
-            </Link>
+            <SlideUp key={item.href} delay={index * 0.05}>
+              <Link
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative overflow-hidden",
+                  isActive
+                    ? "text-primary bg-primary/10"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                )}
+              >
+                <Icon className={cn(
+                  "h-4 w-4 transition-transform duration-500 group-hover:scale-110",
+                  isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                )} />
+                <span className="relative z-10">{item.title}</span>
+
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-active"
+                    className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-primary rounded-full"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </Link>
+            </SlideUp>
           )
         })}
       </nav>
 
-      <div className="mt-auto px-3 py-2">
-        <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
-          <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Backbone v1.0</p>
-          <p className="text-xs text-muted-foreground leading-relaxed">Arquitetura modular equilibrada.</p>
+      <SlideUp delay={0.4} className="mt-auto px-3 py-2">
+        <div className="bg-primary/5 rounded-2xl p-5 border border-primary/10 glass-morphism shadow-inner group">
+          <p className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-2 opacity-70">Backbone v1.0</p>
+          <p className="text-xs text-muted-foreground leading-relaxed group-hover:text-foreground transition-colors">
+            Experiência digital refinada para negócios modernos.
+          </p>
         </div>
-      </div>
+      </SlideUp>
     </aside>
   )
 }

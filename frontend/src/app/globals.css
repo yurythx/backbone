@@ -28,7 +28,19 @@
   --border: 156 20% 90%;
   --input: 156 20% 90%;
   --ring: 156 73% 17%;
-  --radius: 0.5rem;
+  --radius: 0.75rem;
+  /* Smoother corners */
+
+  /* Deep shadows for premium feel */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+  /* Glassmorphism glass color base */
+  --glass-bg: rgb(255 255 255 / 0.7);
+  --glass-border: rgb(255 255 255 / 0.3);
 }
 
 .dark {
@@ -53,6 +65,9 @@
   --border: 156 20% 20%;
   --input: 156 20% 20%;
   --ring: 156 50% 45%;
+
+  --glass-bg: rgb(10 20 18 / 0.7);
+  --glass-border: rgb(255 255 255 / 0.1);
 }
 
 /* Theme Palettes Utility Classes */
@@ -108,6 +123,21 @@
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
+
+  /* Deep glass tokens */
+  --glass-background: var(--glass-bg);
+  --glass-border: var(--glass-border);
+}
+
+.glass-morphism {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid var(--glass-border);
+}
+
+.shadow-premium {
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
 }
 
 body {
