@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
     Dialog,
     DialogContent,
@@ -8,8 +9,19 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Eye } from "lucide-react"
+import {
+    Eye,
+    Smartphone,
+    Tablet,
+    Monitor,
+    Clock,
+    User,
+    Tag,
+    X
+} from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface PreviewDialogProps {
     title: string
@@ -22,6 +34,8 @@ interface PreviewDialogProps {
     type: 'article' | 'page'
 }
 
+type DeviceMode = 'mobile' | 'tablet' | 'desktop'
+
 export function PreviewDialog({
     title,
     content,
@@ -32,68 +46,142 @@ export function PreviewDialog({
     date,
     type
 }: PreviewDialogProps) {
+    const [device, setDevice] = useState<DeviceMode>('desktop')
+
+    const deviceSpecs = {
+        mobile: "max-w-[375px]",
+        tablet: "max-w-[768px]",
+        desktop: "max-w-full"
+    }
+
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button variant="outline" type="button">
-                    <Eye className="h-4 w-4 mr-2" />
+                <Button variant="outline" type="button" className="group">
+                    <Eye className="h-4 w-4 mr-2 group-hover:text-primary transition-colors" />
                     Visualizar
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader className="border-b pb-4 mb-6">
-                    <DialogTitle>Preview do Conteúdo</DialogTitle>
+            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0 overflow-hidden flex flex-col border-none shadow-2xl">
+                <DialogHeader className="p-4 border-b bg-background/80 backdrop-blur-md sticky top-0 z-50 flex flex-row items-center justify-between">
+                    <div>
+                        <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                            <Eye className="h-5 w-5 text-primary" />
+                            Preview do Conteúdo
+                        </DialogTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">Veja como seu {type === 'article' ? 'artigo' : 'página'} será exibido para seus leitores.</p>
+                    </div>
+
+                    <div className="flex bg-muted p-1 rounded-lg mr-8">
+                        <Button
+                            variant={device === 'mobile' ? "background" : "ghost"}
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setDevice('mobile')}
+                        >
+                            <Smartphone className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant={device === 'tablet' ? "background" : "ghost"}
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setDevice('tablet')}
+                        >
+                            <Tablet className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant={device === 'desktop' ? "background" : "ghost"}
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setDevice('desktop')}
+                        >
+                            <Monitor className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </DialogHeader>
 
-                <div className="bg-background text-foreground">
-                    {type === 'article' ? (
-                        <article className="max-w-3xl mx-auto py-4">
-                            <header className="space-y-4 mb-8">
-                                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                                    {categoryName && (
-                                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider">
-                                            {categoryName}
-                                        </span>
-                                    )}
-                                    {date && <span>{date}</span>}
-                                    {authorName && <span>Por {authorName}</span>}
-                                </div>
-                                <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight leading-tight">
-                                    {title || "Sem Título"}
-                                </h1>
-                                {excerpt && (
-                                    <p className="text-xl text-muted-foreground leading-relaxed italic border-l-4 pl-6 border-primary/20">
-                                        {excerpt}
-                                    </p>
+                <div className="flex-1 bg-muted/20 overflow-hidden p-4 md:p-8 flex justify-center">
+                    <div className={cn(
+                        "bg-background w-full h-full shadow-2xl border transition-all duration-300 overflow-hidden rounded-t-xl",
+                        deviceSpecs[device]
+                    )}>
+                        <ScrollArea className="h-full w-full">
+                            <div className="p-6 md:p-12">
+                                {type === 'article' ? (
+                                    <article className="mx-auto">
+                                        <header className="space-y-6 mb-12">
+                                            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                                {categoryName && (
+                                                    <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                                                        <Tag className="h-3 w-3" />
+                                                        {categoryName}
+                                                    </div>
+                                                )}
+                                                {date && (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Clock className="h-3.5 w-3.5" />
+                                                        <span>{date}</span>
+                                                    </div>
+                                                )}
+                                                {authorName && (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <User className="h-3.5 w-3.5" />
+                                                        <span>Por {authorName}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <h1 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]">
+                                                {title || "Título do Artigo"}
+                                            </h1>
+
+                                            {excerpt && (
+                                                <p className="text-xl md:text-2xl text-muted-foreground leading-relaxed font-serif italic border-l-4 pl-6 border-primary/20 bg-muted/5 py-4 rounded-r-lg">
+                                                    {excerpt}
+                                                </p>
+                                            )}
+                                        </header>
+
+                                        {image && (
+                                            <div className="aspect-[21/9] relative rounded-2xl overflow-hidden mb-12 shadow-inner border">
+                                                <img src={image} alt={title} className="object-cover w-full h-full hover:scale-105 transition-transform duration-700" />
+                                            </div>
+                                        )}
+
+                                        <div
+                                            className="prose prose-lg sm:prose-xl dark:prose-invert max-w-none prose-headings:font-black prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-2xl prose-blockquote:border-primary/30 prose-blockquote:bg-muted/10 prose-blockquote:py-1"
+                                            dangerouslySetInnerHTML={{ __html: content || "<p class='text-muted-foreground text-center py-20 bg-muted/5 border-2 border-dashed rounded-xl'>Escreva algo no editor para ver o preview aqui...</p>" }}
+                                        />
+
+                                        <Separator className="my-16" />
+
+                                        <footer className="text-center text-muted-foreground text-sm py-8 space-y-2">
+                                            <p>© 2026 Backbone SaaS - Todos os direitos reservados.</p>
+                                            <div className="flex justify-center gap-4">
+                                                <span className="hover:text-primary cursor-pointer transition-colors">Twitter</span>
+                                                <span className="hover:text-primary cursor-pointer transition-colors">LinkedIn</span>
+                                                <span className="hover:text-primary cursor-pointer transition-colors">Instagram</span>
+                                            </div>
+                                        </footer>
+                                    </article>
+                                ) : (
+                                    <div className="mx-auto">
+                                        <header className="mb-12">
+                                            <h1 className="text-4xl md:text-7xl font-black tracking-tighter mb-6 leading-none">
+                                                {title || "Título da Página"}
+                                            </h1>
+                                            <div className="h-2 w-24 bg-primary rounded-full" />
+                                        </header>
+
+                                        <div
+                                            className="prose prose-lg sm:prose-2xl dark:prose-invert max-w-none prose-headings:font-black prose-headings:tracking-tight prose-a:text-primary hover:prose-a:underline prose-img:rounded-3xl"
+                                            dangerouslySetInnerHTML={{ __html: content || "<p class='text-muted-foreground text-center py-20 bg-muted/5 border-2 border-dashed rounded-xl'>Escreva algo no editor para ver o preview aqui...</p>" }}
+                                        />
+                                    </div>
                                 )}
-                            </header>
-
-                            {image && (
-                                <div className="aspect-video relative rounded-xl overflow-hidden mb-8 shadow-lg">
-                                    <img src={image} alt={title} className="object-cover w-full h-full" />
-                                </div>
-                            )}
-
-                            <div
-                                className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-bold prose-a:text-primary hover:prose-a:underline"
-                                dangerouslySetInnerHTML={{ __html: content || "<p className='text-muted-foreground'>Sem conteúdo para exibir.</p>" }}
-                            />
-                        </article>
-                    ) : (
-                        <div className="max-w-3xl mx-auto py-4">
-                            <header className="mb-8">
-                                <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-4">
-                                    {title || "Sem Título"}
-                                </h1>
-                                <div className="h-1.5 w-20 bg-primary rounded-full" />
-                            </header>
-
-                            <div
-                                className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-bold prose-a:text-primary hover:prose-a:underline"
-                                dangerouslySetInnerHTML={{ __html: content || "<p className='text-muted-foreground'>Sem conteúdo para exibir.</p>" }}
-                            />
-                        </div>
-                    )}
+                            </div>
+                        </ScrollArea>
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>

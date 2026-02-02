@@ -6,29 +6,37 @@ class TenantMiddleware:
 
     def __call__(self, request):
         from apps.core.models import Company
+        if request.path.startswith('/health/'):
+            set_current_company(None)
+            request.company = None
+            return self.get_response(request)
         host = request.get_host().split(':')[0]
-        # Assumindo subdomínio: tenant.dominio.com
-        # Em dev localhost, pode-se usar um header X-Company-Slug para facilitar testes
         slug = None
+        company = None
         
-        # 1. Tenta pegar pelo header (útil para testes/dev/mobile) - case insensitive em Django >= 3.0
-        # Mas verificamos explicitamente o padrão enviado pelo axios
-        slug = request.headers.get('x-company-slug') or request.headers.get('X-Company-Slug')
-        
-        if not slug:
-            # 2. Tenta pegar pelo subdomínio
+        # 1. Tenta pegar pelo header (dev/mobile/testes)
+        slug_header = request.headers.get('x-company-slug') or request.headers.get('X-Company-Slug')
+        if slug_header:
+            company = Company.objects.filter(slug=slug_header).first()
+
+        # 2. Se não achou pelo header, tenta pelo Domínio Customizado (Prioridade sobre subdomínio)
+        if not company:
+            # Procura exato pelo domínio (ex: minhaempresa.com)
+            company = Company.objects.filter(domain__iexact=host).first()
+
+        # 3. Se não achou pelo domínio, tenta pelo subdomínio
+        if not company:
             parts = host.split('.')
             if len(parts) > 1:
                 # Ex: tenant.localhost ou tenant.site.com
+                # Cuidado para não pegar 'www' como tenant se for o domínio principal, 
+                # mas aqui assumimos que www poderia ser um tenant ou tratado via DNS
                 slug = parts[0]
-        
-        if slug:
-            company = Company.objects.filter(slug=slug).first()
-            if company:
-                set_current_company(company)
-                request.company = company
-            else:
-                request.company = None
+                company = Company.objects.filter(slug=slug).first()
+
+        if company:
+            set_current_company(company)
+            request.company = company
         else:
             request.company = None
 

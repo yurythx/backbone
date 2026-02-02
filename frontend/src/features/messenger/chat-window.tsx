@@ -2,7 +2,7 @@ import * as React from "react"
 import { useInfiniteQuery, useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
 import { Send, Loader2, Paperclip, FileIcon, Download, X, ImageIcon } from "lucide-react"
 import { api } from "@/lib/axios"
-import { Contact, Message, Conversation } from "@/types"
+import { Contact, Message, Conversation, MessageReaction } from "@/types"
 import { useChat } from "@/hooks/use-chat"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,13 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { SmilePlus } from "lucide-react"
 
 interface ChatWindowProps {
   contact: Contact;
@@ -24,6 +31,10 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
   const topRef = React.useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const [sendError, setSendError] = React.useState<string | null>(null)
+  const lastPayloadRef = React.useRef<{ content: string; file?: File | null } | null>(null)
+  const retryCountRef = React.useRef<number>(0)
+  const BASE_RETRY_DELAY_MS = 1000
 
   // 1. Get or Create Conversation
   const { data: conversation, isLoading: isLoadingConv } = useQuery({
@@ -66,7 +77,7 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
   })
 
   // 3. WebSocket Hook
-  const { realtimeMessages } = useChat(conversation?.id || null)
+  const { realtimeMessages, typingUsers, handleTyping, sendTypingStatus } = useChat(conversation?.id || null)
 
   // 4. Send Message Mutation
   const sendMessageMutation = useMutation({
@@ -84,14 +95,31 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
     onSuccess: () => {
       setMessageInput("")
       setSelectedFile(null)
+      setSendError(null)
+      retryCountRef.current = 0
+      lastPayloadRef.current = null
       queryClient.invalidateQueries({ queryKey: ['messages', conversation?.id] })
     },
     onError: () => {
-      toast({
-        title: "Erro ao enviar",
-        description: "Não foi possível enviar sua mensagem.",
-        variant: "destructive"
-      })
+      const attempts = retryCountRef.current
+      if (attempts < 3 && lastPayloadRef.current) {
+        const next = attempts + 1
+        retryCountRef.current = next
+        setSendError(`Erro ao enviar. Tentando novamente (${next}/3)...`)
+        const delay = Math.min(BASE_RETRY_DELAY_MS * Math.pow(2, attempts), 5000)
+        setTimeout(() => {
+          if (lastPayloadRef.current) {
+            sendMessageMutation.mutate(lastPayloadRef.current)
+          }
+        }, delay)
+      } else {
+        setSendError("Falha ao enviar mensagem. Verifique a conexão e tente novamente.")
+        toast({
+          title: "Erro ao enviar",
+          description: "Não foi possível enviar sua mensagem.",
+          variant: "destructive"
+        })
+      }
     }
   })
 
@@ -121,10 +149,39 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
     }
   }, [conversation?.id])
 
+  // Infinite Scroll Observer
+  React.useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (topRef.current) {
+      observer.observe(topRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault()
     if (!messageInput.trim() && !selectedFile) return
-    sendMessageMutation.mutate({ content: messageInput, file: selectedFile })
+
+    sendTypingStatus(false)
+
+    lastPayloadRef.current = { content: messageInput, file: selectedFile }
+    retryCountRef.current = 0
+    setSendError(null)
+    sendMessageMutation.mutate(lastPayloadRef.current)
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessageInput(e.target.value)
+    handleTyping()
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,6 +199,21 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
     }
   }
 
+  const handleReaction = async (messageId: number, emoji: string, currentReactions: MessageReaction[]) => {
+    const hasReacted = currentReactions?.some(r => r.user === currentUser?.id && r.emoji === emoji);
+    const action = hasReacted ? 'remove' : 'add';
+
+    try {
+      await api.post(`/api/messenger/messages/${messageId}/reaction/`, { emoji, action });
+    } catch (e) {
+      toast({
+        title: "Erro",
+        description: "Falha ao reagir",
+        variant: "destructive"
+      })
+    }
+  }
+
   if (isLoadingConv) {
     return <div className="flex-1 flex items-center justify-center text-muted-foreground">Carregando conversa...</div>
   }
@@ -149,7 +221,7 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="h-16 border-b flex items-center px-6 justify-between bg-card shrink-0">
+      <div className="h-16 border-b flex items-center px-6 justify-between bg-gradient-to-r from-primary/10 via-card to-primary/5 shrink-0">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 border">
             <AvatarImage src={`https://avatar.vercel.sh/${contact.username}`} />
@@ -177,18 +249,12 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
       {/* Messages Area */}
       <ScrollArea className="flex-1 p-4 overflow-x-hidden">
         <div className="space-y-4 max-w-4xl mx-auto pb-4">
-          {hasNextPage && (
+
+          {hasNextPage && <div ref={topRef} className="h-1" />}
+
+          {isFetchingNextPage && (
             <div className="flex justify-center p-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-                className="text-xs text-muted-foreground hover:text-primary"
-              >
-                {isFetchingNextPage ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
-                Carregar mensagens anteriores
-              </Button>
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           )}
 
@@ -208,8 +274,8 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
                   className={cn(
                     "group relative flex flex-col gap-2 rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-all",
                     isMe
-                      ? "bg-primary text-primary-foreground rounded-tr-none ml-12"
-                      : "bg-muted text-foreground rounded-tl-none mr-12"
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-tr-none ml-12 shadow-primary/20"
+                      : "bg-background/70 backdrop-blur text-foreground rounded-tl-none mr-12 border"
                   )}
                 >
                   {/* Image Attachment */}
@@ -264,10 +330,71 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
                   )}>
                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
+
+                  {/* Reactions Display */}
+                  {msg.reactions && msg.reactions.length > 0 && (
+                    <div className={cn("flex gap-1 flex-wrap mt-1", isMe ? "justify-end" : "justify-start")}>
+                      {Object.entries((msg.reactions || []).reduce((acc, r) => {
+                        acc[r.emoji] = (acc[r.emoji] || []).concat(r);
+                        return acc;
+                      }, {} as Record<string, MessageReaction[]>)).map(([emoji, reactions]) => {
+                        const isReactedByMe = reactions.some(r => r.user === currentUser?.id);
+                        return (
+                          <button
+                            key={emoji}
+                            onClick={() => handleReaction(msg.id, emoji, msg.reactions || [])}
+                            className={cn(
+                              "text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 transition-colors z-10",
+                              isReactedByMe ? "bg-primary/10 border-primary/20 text-primary" : "bg-card border-border hover:bg-muted"
+                            )}
+                          >
+                            <span>{emoji}</span>
+                            <span className="font-medium">{reactions.length}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Reaction Picker Button */}
+                  <div className={cn(
+                    "absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity",
+                    isMe ? "-left-8" : "-right-8"
+                  )}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full bg-background shadow-sm border">
+                          <SmilePlus className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align={isMe ? "end" : "start"} className="flex gap-1 p-1">
+                        {["👍", "❤️", "😂", "😮", "😢", "😡"].map(emoji => (
+                          <DropdownMenuItem key={emoji} onClick={() => handleReaction(msg.id, emoji, msg.reactions || [])} className="cursor-pointer justify-center text-lg px-2 hover:bg-accent rounded-sm">
+                            {emoji}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </div>
             )
           })}
+
+          {/* Typing indicator */}
+          {Object.entries(typingUsers).length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse ml-1">
+              <div className="flex gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-bounce"></span>
+              </div>
+              <span>
+                {Object.values(typingUsers).join(", ")} {Object.values(typingUsers).length === 1 ? "está digitando..." : "estão digitando..."}
+              </span>
+            </div>
+          )}
+
           <div ref={scrollRef} className="h-1" />
         </div>
       </ScrollArea>
@@ -288,11 +415,29 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
             </div>
           )}
 
+        {sendError && (
+          <div className="w-full text-sm text-destructive font-medium bg-destructive/10 border border-destructive/20 p-3 rounded-xl">
+            {sendError}
+          </div>
+        )}
+
           <form onSubmit={handleSend} className="flex gap-2 items-end">
             <div className="flex-1 relative bg-muted rounded-xl border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
               <Input
                 value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
+                onChange={handleInputChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    if (messageInput.trim() || selectedFile) {
+                      sendTypingStatus(false)
+                    lastPayloadRef.current = { content: messageInput, file: selectedFile }
+                    retryCountRef.current = 0
+                    setSendError(null)
+                    sendMessageMutation.mutate(lastPayloadRef.current)
+                    }
+                  }
+                }}
                 placeholder="Escreva uma mensagem..."
                 className="border-none bg-transparent focus-visible:ring-0 min-h-[44px] py-2.5"
                 autoFocus

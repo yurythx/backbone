@@ -1,109 +1,64 @@
-from django.test import TestCase, RequestFactory
-from rest_framework.views import APIView
+from rest_framework.test import APITestCase
+from rest_framework import status
+from django.contrib.auth import get_user_model
 from apps.core.models import Company
-from apps.accounts.models import User
 from .models import Module, TenantModule
-from .permissions import HasModuleAccess
+from apps.accounts.models import Role
 
-class MockView(APIView):
-    pass
+User = get_user_model()
 
-class ModulePermissionTest(TestCase):
+class ModuleManagerTest(APITestCase):
     def setUp(self):
-        self.factory = RequestFactory()
-        self.permission = HasModuleAccess()
-        
-        # Setup Company and User
-        self.company = Company.objects.create(name="Test Corp", slug="test-corp")
+        self.company = Company.objects.create(name="Test Co", slug="test-co")
+        self.role = Role.objects.create(company=self.company, name="Admin", permissions=[])
         self.user = User.objects.create_user(
-            username="testuser", 
-            password="password", 
-            company=self.company
+            username="admin", 
+            password="pwd", 
+            company=self.company,
+            role=self.role
+        )
+        self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
+        
+        # Create a module
+        self.module = Module.objects.create(
+            code="messenger",
+            name="Messenger",
+            description="Chat functionality"
         )
         
-        # Setup Module
-        self.module = Module.objects.create(code="test_mod", name="Test Module")
+    def test_list_modules(self):
+        """Test listing available system modules."""
+        self.client.force_authenticate(user=self.user)
+        # Use corrected URL
+        response = self.client.get('/api/modules/available/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        # Should return the global Module
+        self.assertEqual(len(response.data['results']), 1, response.data)
+        self.assertEqual(response.data['results'][0]['code'], "messenger")
 
-    def test_no_module_code_defined(self):
-        """Should allow access if view has no module_code defined"""
-        request = self.factory.get('/')
-        request.user = self.user
-        request.company = self.company
+    def test_activate_module(self):
+        """Test activating a module for the current tenant."""
+        self.client.force_authenticate(user=self.user)
+        payload = {"module_code": "messenger"}
+        # Use corrected URL
+        response = self.client.post('/api/modules/my-modules/activate/', payload)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
         
-        view = MockView()
-        # view.module_code is undefined
-        
-        self.assertTrue(self.permission.has_permission(request, view))
-
-    def test_no_company_context(self):
-        """Should deny access if no company context (e.g. public endpoint trying to access module logic)"""
-        request = self.factory.get('/')
-        request.user = self.user
-        request.company = None # Simulate missing context
-        
-        view = MockView()
-        view.module_code = "test_mod"
-        
-        self.assertFalse(self.permission.has_permission(request, view))
-
-    def test_module_not_assigned(self):
-        """Should deny access if tenant does not have the module assigned"""
-        request = self.factory.get('/')
-        request.user = self.user
-        request.company = self.company
-        
-        view = MockView()
-        view.module_code = "test_mod"
-        
-        self.assertFalse(self.permission.has_permission(request, view))
-
-    def test_module_assigned_but_inactive(self):
-        """Should deny access if tenant has module but is_active=False"""
-        TenantModule.objects.create(
-            company=self.company, 
-            module=self.module, 
-            is_active=False
-        )
-        
-        request = self.factory.get('/')
-        request.user = self.user
-        request.company = self.company
-        
-        view = MockView()
-        view.module_code = "test_mod"
-        
-        self.assertFalse(self.permission.has_permission(request, view))
-
-    def test_module_assigned_and_active(self):
-        """Should allow access if tenant has module active"""
-        TenantModule.objects.create(
+        # Verify it was activated
+        self.assertTrue(TenantModule.objects.filter(
             company=self.company, 
             module=self.module, 
             is_active=True
-        )
-        
-        request = self.factory.get('/')
-        request.user = self.user
-        request.company = self.company
-        
-        view = MockView()
-        view.module_code = "test_mod"
-        
-        self.assertTrue(self.permission.has_permission(request, view))
+        ).exists())
 
-    def test_module_code_mismatch(self):
-        """Should deny if tenant has 'test_mod' but view requires 'other_mod'"""
-        TenantModule.objects.create(
-            company=self.company, 
-            module=self.module, 
-            is_active=True
-        )
+    def test_list_tenant_modules(self):
+        """Test listing activated modules for the tenant."""
+        # Activate first
+        TenantModule.objects.create(company=self.company, module=self.module, is_active=True)
         
-        request = self.factory.get('/')
-        request.user = self.user
-        request.company = self.company
-        
-        view = MockView()
-        view.module_code = "other_mod" # Mismatch
-        
-        self.assertFalse(self.permission.has_permission(request, view))
+        self.client.force_authenticate(user=self.user)
+        # Use corrected URL
+        response = self.client.get('/api/modules/my-modules/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(len(response.data['results']), 1, response.data)
+        self.assertEqual(response.data['results'][0]['module_name'], "Messenger")

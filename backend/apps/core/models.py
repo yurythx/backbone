@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 from django.conf import settings
 from shared_kernel.models import BaseTenantModel
+from shared_kernel.validators import validate_image, validate_avatar
 
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -44,13 +45,15 @@ class TenantBranding(models.Model):
         upload_to='branding/logos/',
         blank=True,
         null=True,
-        help_text="Logo da empresa (PNG/SVG, max 2MB)"
+        validators=[validate_image],
+        help_text="Logo da empresa (PNG/JPEG/WebP, max 10MB)"
     )
     icon = models.ImageField(
         upload_to='branding/icons/',
         blank=True,
         null=True,
-        help_text="Ícone/favicon (ICO/PNG, recomendado 32x32 ou 64x64)"
+        validators=[validate_avatar],
+        help_text="Ícone/favicon (ICO/PNG, max 2MB, recomendado 32x32 ou 64x64)"
     )
     primary_color = models.CharField(
         max_length=7,

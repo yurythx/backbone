@@ -72,6 +72,9 @@ export function Sidebar() {
       const res = await api.get<TenantModule[]>('/api/modules/my-modules/')
       return res.data
     },
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   })
 
   const { data: allModules } = useQuery({
@@ -79,11 +82,14 @@ export function Sidebar() {
     queryFn: async () => {
       const res = await api.get<any[]>('/api/modules/available/')
       return res.data
-    }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   })
 
   return (
-    <aside className="w-64 glass-morphism h-[calc(100vh-5rem)] sticky top-20 flex flex-col p-4 shrink-0 border-r-0 shadow-lg z-40 transition-all duration-500">
+    <aside className="hidden md:flex w-64 glass-morphism h-[calc(100vh-5rem)] sticky top-20 flex-col p-4 shrink-0 border-r-0 shadow-lg z-40 transition-all duration-500 overflow-y-auto">
       <nav className="flex-1 space-y-2">
         {sidebarItems.map((item, index) => {
           // Visibility Logic

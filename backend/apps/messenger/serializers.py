@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from .models import Conversation, Message
+from .models import Conversation, Message, MessageReaction
 
 User = get_user_model()
 
@@ -21,16 +21,26 @@ class ContactSerializer(serializers.ModelSerializer):
     def get_group_names(self, obj):
         return [g.name for g in obj.groups.all()]
 
+
+class MessageReactionSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = MessageReaction
+        fields = ['id', 'user', 'user_username', 'emoji', 'created_at']
+
 class MessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source='sender.username', read_only=True)
     file_url = serializers.SerializerMethodField()
+    reactions = MessageReactionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Message
         fields = [
             'id', 'conversation', 'sender', 'sender_username', 
             'content', 'file', 'file_url', 'file_name', 
-            'file_type', 'file_size', 'created_at', 'is_read'
+            'file_type', 'file_size', 'created_at', 'is_read',
+            'reactions'
         ]
         read_only_fields = ['sender', 'conversation']
 

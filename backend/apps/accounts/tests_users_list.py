@@ -1,0 +1,29 @@
+from rest_framework import status
+from rest_framework.test import APITestCase
+from django.contrib.auth import get_user_model
+from apps.core.models import Company
+
+User = get_user_model()
+
+class UsersListTest(APITestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="Users Corp", slug="users-corp")
+        self.user = User.all_objects.create_user(
+            username="owner",
+            email="owner@corp.com",
+            password="pass",
+            company=self.company
+        )
+        self.client.force_authenticate(user=self.user)
+        self.client.credentials(HTTP_X_COMPANY_SLUG='users-corp')
+
+        User.all_objects.create_user(username="u1", email="u1@corp.com", password="pass", company=self.company)
+        User.all_objects.create_user(username="u2", email="u2@corp.com", password="pass", company=self.company)
+
+    def test_users_list_has_results(self):
+        res = self.client.get('/api/accounts/users/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('results', res.data)
+        usernames = [u['username'] for u in res.data['results']]
+        self.assertIn('u1', usernames)
+        self.assertIn('u2', usernames)

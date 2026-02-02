@@ -15,8 +15,8 @@ interface PublicArticleCardProps {
 export function PublicArticleCard({ article }: PublicArticleCardProps) {
     return (
         <Link href={`/p/artigos/${article.slug}`}>
-            <Card className="h-full overflow-hidden hover:shadow-lg transition-shadow border-none bg-muted/20">
-                <div className="aspect-video relative overflow-hidden bg-muted">
+            <Card className="h-full overflow-hidden hover:shadow-xl transition-all border border-primary/10 bg-background/60 backdrop-blur rounded-2xl">
+                <div className="aspect-video relative overflow-hidden bg-muted rounded-t-2xl">
                     {article.image ? (
                         <img
                             src={article.image}
@@ -28,10 +28,11 @@ export function PublicArticleCard({ article }: PublicArticleCardProps) {
                             Sem Imagem
                         </div>
                     )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
                 </div>
-                <CardHeader className="p-4 space-y-2">
+                <CardHeader className="p-5 space-y-2">
                     {article.category_name && (
-                        <Badge variant="secondary" className="w-fit">
+                        <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-[10px]">
                             {article.category_name}
                         </Badge>
                     )}
@@ -39,18 +40,19 @@ export function PublicArticleCard({ article }: PublicArticleCardProps) {
                         {article.title}
                     </h3>
                 </CardHeader>
-                <CardContent className="p-4 pt-0">
+                <CardContent className="p-5 pt-0">
                     <p className="text-muted-foreground line-clamp-3 text-sm">
                         {article.excerpt || "Sem resumo disponível."}
                     </p>
                 </CardContent>
-                <CardFooter className="p-4 pt-0 flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
+                <CardFooter className="p-5 pt-0 flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
                         <CalendarDays className="h-3 w-3" />
                         {format(new Date(article.created_at), "dd 'de' MMM, yyyy", { locale: ptBR })}
                     </div>
-                    <div className="flex items-center gap-1 text-primary font-medium">
-                        Ler mais →
+                    <div className="flex items-center gap-1.5 text-primary font-semibold">
+                        Ler mais
+                        <span>→</span>
                     </div>
                 </CardFooter>
             </Card>

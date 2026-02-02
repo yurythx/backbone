@@ -27,7 +27,7 @@ export function DashboardShell({
             exit={{ opacity: 0, scale: 1.01, filter: "blur(4px)" }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className={cn(
-              "flex-1 p-8 bg-background overflow-auto min-h-0",
+              "flex-1 p-4 md:p-8 bg-background overflow-auto min-h-0",
               !isAdminRoute && "max-w-7xl mx-auto w-full"
             )}
           >

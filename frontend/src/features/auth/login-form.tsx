@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -25,18 +25,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Loader2, Building2 } from "lucide-react"
+import { Loader2, Building2, User, Lock, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 const formSchema = z.object({
   username: z.string().min(2, {
-    message: "Username must be at least 2 characters.",
+    message: "O nome de usuário deve ter pelo menos 2 caracteres.",
   }),
-  password: z.string().min(1, {
-    message: "Password is required.",
+  password: z.string().min(6, {
+    message: "A senha deve ter pelo menos 6 caracteres.",
   }),
   companySlug: z.string().min(1, {
-    message: "Por favor, selecione uma empresa.",
+    message: "Por favor, selecione uma empresa para acessar.",
   }),
 })
 
@@ -67,6 +68,13 @@ export function LoginForm() {
       companySlug: "",
     },
   })
+  
+  useEffect(() => {
+    const savedCompany = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
+    if (savedCompany) {
+      form.setValue('companySlug', savedCompany)
+    }
+  }, [form])
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
@@ -90,8 +98,8 @@ export function LoginForm() {
       window.dispatchEvent(new Event('app-login'))
 
       // 5. Redirect
+      toast.success("Login realizado com sucesso! Bem-vindo de volta.")
       router.push('/')
-      toast.success("Login realizado com sucesso!")
     } catch (err: any) {
       console.error(err)
       const message = err.response?.data?.detail || "Credenciais inválidas ou erro de conexão."
@@ -114,13 +122,13 @@ export function LoginForm() {
               <FormItem>
                 <FormControl>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <SelectTrigger className="h-14 bg-background border-primary/20 ring-offset-background focus:ring-primary/30 text-lg transition-all hover:border-primary/40">
+                    <SelectTrigger className="h-14 bg-background border-primary/20 ring-offset-background focus:ring-primary/30 text-lg transition-all hover:border-primary/40" aria-label="Selecionar empresa">
                       <div className="flex items-center gap-3">
-                        <Building2 className="h-5 w-5 text-primary" />
+                        <Building2 className="h-5 w-5 text-primary" aria-hidden="true" />
                         <SelectValue placeholder={isLoadingCompanies ? "Buscando empresas..." : "Escolha sua empresa"} />
                       </div>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-background text-foreground border border-primary/20 shadow-xl rounded-xl">
                       {companies?.map((company) => (
                         <SelectItem key={company.slug} value={company.slug} className="py-3 cursor-pointer">
                           <div className="flex flex-col">
@@ -136,18 +144,22 @@ export function LoginForm() {
             )}
           />
 
-          <div className="grid grid-cols-1 gap-4">
+          <div className="space-y-3">
             <FormField
               control={form.control}
               name="username"
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <Input
-                      placeholder="Usuário"
-                      className="h-12 bg-background/50 border-muted-foreground/20 focus:bg-background transition-colors"
-                      {...field}
-                    />
+                    <div className="relative group">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
+                      <Input
+                        placeholder="Nome de usuário"
+                        className="h-12 pl-12 bg-background/50 border-muted-foreground/20 focus:bg-background transition-all"
+                        aria-label="Nome de usuário"
+                        {...field}
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage className="text-xs" />
                 </FormItem>
@@ -160,12 +172,16 @@ export function LoginForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="Senha"
-                      className="h-12 bg-background/50 border-muted-foreground/20 focus:bg-background transition-colors"
-                      {...field}
-                    />
+                    <div className="relative group">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
+                      <Input
+                        type="password"
+                        placeholder="Sua senha secreta"
+                        className="h-12 pl-12 bg-background/50 border-muted-foreground/20 focus:bg-background transition-all"
+                        aria-label="Senha"
+                        {...field}
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage className="text-xs" />
                 </FormItem>
@@ -174,20 +190,27 @@ export function LoginForm() {
           </div>
 
           {error && (
-            <div className="text-sm text-destructive-foreground font-medium bg-destructive p-3 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-              <div className="h-1.5 w-1.5 rounded-full bg-destructive-foreground animate-pulse" />
+            <div className="text-sm text-destructive font-medium bg-destructive/10 border border-destructive/20 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
+              <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
               {error}
             </div>
           )}
 
-          <Button type="submit" className="w-full h-14 text-lg font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" disabled={isLoading}>
+          <Button
+            type="submit"
+            className="w-full h-14 text-lg font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98] mt-2 group"
+            disabled={isLoading}
+          >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                Acessando...
+                Autenticando...
               </>
             ) : (
-              "Entrar agora"
+              <span className="flex items-center gap-2">
+                Acessar Portal
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </span>
             )}
           </Button>
         </form>

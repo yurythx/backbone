@@ -69,14 +69,14 @@ class IntegrationFlowTest(TestCase):
 
         # 4. Access Protected Endpoint (Articles) - Should Fail
         # Because the company 'tech-corp' does not have 'articles' module active yet
-        response = self.client.get('/api/articles/')
+        response = self.client.get('/api/articles/articles/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
         # 5. Grant Access (Simulating Admin/Licensing Action)
         TenantModule.objects.create(company=company, module=self.article_module, is_active=True)
 
         # 6. Access Protected Endpoint (Articles) - Should Succeed
-        response = self.client.get('/api/articles/')
+        response = self.client.get('/api/articles/articles/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should return empty list initially
         self.assertEqual(response.data['count'], 0)
@@ -88,6 +88,6 @@ class IntegrationFlowTest(TestCase):
             "content": "First post",
             "is_published": True
         }
-        response = self.client.post('/api/articles/', article_data, format='json')
+        response = self.client.post('/api/articles/articles/', article_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['title'], "Hello World")
