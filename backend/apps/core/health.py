@@ -15,54 +15,35 @@ def health_check(request):
     """
     start_time = time.time()
     
-    health = {
-        'status': 'healthy',
-        'timestamp': time.time(),
-        'services': {}
-    }
+    health = {'status': 'ok', 'timestamp': time.time()}
     
     all_healthy = True
     
-    # 1. Check PostgreSQL
     db_status = check_database()
-    health['services']['database'] = db_status
-    if db_status['status'] != 'healthy':
+    health['database'] = 'ok' if db_status['status'] == 'healthy' else 'error'
+    if health['database'] != 'ok':
         all_healthy = False
     
-    # 2. Check Redis
     redis_status = check_redis()
-    health['services']['redis'] = redis_status
-    if redis_status['status'] != 'healthy':
+    health['redis'] = 'ok' if (redis_status['status'] == 'healthy') else 'error'
+    if health['redis'] != 'ok':
         all_healthy = False
     
-    # 3. Check MinIO/S3 (if enabled)
     if getattr(settings, 'USE_S3', False):
         minio_status = check_minio()
-        health['services']['minio'] = minio_status
+        health['minio'] = 'ok' if minio_status['status'] == 'healthy' else 'error'
         if minio_status['status'] != 'healthy':
             all_healthy = False
     
-    # 4. Check Celery (if configured)
     celery_status = check_celery()
-    health['services']['celery'] = celery_status
-    if celery_status['status'] != 'healthy':
-        # Celery warning, not critical
-        health['status'] = 'degraded' if all_healthy else 'unhealthy'
+    health['celery'] = 'ok' if celery_status['status'] == 'healthy' else 'warning'
     
-    # Set overall status
     if not all_healthy:
-        health['status'] = 'unhealthy'
+        health['status'] = 'error'
     
-    # Response time
     health['response_time_ms'] = round((time.time() - start_time) * 1000, 2)
     
-    # HTTP status code
-    if health['status'] == 'healthy':
-        status_code = 200
-    elif health['status'] == 'degraded':
-        status_code = 200  # Still operational
-    else:
-        status_code = 503  # Service Unavailable
+    status_code = 200 if health['status'] == 'ok' else 503
     
     return JsonResponse(health, status=status_code)
 
@@ -91,28 +72,12 @@ def check_database():
 
 
 def check_redis():
-    """Check Redis connection and responsiveness"""
     try:
-        start = time.time()
         conn = get_redis_connection("default")
-        result = conn.ping()
-        response_time = round((time.time() - start) * 1000, 2)
-        
-        # Get some stats
-        info = conn.info()
-        
-        return {
-            'status': 'healthy',
-            'response_time_ms': response_time,
-            'connected_clients': info.get('connected_clients', 'unknown'),
-            'used_memory_human': info.get('used_memory_human', 'unknown')
-        }
+        conn.ping()
+        return {'status': 'healthy'}
     except Exception as e:
-        return {
-            'status': 'unhealthy',
-            'error': str(e),
-            'type': 'redis'
-        }
+        return {'status': 'unhealthy', 'error': str(e)}
 
 
 def check_minio():

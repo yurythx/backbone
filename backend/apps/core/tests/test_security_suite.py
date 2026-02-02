@@ -55,7 +55,7 @@ class SecuritySuiteTest(TestCase):
 
         # B lists articles
         # Correct URL is usually /api/articles/ (if router registers r'')
-        response = self.client_b.get('/api/articles/')
+        response = self.client_b.get('/api/articles/articles/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data['results']
         
@@ -63,7 +63,7 @@ class SecuritySuiteTest(TestCase):
         self.assertEqual(len(results), 0)
         
         # B tries to access A's article directly by ID
-        response_direct = self.client_b.get(f'/api/articles/{article.id}/')
+        response_direct = self.client_b.get(f'/api/articles/articles/{article.id}/')
         # Should be 404 because QuerySet is filtered
         self.assertEqual(response_direct.status_code, status.HTTP_404_NOT_FOUND)
 

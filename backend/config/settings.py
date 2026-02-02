@@ -29,8 +29,10 @@ INSTALLED_APPS = [
     "channels",
     "rest_framework_simplejwt",
     "drf_spectacular",
+    "reversion", # Version control
     "storages",  # Django Storages
     "django_celery_beat",
+    "django_filters",
     # Local apps
     "apps.core",
     "apps.accounts.apps.AccountsConfig",
@@ -58,6 +60,11 @@ MIDDLEWARE = [
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
@@ -90,6 +97,9 @@ SIMPLE_JWT = {
     "SIGNING_KEY": SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+# Health check behavior in development
+HEALTH_IGNORE_REDIS = env.bool("HEALTH_IGNORE_REDIS", default=False)
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Backbone SaaS API',
@@ -169,6 +179,17 @@ if USE_S3:
 else:
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
+
+# Email Configuration
+EMAIL_BACKEND = env.str("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = env.str("EMAIL_HOST", default="localhost")
+EMAIL_PORT = env.int("EMAIL_PORT", default=1025)
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="Backbone <noreply@backbone.io>")
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+FRONTEND_URL = env.str("FRONTEND_URL", default="http://localhost:3005")
 
 # Channels
 ASGI_APPLICATION = "config.asgi.application"
@@ -262,6 +283,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
 # Logging Configuration
+# Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -274,18 +296,22 @@ LOGGING = {
             'format': '{levelname} {message}',
             'style': '{',
         },
+        'json': {
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(levelname)s %(asctime)s %(module)s %(message)s %(request_id)s %(user_id)s %(tenant)s',
+        }
     },
     'handlers': {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+            'formatter': 'json' if not DEBUG else 'verbose',
         },
     },
     'loggers': {
         'django': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': True,
         },
         'django.request': {
@@ -297,17 +323,24 @@ LOGGING = {
 }
 
 # Sentry Configuration
-# SENTRY_DSN = env("SENTRY_DSN", default=None)
-# if SENTRY_DSN:
-#     import sentry_sdk
-#     from sentry_sdk.integrations.django import DjangoIntegration
-#     sentry_sdk.init(
-#         dsn=SENTRY_DSN,
-#         integrations=[DjangoIntegration()],
-#         traces_sample_rate=0.1,
-#         send_default_pii=True,
-#         environment=env("SENTRY_ENVIRONMENT", default="production"),
-#     )
+SENTRY_DSN = env("SENTRY_DSN", default=None)
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            RedisIntegration(),
+            CeleryIntegration(),
+        ],
+        traces_sample_rate=0.1,
+        send_default_pii=True,
+        environment=env("SENTRY_ENVIRONMENT", default="production"),
+    )
 
 # Celery Configuration
 CELERY_BROKER_URL = REDIS_URL or "redis://localhost:6379/0"
@@ -316,6 +349,9 @@ CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_TASK_IGNORE_RESULT = True
 
 # Content Security Policy (CSP)
 from .csp_config import *  # noqa

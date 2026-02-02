@@ -43,7 +43,7 @@ class ModulesTestCase(APITestCase):
     def test_articles_crud(self):
         # Create Article
         data = {"title": "News 1", "slug": "news-1", "content": "Extra extra!", "is_published": True}
-        response = self.client.post('/api/articles/', data, format='json')
+        response = self.client.post('/api/articles/articles/', data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['author_name'], 'tester')
 

@@ -1,5 +1,7 @@
-from django.contrib.auth.models import AbstractUser, UserManager
+import secrets
 from django.db import models
+from django.utils import timezone
+from django.contrib.auth.models import AbstractUser, UserManager
 from shared_kernel.models import BaseTenantModel
 from shared_kernel.tenant_context import get_current_company
 
@@ -9,12 +11,40 @@ class TenantUserManager(UserManager):
         qs = super().get_queryset()
         if company:
             return qs.filter(company=company)
-        return qs
+        return qs.none()
+
+class Role(BaseTenantModel):
+    """
+    Papéis de usuário dentro de um tenant.
+    Ex: Administrador, Editor, Visualizador.
+    """
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    # Lista de permissões no formato slug (ex: ["articles.create", "media.upload"])
+    permissions = models.JSONField(default=list, help_text="Lista de slugs de permissões atribuídas a esta role")
+    is_system_role = models.BooleanField(default=False, help_text="Se True, não pode ser editada ou excluída")
+
+    class Meta:
+        verbose_name = "Role"
+        verbose_name_plural = "Roles"
+        unique_together = ('company', 'name')
+
+    def __str__(self):
+        return f"{self.name} ({self.company.name if self.company else 'System'})"
 
 class User(AbstractUser, BaseTenantModel):
+    # Relacionamento com Role
+    role = models.ForeignKey(
+        Role, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='users'
+    )
+
     # Managers
     objects = TenantUserManager()
-    all_objects = UserManager() 
+    all_objects = UserManager()
 
     class Meta:
         verbose_name = "User"
@@ -80,4 +110,34 @@ class UserThemePreference(models.Model):
     def __str__(self):
         palette = self.theme_palette if not self.use_tenant_theme else "Tenant Theme"
         return f"{self.user.username} - {palette}"
+
+class Invitation(BaseTenantModel):
+    """
+    Convite para um novo usuário se juntar à empresa.
+    """
+    email = models.EmailField(db_index=True)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='invitations')
+    token = models.CharField(max_length=64, unique=True, default=secrets.token_urlsafe)
+    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='sent_invitations')
+    status = models.CharField(
+        max_length=20, 
+        choices=(('pending', 'Pending'), ('accepted', 'Accepted'), ('expired', 'Expired')),
+        default='pending'
+    )
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            # Convite expira em 7 dias por padrão
+            self.expires_at = timezone.now() + timezone.timedelta(days=7)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"Invite for {self.email} - {self.company.name}"
 

@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Article, Category
+from .models import Article, Category, Tag, Comment
+from shared_kernel.sanitization import sanitize_html, sanitize_plain_text
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -7,11 +8,54 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['company']
 
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = '__all__'
+        read_only_fields = ['company']
+
 class ArticleSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     author_name = serializers.CharField(source='author.username', read_only=True)
+    tag_list = TagSerializer(source='tags', many=True, read_only=True)
 
     class Meta:
         model = Article
         fields = '__all__'
         read_only_fields = ['company', 'created_at', 'updated_at', 'author']
+
+    def validate(self, attrs):
+        if 'content' in attrs and attrs['content']:
+            attrs['content'] = sanitize_html(attrs['content'])
+        if 'excerpt' in attrs and attrs['excerpt']:
+            attrs['excerpt'] = sanitize_plain_text(attrs['excerpt'])
+        if 'title' in attrs and attrs['title']:
+            attrs['title'] = sanitize_plain_text(attrs['title'])
+        if 'meta_title' in attrs and attrs['meta_title']:
+            attrs['meta_title'] = sanitize_plain_text(attrs['meta_title'])
+        if 'meta_description' in attrs and attrs['meta_description']:
+            md = sanitize_plain_text(attrs['meta_description'])
+            if len(md) > 160:
+                raise serializers.ValidationError({'meta_description': 'máximo de 160 caracteres'})
+            attrs['meta_description'] = md
+        if 'meta_keywords' in attrs and attrs['meta_keywords']:
+            attrs['meta_keywords'] = sanitize_plain_text(attrs['meta_keywords'])
+        return attrs
+
+class CommentSerializer(serializers.ModelSerializer):
+    author_name = serializers.CharField(source='author.username', read_only=True)
+    article_title = serializers.CharField(source='article.title', read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = '__all__'
+        read_only_fields = ['company', 'created_at', 'author', 'is_approved']
+
+    def validate(self, attrs):
+        if 'content' in attrs and attrs['content']:
+            attrs['content'] = sanitize_plain_text(attrs['content'])
+        if 'name' in attrs and attrs['name']:
+            attrs['name'] = sanitize_plain_text(attrs['name'])
+        if 'email' in attrs and attrs['email']:
+            attrs['email'] = sanitize_plain_text(attrs['email'])
+        return attrs

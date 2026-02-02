@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from .models import Module, TenantModule
 from .serializers import ModuleSerializer, TenantModuleSerializer
+from shared_kernel.cache import tenant_cached, invalidate_tenant_cache
 
 class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -11,7 +12,6 @@ class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Module.objects.all().order_by('name')
     serializer_class = ModuleSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None
 
 class TenantModuleViewSet(viewsets.ModelViewSet):
     """
@@ -19,13 +19,21 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
     """
     serializer_class = TenantModuleSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None
+
+    @tenant_cached(timeout=3600, key_prefix='modules')
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
-        return TenantModule.objects.filter(company=self.request.company).order_by('module__name')
+        return TenantModule.objects.select_related('module').filter(company=self.request.company).order_by('module__name')
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
+        invalidate_tenant_cache('modules', self.request.company.slug)
+
+    def perform_update(self, serializer):
+        serializer.save()
+        invalidate_tenant_cache('modules', self.request.company.slug)
 
     @action(detail=False, methods=['post'], url_path='activate')
     def activate_module(self, request):
@@ -51,6 +59,8 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
         if not created and not tenant_module.is_active:
             tenant_module.is_active = True
             tenant_module.save()
+        
+        invalidate_tenant_cache('modules', request.company.slug)
 
         serializer = self.get_serializer(tenant_module)
         return Response(serializer.data, status=status.HTTP_200_OK)

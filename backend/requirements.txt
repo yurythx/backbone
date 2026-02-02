@@ -22,3 +22,8 @@ Faker>=20.0.0
 python-magic>=0.4.27
 django-csp>=3.8
 bleach>=6.1.0
+django-filter>=24.0
+
+
+django-reversion>=5.0
+python-json-logger>=2.0

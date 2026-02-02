@@ -45,3 +45,21 @@ class Message(BaseTenantModel):
 
     def __str__(self):
         return f"Message {self.id} from {self.sender}"
+
+class MessageReaction(BaseTenantModel):
+    """
+    Reações em mensagens (ex: 👍, ❤️).
+    """
+    message = models.ForeignKey(Message, related_name='reactions', on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='message_reactions', on_delete=models.CASCADE)
+    emoji = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('message', 'user', 'emoji')
+        indexes = [
+            models.Index(fields=['message', 'emoji']),
+        ]
+
+    def __str__(self):
+        return f"{self.user} reacted {self.emoji} to {self.message_id}"

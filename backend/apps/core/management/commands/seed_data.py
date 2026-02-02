@@ -25,7 +25,12 @@ class Command(BaseCommand):
             slug="ironminds",
             domain="ironminds.com"
         )
-        self.stdout.write(self.style.SUCCESS(f'Companies created: {blackbone.name}, {ironminds.name}'))
+        rootco, _ = Company.objects.get_or_create(
+            name="Empresa Raiz",
+            slug="raiz",
+            domain="raiz.local"
+        )
+        self.stdout.write(self.style.SUCCESS(f'Companies created: {blackbone.name}, {ironminds.name}, {rootco.name}'))
 
         # 2. Create Plans & Features
         feature_cms, _ = Feature.objects.get_or_create(name="CMS", code="cms", description="Content Management System")
@@ -48,37 +53,47 @@ class Command(BaseCommand):
 
         # 4. Assign Licenses & Activate Modules
         # BlackBone -> Pro
-        License.objects.get_or_create(
-            company=blackbone,
-            plan=plan_pro,
-            defaults={
-                'start_date': timezone.now(),
-                'end_date': timezone.now() + timedelta(days=365),
-                'is_active': True
-            }
-        )
-        TenantModule.objects.get_or_create(company=blackbone, module=module_pages, is_active=True)
-        TenantModule.objects.get_or_create(company=blackbone, module=module_articles, is_active=True)
-        TenantModule.objects.get_or_create(company=blackbone, module=module_messenger, is_active=True)
+        if not License.all_objects.filter(company=blackbone, plan=plan_pro).exists():
+            License.all_objects.create(
+                company=blackbone,
+                plan=plan_pro,
+                start_date=timezone.now(),
+                end_date=timezone.now() + timedelta(days=365),
+                is_active=True
+            )
+        TenantModule.all_objects.get_or_create(company=blackbone, module=module_pages, defaults={'is_active': True})
+        TenantModule.all_objects.get_or_create(company=blackbone, module=module_articles, defaults={'is_active': True})
+        TenantModule.all_objects.get_or_create(company=blackbone, module=module_messenger, defaults={'is_active': True})
 
         # IronMinds -> Basic
-        License.objects.get_or_create(
-            company=ironminds,
-            plan=plan_basic,
-            defaults={
-                'start_date': timezone.now(),
-                'end_date': timezone.now() + timedelta(days=365),
-                'is_active': True
-            }
-        )
-        TenantModule.objects.get_or_create(company=ironminds, module=module_pages, is_active=True)
+        if not License.all_objects.filter(company=ironminds, plan=plan_basic).exists():
+            License.all_objects.create(
+                company=ironminds,
+                plan=plan_basic,
+                start_date=timezone.now(),
+                end_date=timezone.now() + timedelta(days=365),
+                is_active=True
+            )
+        TenantModule.all_objects.get_or_create(company=ironminds, module=module_pages, defaults={'is_active': True})
         # IronMinds doesn't get Messenger
+        # Root company -> Pro like BlackBone
+        if not License.all_objects.filter(company=rootco, plan=plan_pro).exists():
+            License.all_objects.create(
+                company=rootco,
+                plan=plan_pro,
+                start_date=timezone.now(),
+                end_date=timezone.now() + timedelta(days=365),
+                is_active=True
+            )
+        TenantModule.all_objects.get_or_create(company=rootco, module=module_pages, defaults={'is_active': True})
+        TenantModule.all_objects.get_or_create(company=rootco, module=module_articles, defaults={'is_active': True})
+        TenantModule.all_objects.get_or_create(company=rootco, module=module_messenger, defaults={'is_active': True})
 
         self.stdout.write(self.style.SUCCESS('Licenses assigned and modules activated'))
 
         # 5. Create Users
         # Admin BlackBone
-        if not User.objects.filter(email="admin@blackbone.com").exists():
+        if not User.all_objects.filter(username="admin_blackbone").exists():
             User.objects.create_superuser(
                 username="admin_blackbone",
                 email="admin@blackbone.com",
@@ -87,7 +102,7 @@ class Command(BaseCommand):
             )
         
         # Admin IronMinds
-        if not User.objects.filter(email="admin@ironminds.com").exists():
+        if not User.all_objects.filter(username="admin_ironminds").exists():
             User.objects.create_user(
                 username="admin_ironminds",
                 email="admin@ironminds.com",
@@ -95,6 +110,22 @@ class Command(BaseCommand):
                 company=ironminds,
                 is_staff=True
             )
+        # Suporte Root Superuser
+        if not User.all_objects.filter(username="suporte").exists():
+            User.all_objects.create_superuser(
+                username="suporte",
+                email="suporte@raiz.local",
+                password="suporte123",
+                company=rootco
+            )
+        # Colaborador Root (para testes de contatos/mensageria)
+        if not User.all_objects.filter(username="colab_raiz").exists():
+            User.all_objects.create_user(
+                username="colab_raiz",
+                email="colab@raiz.local",
+                password="password123",
+                company=rootco
+            )
 
-        self.stdout.write(self.style.SUCCESS('Users created: admin@blackbone.com, admin@ironminds.com (pass: password123)'))
+        self.stdout.write(self.style.SUCCESS('Users created: admin@blackbone.com, admin@ironminds.com (pass: password123), suporte@raiz.local (pass: suporte123)'))
         self.stdout.write(self.style.SUCCESS('Seeding completed successfully!'))
