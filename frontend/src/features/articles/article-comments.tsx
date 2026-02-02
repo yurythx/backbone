@@ -1,0 +1,154 @@
+"use client"
+
+import * as React from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { api } from "@/lib/axios"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { MessageSquare, User, Trash2, Send } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { useToast } from "@/hooks/use-toast"
+import { Textarea } from "@/components/ui/textarea"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
+interface Comment {
+    id: number
+    content: string
+    author_name: string
+    created_at: string
+    is_approved: boolean
+}
+
+interface ArticleCommentsProps {
+    articleId: number
+}
+
+export function ArticleComments({ articleId }: ArticleCommentsProps) {
+    const { toast } = useToast()
+    const queryClient = useQueryClient()
+    const [isOpen, setIsOpen] = React.useState(false)
+    const [content, setContent] = React.useState("")
+
+    const { data: comments, isLoading } = useQuery({
+        queryKey: ['article-comments', articleId],
+        queryFn: async () => {
+            const res = await api.get<Comment[]>(`/api/articles/comments/?article=${articleId}`)
+            return Array.isArray(res.data) ? res.data : (res.data as any).results || []
+        },
+        enabled: isOpen
+    })
+
+    const createMutation = useMutation({
+        mutationFn: async (content: string) => {
+            await api.post('/api/articles/comments/', { article: articleId, content })
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['article-comments', articleId] })
+            setContent("")
+            toast({ title: "Comentário adicionado" })
+        },
+        onError: () => {
+            toast({ title: "Erro ao adicionar comentário", variant: "destructive" })
+        }
+    })
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id: number) => {
+            await api.delete(`/api/articles/comments/${id}/`)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['article-comments', articleId] })
+            toast({ title: "Comentário removido" })
+        },
+        onError: () => {
+            toast({ title: "Erro ao remover", variant: "destructive" })
+        }
+    })
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!content.trim()) return
+        createMutation.mutate(content)
+    }
+
+    return (
+        <Sheet open={isOpen} onOpenChange={setIsOpen}>
+            <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Comentários
+                </Button>
+            </SheetTrigger>
+            <SheetContent className="w-[400px] sm:w-[540px]">
+                <SheetHeader>
+                    <SheetTitle>Comentários do Artigo</SheetTitle>
+                    <SheetDescription>
+                        Gerencie os comentários e interações deste artigo.
+                    </SheetDescription>
+                </SheetHeader>
+
+                <div className="flex flex-col h-full pb-20">
+                    <div className="mt-6 mb-4">
+                        <form onSubmit={handleSubmit} className="flex gap-2">
+                            <Textarea
+                                placeholder="Adicione um comentário..."
+                                value={content}
+                                onChange={(e) => setContent(e.target.value)}
+                                className="resize-none min-h-[80px]"
+                            />
+                            <Button type="submit" size="icon" className="h-[80px] w-[80px]" disabled={createMutation.isPending}>
+                                <Send className="h-4 w-4" />
+                            </Button>
+                        </form>
+                    </div>
+
+                    <ScrollArea className="flex-1 pr-4 -mr-4 h-full">
+                        {isLoading ? (
+                            <div className="text-center py-4 text-muted-foreground">Carregando...</div>
+                        ) : comments?.length === 0 ? (
+                            <div className="text-center py-4 text-muted-foreground">Nenhum comentário ainda.</div>
+                        ) : (
+                            <div className="space-y-4 pb-4">
+                                {comments?.map((comment: Comment) => (
+                                    <div key={comment.id} className="flex gap-4 p-4 rounded-lg border bg-card text-card-foreground shadow-sm">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarFallback>{comment.author_name?.[0]?.toUpperCase() || '?'}</AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-semibold text-sm">{comment.author_name || 'Anônimo'}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {format(new Date(comment.created_at), "dd 'de' MMM, HH:mm", { locale: ptBR })}
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                                    onClick={() => deleteMutation.mutate(comment.id)}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <p className="text-sm text-foreground/90 whitespace-pre-wrap">{comment.content}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </ScrollArea>
+                </div>
+            </SheetContent>
+        </Sheet>
+    )
+}

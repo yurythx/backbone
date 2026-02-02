@@ -18,7 +18,10 @@ export function ModuleList() {
     queryFn: async () => {
       const res = await api.get<Module[]>('/api/modules/available/')
       return res.data
-    }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   })
 
   // 2. Fetch active modules for tenant
@@ -27,7 +30,10 @@ export function ModuleList() {
     queryFn: async () => {
       const res = await api.get<TenantModule[]>('/api/modules/my-modules/')
       return res.data
-    }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   })
 
   // 3. Toggle Mutation
