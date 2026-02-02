@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.coverage
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Django
+db.sqlite3
+media/
+staticfiles/
+*.log
+
+# Environments & secrets
+.env
+.env.*
+venv/
+.venv/
+
+# Node/Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.next/
+frontend/.nuxt/
+frontend/.cache/
+
+# IDE/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Build artifacts
+backend/**/dist/
+backend/**/build/
+
+# OS files
+Thumbs.db
