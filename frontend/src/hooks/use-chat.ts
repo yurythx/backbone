@@ -25,7 +25,7 @@ export function useChat(conversationId: number | null) {
     if (!token) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+    const host = window.location.hostname === 'localhost' ? 'localhost:8005' : window.location.host;
     const wsUrl = `${protocol}//${host}/ws/chat/chat_${conversationId}/?token=${token}`;
 
     const connect = () => {

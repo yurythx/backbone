@@ -25,6 +25,11 @@ class LicensingAPITest(APITestCase):
         PlanFeature.objects.create(plan=self.plan, feature=feat_users, value="100")
         PlanFeature.objects.create(plan=self.plan, feature=feat_cms, value="true")
 
+        # Enable articles module for this company
+        from apps.module_manager.models import Module, TenantModule
+        mod, _ = Module.objects.get_or_create(code="articles", defaults={"name": "Articles"})
+        TenantModule.objects.create(company=self.company, module=mod, is_active=True)
+
     def test_create_and_get_license(self):
         res = self.client.post('/api/licensing/my-license/', {"plan": self.plan.id}, format='json')
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
@@ -35,4 +40,63 @@ class LicensingAPITest(APITestCase):
 
         list_res = self.client.get('/api/licensing/my-license/')
         self.assertEqual(list_res.status_code, status.HTTP_200_OK)
-        self.assertTrue(any(item['id'] == lic_id for item in list_res.data['results']))
+        # Handle pagination if necessary, though current mock might be simple list
+        data = list_res.data['results'] if isinstance(list_res.data, dict) and 'results' in list_res.data else list_res.data
+        self.assertTrue(any(item['id'] == lic_id for item in data))
+
+    def test_checkout_upgrade(self):
+        new_plan = Plan.objects.create(name="Enterprise", price="499.00")
+        res = self.client.post('/api/licensing/my-license/checkout/', {"plan_id": new_plan.id}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        
+        # Verify new license is active
+        lic = License.objects.get(id=res.data['id'])
+        self.assertEqual(lic.plan, new_plan)
+        self.assertTrue(lic.is_active)
+        
+        # Verify Audit Log
+        from apps.core.models import AuditLog
+        audit = AuditLog.objects.filter(resource="License", resource_id=str(lic.id)).first()
+        self.assertIsNotNone(audit)
+        self.assertIn("UPGRADE_PLAN", audit.action)
+
+    def test_user_limit_enforcement(self):
+        # Create a plan with limit 1 user
+        small_plan = Plan.objects.create(name="Small", price="10.00")
+        feat_users = Feature.objects.get(code="max_users")
+        PlanFeature.objects.create(plan=small_plan, feature=feat_users, value="1")
+        
+        License.objects.create(company=self.company, plan=small_plan, is_active=True)
+        
+        # Try to create second user via API
+        from apps.accounts.serializers import UserSerializer
+        res = self.client.post('/api/accounts/users/', {
+            "username": "blocked",
+            "email": "blocked@corp.com",
+            "password": "pass123",
+            "role_id": None
+        }, format='json')
+        
+        # Should be blocked by Licensing Enforcement
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Limite de usuários atingido", str(res.data))
+
+    def test_article_limit_enforcement(self):
+        # Create a plan with limit 0 articles
+        no_article_plan = Plan.objects.create(name="No Articles", price="5.00")
+        feat_articles = Feature.objects.create(code="max_articles", name="Max Articles")
+        PlanFeature.objects.create(plan=no_article_plan, feature=feat_articles, value="0")
+        
+        # Deactivate old licenses
+        License.objects.filter(company=self.company).update(is_active=False)
+        License.objects.create(company=self.company, plan=no_article_plan, is_active=True)
+        
+        # Try to create article (using correct endpoint /api/articles/articles/)
+        res = self.client.post('/api/articles/articles/', {
+            "title": "Blocked Article",
+            "slug": "blocked-article", # Serializer might require it if service doesn't generate before validation
+            "content": "Should not be created"
+        }, format='json')
+        
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Limite de artigos atingido", str(res.data))

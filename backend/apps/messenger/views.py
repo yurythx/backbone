@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer, ContactSerializer
 from .services import MessengerService
@@ -10,7 +10,10 @@ from apps.module_manager.permissions import HasModuleAccess
 
 User = get_user_model()
 
-@extend_schema(tags=['Messenger'])
+@extend_schema_view(
+    list=extend_schema(tags=['Messenger']),
+    retrieve=extend_schema(tags=['Messenger']),
+)
 class ContactViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
@@ -33,7 +36,14 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
             
         return User.objects.filter(groups__in=user_groups).exclude(id=user.id).distinct().order_by('username')
 
-@extend_schema(tags=['Messenger'])
+@extend_schema_view(
+    list=extend_schema(tags=['Messenger']),
+    retrieve=extend_schema(tags=['Messenger']),
+    create=extend_schema(tags=['Messenger']),
+    update=extend_schema(tags=['Messenger']),
+    partial_update=extend_schema(tags=['Messenger']),
+    destroy=extend_schema(tags=['Messenger']),
+)
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
@@ -106,7 +116,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer = MessageSerializer(messages, many=True, context={'request': request})
         return Response(serializer.data)
 
-@extend_schema(tags=['Messenger'])
+@extend_schema_view(
+    reaction=extend_schema(tags=['Messenger'], summary="Add or remove emoji reaction"),
+    mark_read=extend_schema(tags=['Messenger'], summary="Mark message as read by recipient"),
+)
 class MessageViewSet(viewsets.GenericViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer

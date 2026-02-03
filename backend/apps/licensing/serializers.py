@@ -22,9 +22,21 @@ class PlanSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class LicenseSerializer(serializers.ModelSerializer):
-    plan_name = serializers.CharField(source='plan.name', read_only=True)
+    plan_details = PlanSerializer(source='plan', read_only=True)
     
     class Meta:
         model = License
-        fields = ['id', 'company', 'plan', 'plan_name', 'start_date', 'end_date', 'is_active']
-        read_only_fields = ['company', 'start_date']
+        fields = ['id', 'plan', 'plan_details', 'is_active', 'start_date', 'end_date']
+        read_only_fields = ['id', 'start_date', 'end_date']
+
+
+class UsageItemSerializer(serializers.Serializer):
+    current = serializers.IntegerField()
+    limit = serializers.IntegerField()
+    label = serializers.CharField()
+
+
+class UsageResponseSerializer(serializers.Serializer):
+    plan = serializers.CharField()
+    usage = serializers.DictField(child=UsageItemSerializer())
+    limits = serializers.DictField(child=serializers.CharField())

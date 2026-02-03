@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import {
     History,
     Search,
@@ -25,6 +26,7 @@ import {
 import { useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { SlideUp, FadeIn } from "@/components/ui/motion"
 import {
     Tooltip,
     TooltipContent,
@@ -42,6 +44,7 @@ export default function AuditPage() {
             let url = '/api/core/audit-logs/'
             const params = new URLSearchParams()
             if (actionFilter !== 'all') params.append('action', actionFilter)
+            if (searchTerm) params.append('search', searchTerm)
             if (params.toString()) url += `?${params.toString()}`
 
             const res = await api.get(url)
@@ -63,118 +66,153 @@ export default function AuditPage() {
     return (
         <DashboardShell>
             <div className="max-w-6xl mx-auto py-8 space-y-8">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                            <History className="h-8 w-8 text-primary" />
-                            Logs de Auditoria
-                        </h1>
-                        <p className="text-muted-foreground">Rastreie todas as atividades críticas realizadas no sistema.</p>
+                <SlideUp>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <h1 className="text-4xl font-black tracking-tight flex items-center gap-4 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                                <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 shadow-inner">
+                                    <History className="h-8 w-8 text-primary" />
+                                </div>
+                                Logs de Auditoria
+                            </h1>
+                            <p className="text-muted-foreground text-lg ml-1">Rastreie todas as atividades críticas realizadas no sistema.</p>
+                        </div>
                     </div>
-                </div>
+                </SlideUp>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-2 relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Pesquisar por recurso, ID ou usuário..."
-                            className="pl-11 h-12 rounded-2xl bg-card border-none shadow-sm focus-visible:ring-primary/20"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                <SlideUp delay={0.1}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="md:col-span-2 relative group">
+                            <div className="absolute inset-0 bg-primary/5 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                            <Input
+                                placeholder="Pesquisar por recurso, ID ou usuário..."
+                                className="pl-11 h-14 rounded-2xl bg-card/50 backdrop-blur-md border border-border/50 shadow-sm focus-visible:ring-primary/20 transition-all text-base"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <div className="relative group">
+                            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                            <select
+                                className="w-full h-14 pl-11 pr-4 rounded-2xl bg-card/50 backdrop-blur-md border border-border/50 shadow-sm appearance-none focus:ring-2 focus:ring-primary/20 text-sm font-bold cursor-pointer transition-all"
+                                value={actionFilter}
+                                onChange={(e) => setActionFilter(e.target.value)}
+                            >
+                                <option value="all">Todas as Ações</option>
+                                <option value="create">Criação (Create)</option>
+                                <option value="update">Edição (Update)</option>
+                                <option value="delete">Exclusão (Delete)</option>
+                                <option value="login">Login</option>
+                            </select>
+                        </div>
                     </div>
-                    <div className="relative">
-                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <select
-                            className="w-full h-12 pl-11 pr-4 rounded-2xl bg-card border-none shadow-sm appearance-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
-                            value={actionFilter}
-                            onChange={(e) => setActionFilter(e.target.value)}
-                        >
-                            <option value="all">Todas as Ações</option>
-                            <option value="create">Criação (Create)</option>
-                            <option value="update">Edição (Update)</option>
-                            <option value="delete">Exclusão (Delete)</option>
-                            <option value="login">Login</option>
-                        </select>
-                    </div>
-                </div>
+                </SlideUp>
 
-                <div className="rounded-3xl border bg-card overflow-hidden shadow-xl">
-                    <Table>
-                        <TableHeader className="bg-muted/30">
-                            <TableRow>
-                                <TableHead className="py-5 pl-8">Evento</TableHead>
-                                <TableHead>Usuário</TableHead>
-                                <TableHead>Recurso</TableHead>
-                                <TableHead>IP</TableHead>
-                                <TableHead>Data</TableHead>
-                                <TableHead className="text-right pr-8">Detalhes</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {isLoading ? (
-                                Array.from({ length: 5 }).map((_, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell colSpan={6} className="h-16 animate-pulse bg-muted/10" />
-                                    </TableRow>
-                                ))
-                            ) : logs?.map((log: any) => (
-                                <TableRow key={log.id} className="group hover:bg-muted/20 transition-colors">
-                                    <TableCell className="py-4 pl-8">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-9 w-9 rounded-xl bg-background border flex items-center justify-center shadow-sm">
-                                                <Activity className="h-4 w-4 text-muted-foreground" />
+                <FadeIn delay={0.3}>
+                    <div className="rounded-[2.5rem] border border-border/50 bg-card/30 backdrop-blur-xl overflow-hidden shadow-2xl relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="border-border/50 hover:bg-transparent bg-muted/20">
+                                    <TableHead className="py-6 pl-10 font-bold text-foreground">Evento</TableHead>
+                                    <TableHead className="font-bold text-foreground">Usuário</TableHead>
+                                    <TableHead className="font-bold text-foreground">Recurso</TableHead>
+                                    <TableHead className="font-bold text-foreground">IP</TableHead>
+                                    <TableHead className="font-bold text-foreground">Data</TableHead>
+                                    <TableHead className="text-right pr-10 font-bold text-foreground">Detalhes</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {isLoading ? (
+                                    Array.from({ length: 5 }).map((_, i) => (
+                                        <TableRow key={i} className="border-border/50">
+                                            <TableCell colSpan={6} className="h-24 animate-pulse bg-muted/5">
+                                                <div className="flex items-center gap-4 px-10">
+                                                    <div className="h-12 w-12 rounded-2xl bg-muted" />
+                                                    <div className="space-y-2 flex-1">
+                                                        <div className="h-4 w-32 bg-muted rounded" />
+                                                        <div className="h-3 w-48 bg-muted rounded opacity-50" />
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : logs?.map((log: any) => (
+                                    <TableRow key={log.id} className="group hover:bg-primary/5 transition-all border-border/30">
+                                        <TableCell className="py-6 pl-10">
+                                            <div className="flex items-center gap-4">
+                                                <div className="h-12 w-12 rounded-2xl bg-background border border-border/50 flex items-center justify-center shadow-premium group-hover:scale-110 transition-transform">
+                                                    <Activity className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                </div>
+                                                {getActionBadge(log.action)}
                                             </div>
-                                            {getActionBadge(log.action)}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col">
-                                            <span className="font-bold text-sm">{log.user_name || 'Sistema'}</span>
-                                            <span className="text-[10px] text-muted-foreground">{log.user_email || 'Backbone Daemon'}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <Database className="h-3 w-3 text-primary/60" />
-                                            <span className="text-sm font-medium">{log.resource}</span>
-                                            <Badge variant="secondary" className="text-[10px] h-5 rounded-md px-1">{log.resource_id}</Badge>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-xs font-mono text-muted-foreground">
-                                        {log.ip_address || "Internal"}
-                                    </TableCell>
-                                    <TableCell className="text-xs">
-                                        {format(new Date(log.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                                    </TableCell>
-                                    <TableCell className="text-right pr-8">
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
-                                                        <Info className="h-4 w-4 text-muted-foreground" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="max-w-[300px] p-4 rounded-xl border-none shadow-2xl">
-                                                    <pre className="text-[10px] overflow-auto max-h-[200px] font-mono whitespace-pre-wrap">
-                                                        {JSON.stringify(log.details, null, 2)}
-                                                    </pre>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {!isLoading && logs?.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
-                                        Nenhum log encontrado para o filtro selecionado.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <span className="font-black text-sm text-foreground/90">{log.user_name || 'Sistema'}</span>
+                                                <span className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter opacity-70">
+                                                    {log.user_email || 'Backbone Daemon'}
+                                                </span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-1.5 rounded-lg bg-primary/10">
+                                                    <Database className="h-4 w-4 text-primary" />
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black uppercase tracking-widest opacity-60">Recurso</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-black">{log.resource}</span>
+                                                        <Badge variant="outline" className="text-[9px] font-black h-4 px-1 border-primary/20 text-primary">ID: {log.resource_id}</Badge>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-xs font-mono font-bold text-muted-foreground">
+                                            {log.ip_address || "Internal"}
+                                        </TableCell>
+                                        <TableCell className="text-xs font-bold">
+                                            {format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                                        </TableCell>
+                                        <TableCell className="text-right pr-10">
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl bg-background/90 hover:bg-primary/10 border border-transparent hover:border-primary/20 shadow-sm transition-all">
+                                                            <Info className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="max-w-[400px] p-0 rounded-2xl border border-border/50 shadow-2xl overflow-hidden">
+                                                        <div className="bg-primary/10 p-3 border-b border-border/50 flex items-center gap-2">
+                                                            <Activity className="h-4 w-4 text-primary" />
+                                                            <span className="text-xs font-black uppercase tracking-widest">Detalhes do Evento</span>
+                                                        </div>
+                                                        <pre className="p-4 text-[11px] bg-card font-mono text-foreground/80 leading-relaxed overflow-auto max-h-[300px]">
+                                                            {JSON.stringify(log.details, null, 2)}
+                                                        </pre>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                        {!isLoading && (!logs || logs.length === 0) && (
+                            <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+                                <div className="p-6 rounded-full bg-muted/20">
+                                    <History className="h-12 w-12 text-muted-foreground/30" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold">Nenhum rastro encontrado</h3>
+                                    <p className="text-muted-foreground">O sistema está limpo. Tente ajustar seus filtros.</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </FadeIn>
             </div>
         </DashboardShell>
     )

@@ -1,10 +1,14 @@
 import uuid
 from django.db import models
 from shared_kernel.models import BaseTenantModel
+from shared_kernel.validators import validate_chat_file
 
 class Media(BaseTenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    file = models.FileField(upload_to='media_library/%Y/%m/')
+    file = models.FileField(
+        upload_to='media_library/%Y/%m/',
+        validators=[validate_chat_file]
+    )
     title = models.CharField(max_length=255, blank=True)
     alt_text = models.CharField(max_length=255, blank=True)
     file_type = models.CharField(max_length=100, blank=True) # e.g., image/jpeg

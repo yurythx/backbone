@@ -183,7 +183,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-6 sticky bottom-0 bg-background/80 backdrop-blur-sm -mx-8 -mb-8 p-8 border-t">
+                            <div className="flex justify-end gap-3 pt-6 sticky bottom-0 bg-background/95 backdrop-blur-sm -mx-8 -mb-8 p-8 border-t">
                                 <Button variant="ghost" type="button" onClick={onCancel} className="rounded-xl h-11 px-6">
                                     Cancelar
                                 </Button>

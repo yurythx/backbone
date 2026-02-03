@@ -2,10 +2,19 @@ from rest_framework import viewsets, permissions
 from rest_framework.response import Response
 from django.db import IntegrityError
 from rest_framework import status
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import Page
 from .serializers import PageSerializer
 from apps.module_manager.permissions import HasModuleAccess
 
+@extend_schema_view(
+    list=extend_schema(tags=['CMS']),
+    retrieve=extend_schema(tags=['CMS']),
+    create=extend_schema(tags=['CMS']),
+    update=extend_schema(tags=['CMS']),
+    partial_update=extend_schema(tags=['CMS']),
+    destroy=extend_schema(tags=['CMS']),
+)
 class PageViewSet(viewsets.ModelViewSet):
     """
     Gerencia páginas do CMS.

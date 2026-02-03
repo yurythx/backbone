@@ -13,7 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         refetchOnWindowFocus: false,
         staleTime: 30_000,
         gcTime: 5 * 60_000,
-        keepPreviousData: true,
+
       }
     }
   }))

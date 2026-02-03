@@ -16,6 +16,7 @@ ALLOWED_RICH_TEXT_TAGS = [
     'blockquote', 'code', 'pre',
     'img', 'figure', 'figcaption',
     'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'span', 'div',
 ]
 
 # Allowed attributes for rich text HTML
@@ -25,6 +26,8 @@ ALLOWED_RICH_TEXT_ATTRIBUTES = {
     'p': ['class'],
     'code': ['class'],
     'pre': ['class'],
+    'span': ['class', 'style'],
+    'div': ['class', 'style'],
 }
 
 # Allowed protocols for links

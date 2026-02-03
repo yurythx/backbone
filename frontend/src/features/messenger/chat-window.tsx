@@ -275,12 +275,12 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
                     "group relative flex flex-col gap-2 rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-all",
                     isMe
                       ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-tr-none ml-12 shadow-primary/20"
-                      : "bg-background/70 backdrop-blur text-foreground rounded-tl-none mr-12 border"
+                      : "bg-background/95 backdrop-blur text-foreground rounded-tl-none mr-12 border"
                   )}
                 >
                   {/* Image Attachment */}
                   {isImage && msg.file_url && (
-                    <div className="mb-2 overflow-hidden rounded-lg border bg-background/10">
+                    <div className="mb-2 overflow-hidden rounded-lg border bg-background/50">
                       <img
                         src={msg.file_url}
                         alt={msg.file_name}
@@ -415,11 +415,11 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
             </div>
           )}
 
-        {sendError && (
-          <div className="w-full text-sm text-destructive font-medium bg-destructive/10 border border-destructive/20 p-3 rounded-xl">
-            {sendError}
-          </div>
-        )}
+          {sendError && (
+            <div className="w-full text-sm text-destructive font-medium bg-destructive/10 border border-destructive/20 p-3 rounded-xl">
+              {sendError}
+            </div>
+          )}
 
           <form onSubmit={handleSend} className="flex gap-2 items-end">
             <div className="flex-1 relative bg-muted rounded-xl border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
@@ -431,10 +431,10 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
                     e.preventDefault()
                     if (messageInput.trim() || selectedFile) {
                       sendTypingStatus(false)
-                    lastPayloadRef.current = { content: messageInput, file: selectedFile }
-                    retryCountRef.current = 0
-                    setSendError(null)
-                    sendMessageMutation.mutate(lastPayloadRef.current)
+                      lastPayloadRef.current = { content: messageInput, file: selectedFile }
+                      retryCountRef.current = 0
+                      setSendError(null)
+                      sendMessageMutation.mutate(lastPayloadRef.current)
                     }
                   }
                 }}

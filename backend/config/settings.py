@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     "apps.articles",
     "apps.messenger",
     "apps.media",
+    "apps.notifications",
+    "apps.seo",
 ]
 
 MIDDLEWARE = [
@@ -107,6 +109,14 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
+    'ENUM_NAME_OVERRIDES': {
+        'StatusEnum': 'apps.core.models.StatusChoices',
+    },
+    'COMPONENT_NO_READ_ONLY_FIELDS': True,
+    'CONTACT': {
+        'name': 'Backbone Team',
+        'email': 'support@backbone.com',
+    },
     'APPEND_COMPONENTS': {
         'securitySchemes': {
             'ApiKeyAuth': {
@@ -116,7 +126,7 @@ SPECTACULAR_SETTINGS = {
             }
         }
     },
-    'SECURITY': [{'ApiKeyAuth': []}],
+    'SECURITY': [{'jwtAuth': []}, {'ApiKeyAuth': []}],
 }
 
 # CORS Configuration - Conditional by environment
@@ -199,7 +209,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

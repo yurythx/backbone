@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from apps.core.models import Company
 from apps.accounts.models import Role
 from apps.module_manager.models import Module, TenantModule
+from apps.licensing.models import Feature, Plan, PlanFeature, License
 from .models import Article, Category, Tag
 
 User = get_user_model()
@@ -18,6 +19,17 @@ class ArticleAPITest(APITestCase):
         self.module = Module.objects.create(code="articles", name="Articles")
         TenantModule.objects.create(company=self.company1, module=self.module, is_active=True)
         TenantModule.objects.create(company=self.company2, module=self.module, is_active=True)
+
+        # Create Plan and Features for testing
+        self.feat_articles = Feature.objects.create(code="max_articles", name="Max Articles")
+        self.feat_users = Feature.objects.create(code="max_users", name="Max Users")
+        self.plan = Plan.objects.create(name="Enterprise")
+        PlanFeature.objects.create(plan=self.plan, feature=self.feat_articles, value="unlimited")
+        PlanFeature.objects.create(plan=self.plan, feature=self.feat_users, value="unlimited")
+
+        # Assign Licenses
+        License.objects.create(company=self.company1, plan=self.plan, is_active=True)
+        License.objects.create(company=self.company2, plan=self.plan, is_active=True)
 
         # Create Role with permission
         self.role1 = Role.objects.create(

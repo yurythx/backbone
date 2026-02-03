@@ -1,11 +1,12 @@
 "use client"
- 
+
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { ArticleList } from "@/features/articles/article-list"
 import { ArticleForm } from "@/features/articles/article-form"
 import { TagList } from "@/features/articles/tag-list"
+import { ArticleAnalytics } from "@/features/articles/article-analytics"
 import { Article } from "@/types"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PublicArticleCard } from "@/components/public/article-card"
@@ -70,6 +71,7 @@ export default function ArtigosPage() {
                 <TabsList className="bg-muted/50 p-1 rounded-xl">
                     <TabsTrigger value="articles" className="rounded-lg px-6">Artigos</TabsTrigger>
                     <TabsTrigger value="tags" className="rounded-lg px-6">Tags & Categorias</TabsTrigger>
+                    <TabsTrigger value="analytics" className="rounded-lg px-6">Analytics</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="articles" className="mt-6">
@@ -94,6 +96,10 @@ export default function ArtigosPage() {
 
                 <TabsContent value="tags" className="mt-6">
                     <TagList />
+                </TabsContent>
+
+                <TabsContent value="analytics" className="mt-6">
+                    <ArticleAnalytics />
                 </TabsContent>
             </Tabs>
         </div>

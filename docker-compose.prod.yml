@@ -38,6 +38,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -66,8 +67,9 @@ services:
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
-      timeout: 20s
+      timeout: 10s
       retries: 3
+      start_period: 30s
 
   backend:
     build:
@@ -100,6 +102,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
   celery_worker:
     build:

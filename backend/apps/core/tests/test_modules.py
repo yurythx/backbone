@@ -3,6 +3,7 @@ from rest_framework.test import APITestCase
 from apps.core.models import Company
 from django.contrib.auth import get_user_model
 from apps.module_manager.models import Module, TenantModule
+from apps.licensing.models import Feature, Plan, PlanFeature, License
 
 User = get_user_model()
 
@@ -27,6 +28,12 @@ class ModulesTestCase(APITestCase):
         TenantModule.objects.create(company=self.company, module=pages, is_active=True)
         TenantModule.objects.create(company=self.company, module=articles, is_active=True)
         TenantModule.objects.create(company=self.company, module=messenger, is_active=True)
+
+        # License for limits
+        self.feat_articles = Feature.objects.create(code="max_articles", name="Max Articles")
+        self.plan = Plan.objects.create(name="Pro")
+        PlanFeature.objects.create(plan=self.plan, feature=self.feat_articles, value="unlimited")
+        License.objects.create(company=self.company, plan=self.plan, is_active=True)
 
     def test_pages_crud(self):
         # Create Page

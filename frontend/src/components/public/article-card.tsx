@@ -15,7 +15,7 @@ interface PublicArticleCardProps {
 export function PublicArticleCard({ article }: PublicArticleCardProps) {
     return (
         <Link href={`/p/artigos/${article.slug}`}>
-            <Card className="h-full overflow-hidden hover:shadow-xl transition-all border border-primary/10 bg-background/60 backdrop-blur rounded-2xl">
+            <Card className="h-full overflow-hidden hover:shadow-xl transition-all border border-primary/10 bg-background/95 backdrop-blur rounded-2xl">
                 <div className="aspect-video relative overflow-hidden bg-muted rounded-t-2xl">
                     {article.image ? (
                         <img

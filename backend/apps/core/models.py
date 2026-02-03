@@ -11,6 +11,10 @@ class Company(models.Model):
     domain = models.CharField(max_length=255, blank=True, null=True, unique=True)
     branding = models.JSONField(default=dict, blank=True)
     
+    # Onboarding state
+    onboarding_completed = models.BooleanField(default=False)
+    onboarding_step = models.IntegerField(default=1) # 1: Identity, 2: Visual, 3: Connectivity, 4: Domain
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

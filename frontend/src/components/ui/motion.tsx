@@ -4,6 +4,8 @@ import { motion, HTMLMotionProps } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 interface SlideUpProps extends HTMLMotionProps<"div"> {
+    children: React.ReactNode
+    className?: string
     delay?: number
 }
 

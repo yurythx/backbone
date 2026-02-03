@@ -3,6 +3,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from apps.core.models import Company
 from apps.module_manager.models import Module, TenantModule
+from apps.licensing.models import Feature, Plan, PlanFeature, License
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -17,6 +18,11 @@ class IntegrationFlowTest(TestCase):
             description="Manage blog posts",
             is_default=False
         )
+        
+        # Setup Default Plan for testing
+        self.feat_articles = Feature.objects.create(code="max_articles", name="Max Articles")
+        self.plan = Plan.objects.create(name="Starter")
+        PlanFeature.objects.create(plan=self.plan, feature=self.feat_articles, value="unlimited")
 
     def test_end_to_end_flow(self):
         """
@@ -39,19 +45,32 @@ class IntegrationFlowTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Company.objects.count(), 1)
         company = Company.objects.get(slug="tech-corp")
+
+        # Assign License manually (normally done by system logic but needed here for limits)
+        License.objects.create(company=company, plan=self.plan, is_active=True)
         
         # 2. Register User (Public)
         user_data = {
             "username": "alice",
             "email": "alice@tech.corp",
             "password": "strongpassword123",
-            "company_slug": "tech-corp"
+            "company_slug": "tech-corp",
+            "plan_tier": "starter" # Hypothetical field if needed, but for now I will rely on the fact that the company has a license.
         }
+        # Force staff status on the user created by the API for simplified testing of article creation
+        # Alternatively, we could create a Role and assign it.
+        # But for 'test_end_to_end_flow' let's verify if the user becomes an admin or regular user.
+        # The register endpoint usually creates an OWNER or ADMIN if it's the first user? No, this is just register.
+        # Let's see if we can patch the user after creation.
         response = self.client.post('/api/accounts/register/', user_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(User.all_objects.count(), 1)
+        
+        # Verify user association
+        user = User.all_objects.get(username="alice")
+        self.assertEqual(user.company.slug, "tech-corp", "User was not assigned to correct company!")
 
-        # 3. Login / Get Token
+        # 3. Login / Get Token (Generate NEW token with updated permissions if claims depend on user state)
         login_data = {
             "username": "alice",
             "password": "strongpassword123"
@@ -82,12 +101,23 @@ class IntegrationFlowTest(TestCase):
         self.assertEqual(response.data['count'], 0)
 
         # 7. Create an Article (Verify write access within module)
+        # Using the standard token auth
+        self.client.credentials(
+            HTTP_AUTHORIZATION='Bearer ' + access_token, 
+            HTTP_X_COMPANY_SLUG='tech-corp'
+        )
+
         article_data = {
             "title": "Hello World",
             "slug": "hello-world",
             "content": "First post",
             "is_published": True
         }
-        response = self.client.post('/api/articles/articles/', article_data, format='json')
+        response = self.client.post(
+            '/api/articles/articles/?company_slug=tech-corp', 
+            article_data, 
+            format='json',
+            HTTP_AUTHORIZATION='Bearer ' + access_token
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['title'], "Hello World")

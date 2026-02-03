@@ -17,6 +17,8 @@ class TagSerializer(serializers.ModelSerializer):
 class ArticleSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     author_name = serializers.CharField(source='author.username', read_only=True)
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    company_slug = serializers.CharField(source='company.slug', read_only=True)
     tag_list = TagSerializer(source='tags', many=True, read_only=True)
 
     class Meta:
@@ -59,3 +61,23 @@ class CommentSerializer(serializers.ModelSerializer):
         if 'email' in attrs and attrs['email']:
             attrs['email'] = sanitize_plain_text(attrs['email'])
         return attrs
+
+class ArticleAnalyticsSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    slug = serializers.CharField()
+    total_views = serializers.IntegerField()
+    views_last_30_days = serializers.IntegerField()
+    unique_visitors = serializers.IntegerField()
+
+class GlobalArticlesAnalyticsSerializer(serializers.Serializer):
+    total_articles = serializers.IntegerField()
+    total_views = serializers.IntegerField()
+    most_viewed = ArticleAnalyticsSerializer(many=True)
+    views_by_date = serializers.ListField(child=serializers.DictField())
+
+class ArticleHistorySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    created_at = serializers.DateTimeField()
+    user = serializers.CharField()
+    comment = serializers.CharField(allow_blank=True)

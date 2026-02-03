@@ -15,18 +15,21 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from apps.module_manager.permissions import HasModuleAccess
 from django.core.cache import cache
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from shared_kernel.audit import log_action
 
 User = get_user_model()
 
+@extend_schema(tags=['Accounts - Auth'])
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+@extend_schema(tags=['Accounts - Auth'], summary="Register a new user (admin level)")
 class UserRegistrationView(generics.CreateAPIView):
-    queryset = User.all_objects.all()
     serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
 
+@extend_schema(tags=['Accounts - Auth'], summary="Request password reset link")
 class PasswordResetRequestView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = PasswordResetRequestSerializer
@@ -41,6 +44,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
             status=status.HTTP_200_OK
         )
 
+@extend_schema(tags=['Accounts - Auth'], summary="Confirm password reset with token")
 class PasswordResetConfirmView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = PasswordResetConfirmSerializer
@@ -59,11 +63,17 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             return Response({"detail": "Senha alterada com sucesso."}, status=status.HTTP_200_OK)
         return Response({"detail": "Link inválido ou expirado."}, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema_view(
+    list=extend_schema(tags=['Accounts - Users']),
+    retrieve=extend_schema(tags=['Accounts - Users']),
+    create=extend_schema(tags=['Accounts - Users']),
+    update=extend_schema(tags=['Accounts - Users']),
+    partial_update=extend_schema(tags=['Accounts - Users']),
+    destroy=extend_schema(tags=['Accounts - Users']),
+    me=extend_schema(tags=['Accounts - Users'], summary="Get current user profile"),
+    export=extend_schema(tags=['Accounts - Users'], summary="Export users as CSV"),
+)
 class UserViewSet(viewsets.ModelViewSet):
-    """
-    Gerencia usuários do tenant atual.
-    Inclui actions para perfil próprio (me) e troca de senha.
-    """
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated] # Adicionar HasModuleAccess se quiser restringir a 'admin' module
     search_fields = ['username', 'email', 'first_name', 'last_name']
@@ -81,9 +91,12 @@ class UserViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        # Criação via Admin Panel dentro do tenant
-        # Se precisar de senha, o serializer deve tratar ou usar set_password
-        # Aqui simplificado:
+        from shared_kernel.licensing import check_feature_limit
+        can_add, limit, current = check_feature_limit(self.request.company, 'max_users')
+        if not can_add:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(f"Limite de usuários atingido ({current}/{limit}). Faça um upgrade do seu plano.")
+            
         serializer.save(company=self.request.company)
 
     @action(detail=False, methods=['get', 'put', 'patch'])
@@ -115,10 +128,15 @@ class UserViewSet(viewsets.ModelViewSet):
         resp['Content-Disposition'] = 'attachment; filename="users.csv"'
         return resp
 
+@extend_schema_view(
+    list=extend_schema(tags=['Accounts - Auth']),
+    retrieve=extend_schema(tags=['Accounts - Auth']),
+    create=extend_schema(tags=['Accounts - Auth']),
+    update=extend_schema(tags=['Accounts - Auth']),
+    partial_update=extend_schema(tags=['Accounts - Auth']),
+    destroy=extend_schema(tags=['Accounts - Auth']),
+)
 class RoleViewSet(viewsets.ModelViewSet):
-    """
-    Gerencia papéis (Roles) do tenant atual.
-    """
     serializer_class = RoleSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -137,10 +155,16 @@ class RoleViewSet(viewsets.ModelViewSet):
             )
         return super().destroy(request, *args, **kwargs)
 
+@extend_schema_view(
+    list=extend_schema(tags=['Accounts - Invitations']),
+    retrieve=extend_schema(tags=['Accounts - Invitations']),
+    create=extend_schema(tags=['Accounts - Invitations'], summary="Send a new invitation"),
+    update=extend_schema(tags=['Accounts - Invitations']),
+    partial_update=extend_schema(tags=['Accounts - Invitations']),
+    destroy=extend_schema(tags=['Accounts - Invitations']),
+    resend=extend_schema(tags=['Accounts - Invitations'], summary="Resend invitation email"),
+)
 class InvitationViewSet(viewsets.ModelViewSet):
-    """
-    Gerencia convites enviados pelo tenant.
-    """
     serializer_class = InvitationSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -148,6 +172,12 @@ class InvitationViewSet(viewsets.ModelViewSet):
         return Invitation.objects.select_related('role', 'company', 'invited_by').all().order_by('-created_at')
 
     def perform_create(self, serializer):
+        from shared_kernel.licensing import check_feature_limit
+        can_add, limit, current = check_feature_limit(self.request.company, 'max_users')
+        if not can_add:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(f"Limite de usuários atingido ({current}/{limit}). O convite não pode ser enviado.")
+
         AccountService.create_invitation(
             sender=self.request.user,
             company=self.request.company,
@@ -187,6 +217,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"detail": f"Falha ao reenviar convite: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema(tags=['Accounts - Invitations'], summary="Accept invitation and create account")
 class AcceptInvitationView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = AcceptInvitationSerializer

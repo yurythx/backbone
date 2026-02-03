@@ -1,14 +1,27 @@
-from rest_framework import viewsets, permissions
-from rest_framework.response import Response
+from rest_framework import viewsets, permissions, status, filters, serializers
 from rest_framework.decorators import action
-from .models import Article, Category, Tag, Comment
-from .serializers import ArticleSerializer, CategorySerializer, TagSerializer, CommentSerializer
-from .filters import ArticleFilter
-from .services import ArticleService
+from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from apps.module_manager.permissions import HasModuleAccess
 from apps.accounts.permissions import HasRolePermission
 from shared_kernel.audit import log_create, log_update, log_delete
+from .models import Article, Category, Tag, Comment, ArticleView
+from .serializers import (
+    ArticleSerializer, CategorySerializer, TagSerializer, 
+    CommentSerializer, ArticleHistorySerializer, ArticleAnalyticsSerializer,
+    GlobalArticlesAnalyticsSerializer
+)
+from .services import ArticleService
+from .filters import ArticleFilter
 
+@extend_schema_view(
+    list=extend_schema(tags=['Articles']),
+    retrieve=extend_schema(tags=['Articles']),
+    create=extend_schema(tags=['Articles']),
+    update=extend_schema(tags=['Articles']),
+    partial_update=extend_schema(tags=['Articles']),
+    destroy=extend_schema(tags=['Articles']),
+)
 class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, HasModuleAccess, HasRolePermission]
@@ -38,6 +51,14 @@ class CategoryViewSet(viewsets.ModelViewSet):
             return base
         return base + [HasRolePermission()]
 
+@extend_schema_view(
+    list=extend_schema(tags=['Articles']),
+    retrieve=extend_schema(tags=['Articles']),
+    create=extend_schema(tags=['Articles']),
+    update=extend_schema(tags=['Articles']),
+    partial_update=extend_schema(tags=['Articles']),
+    destroy=extend_schema(tags=['Articles']),
+)
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, HasModuleAccess, HasRolePermission]
@@ -67,10 +88,20 @@ class TagViewSet(viewsets.ModelViewSet):
             return base
         return base + [HasRolePermission()]
 
+@extend_schema_view(
+    list=extend_schema(tags=['Articles']),
+    retrieve=extend_schema(tags=['Articles']),
+    create=extend_schema(tags=['Articles']),
+    update=extend_schema(tags=['Articles']),
+    partial_update=extend_schema(tags=['Articles']),
+    destroy=extend_schema(tags=['Articles']),
+    history=extend_schema(tags=['Articles'], responses={200: serializers.ListSerializer(child=serializers.DictField())}),
+    revert=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
+    submit_for_review=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
+    publish=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
+    reject=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
+)
 class ArticleViewSet(viewsets.ModelViewSet):
-    """
-    Gerencia artigos do CMS.
-    """
     serializer_class = ArticleSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
     required_permission = 'articles.article_manage'
@@ -98,10 +129,12 @@ class ArticleViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        # Extract data from serializer, but we let the service handle the object creation
-        # to centralize logic like slug generation or complex side effects.
-        # However, DRF's serializer.save() is already quite good.
-        # To truly use the service, we can do:
+        from shared_kernel.licensing import check_feature_limit
+        can_add, limit, current = check_feature_limit(self.request.company, 'max_articles')
+        if not can_add:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(f"Limite de artigos atingido ({current}/{limit}). Faça um upgrade do seu plano.")
+
         article = ArticleService.create_article(
             user=self.request.user,
             company=self.request.company,
@@ -187,6 +220,88 @@ class ArticleViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({'error': str(e)}, status=400)
 
+    @action(detail=False, methods=['get'])
+    def analytics(self, request):
+        """
+        Retorna estatísticas globais de visualizações dos artigos do tenant.
+        """
+        from django.db.models import Count, Q
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+        from .models import ArticleView
+        from .serializers import GlobalArticlesAnalyticsSerializer
+        
+        company = request.company
+        thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
+        
+        # 1. Estatísticas globais
+        total_articles = Article.objects.filter(company=company).count()
+        total_views = ArticleView.objects.filter(company=company).count()
+        
+        # 2. Artigos mais vistos (Top 5)
+        most_viewed_qs = Article.objects.filter(company=company).annotate(
+            total_views=Count('views'),
+            views_last_30_days=Count('views', filter=Q(views__viewed_at__gte=thirty_days_ago))
+        ).order_by('-total_views')[:5]
+        
+        # 3. Visualizações por data (Últimos 15 dias)
+        fifteen_days_ago = timezone.now().date() - timezone.timedelta(days=15)
+        views_by_date_qs = ArticleView.objects.filter(
+            company=company,
+            viewed_at__date__gte=fifteen_days_ago
+        ).annotate(
+            date=TruncDate('viewed_at')
+        ).values('date').annotate(
+            count=Count('id')
+        ).order_by('date')
+        
+        views_by_date = [
+            {'date': item['date'].isoformat(), 'count': item['count']}
+            for item in views_by_date_qs
+        ]
+
+        data = {
+            'total_articles': total_articles,
+            'total_views': total_views,
+            'most_viewed': most_viewed_qs,
+            'views_by_date': views_by_date
+        }
+        
+        serializer = GlobalArticlesAnalyticsSerializer(data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def analytics_detail(self, request, pk=None):
+        """
+        Retorna estatísticas detalhadas de um artigo específico.
+        """
+        from django.db.models import Count, Q
+        from django.utils import timezone
+        
+        thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
+        article = Article.objects.filter(pk=pk).annotate(
+            total_views=Count('views'),
+            views_last_30_days=Count('views', filter=Q(views__viewed_at__gte=thirty_days_ago)),
+            unique_visitors=Count('views__ip_address', distinct=True)
+        ).first()
+        
+        if not article:
+             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+             
+        from .serializers import ArticleAnalyticsSerializer
+        
+        # Agregação básica (já calculada pelo serializer se passarmos o objeto)
+        serializer = ArticleAnalyticsSerializer(article)
+        return Response(serializer.data)
+
+@extend_schema_view(
+    list=extend_schema(tags=['Articles']),
+    retrieve=extend_schema(tags=['Articles']),
+    create=extend_schema(tags=['Articles']),
+    update=extend_schema(tags=['Articles']),
+    partial_update=extend_schema(tags=['Articles']),
+    destroy=extend_schema(tags=['Articles']),
+)
 class CommentViewSet(viewsets.ModelViewSet):
     """
     Gerencia comentários dos artigos.

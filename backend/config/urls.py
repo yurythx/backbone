@@ -18,11 +18,15 @@ urlpatterns = [
     path("api/media/", include("apps.media.urls")),
     path("api/pages/", include("apps.pages.urls")),
     path("api/articles/", include("apps.articles.urls")),
+    path("api/notifications/", include("apps.notifications.urls")),
     
     # Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    
+    # Sitemap & Robots
+    path("", include("apps.seo.urls")),
 ]
 
 if settings.DEBUG:

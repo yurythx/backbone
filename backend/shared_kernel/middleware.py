@@ -19,6 +19,12 @@ class TenantMiddleware:
         if slug_header:
             company = Company.objects.filter(slug=slug_header).first()
 
+        # 1.5. Tenta pegar por Query Param (útil para debug/testes)
+        if not company:
+            slug_query = request.GET.get('company_slug')
+            if slug_query:
+                company = Company.objects.filter(slug=slug_query).first()
+
         # 2. Se não achou pelo header, tenta pelo Domínio Customizado (Prioridade sobre subdomínio)
         if not company:
             # Procura exato pelo domínio (ex: minhaempresa.com)

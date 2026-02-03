@@ -44,9 +44,14 @@ const formSchema = z.object({
 interface Company {
   name: string
   slug: string
+  logo?: string | null
 }
 
-export function LoginForm() {
+interface LoginFormProps {
+  onCompanyChange?: (company: Company | null) => void
+}
+
+export function LoginForm({ onCompanyChange }: LoginFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -68,13 +73,27 @@ export function LoginForm() {
       companySlug: "",
     },
   })
-  
+
   useEffect(() => {
     const savedCompany = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
-    if (savedCompany) {
+    if (savedCompany && companies) {
       form.setValue('companySlug', savedCompany)
+      // Attempt to set initial branding if companies are loaded
+      const found = companies.find(c => c.slug === savedCompany)
+      if (found && onCompanyChange) {
+        onCompanyChange(found)
+      }
     }
-  }, [form])
+  }, [form, companies, onCompanyChange])
+
+  // Handle manual selection change
+  const handleCompanyChange = (slug: string) => {
+    form.setValue('companySlug', slug)
+    const company = companies?.find(c => c.slug === slug)
+    if (onCompanyChange) {
+      onCompanyChange(company || null)
+    }
+  }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
@@ -102,10 +121,32 @@ export function LoginForm() {
       router.push('/')
     } catch (err: any) {
       console.error(err)
-      const message = err.response?.data?.detail || "Credenciais inválidas ou erro de conexão."
+
+      let message = "Ocorreu um erro inesperado. Tente novamente."
+      if (err.response) {
+        const status = err.response.status
+        if (status === 401) {
+          message = "Usuário ou senha incorretos."
+        } else if (status === 400) {
+          message = "Dados inválidos. Verifique se a empresa foi selecionada."
+        } else if (status === 500) {
+          message = "Erro no servidor. Nossa equipe já foi notificada."
+        } else if (status === 403) {
+          message = "Sua conta não tem permissão para acessar esta empresa."
+        }
+      } else if (err.request) {
+        message = "Sem conexão com o servidor. Verifique sua internet."
+      }
+
       setError(message)
-      toast.error(message)
-      localStorage.removeItem('companySlug') // Clean up on fail
+      toast.error("Falha no Login", {
+        description: message,
+      })
+
+      // Only clear company if it seems like a tenant issue (404/400)
+      if (err.response?.status === 404) {
+        localStorage.removeItem('companySlug')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -114,14 +155,20 @@ export function LoginForm() {
   return (
     <div className="space-y-6">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+          if (errors.companySlug) {
+            toast.error("Empresa obrigatória", { description: "Por favor, selecione uma empresa para continuar." })
+          } else if (errors.username || errors.password) {
+            toast.error("Dados incompletos", { description: "Preencha usuário e senha para entrar." })
+          }
+        })} className="space-y-4">
           <FormField
             control={form.control}
             name="companySlug"
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={handleCompanyChange} value={field.value}>
                     <SelectTrigger className="h-14 bg-background border-primary/20 ring-offset-background focus:ring-primary/30 text-lg transition-all hover:border-primary/40" aria-label="Selecionar empresa">
                       <div className="flex items-center gap-3">
                         <Building2 className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -155,7 +202,7 @@ export function LoginForm() {
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
                       <Input
                         placeholder="Nome de usuário"
-                        className="h-12 pl-12 bg-background/50 border-muted-foreground/20 focus:bg-background transition-all"
+                        className="h-12 pl-12 bg-background/90 border-muted-foreground/20 focus:bg-background transition-all"
                         aria-label="Nome de usuário"
                         {...field}
                       />
@@ -177,7 +224,7 @@ export function LoginForm() {
                       <Input
                         type="password"
                         placeholder="Sua senha secreta"
-                        className="h-12 pl-12 bg-background/50 border-muted-foreground/20 focus:bg-background transition-all"
+                        className="h-12 pl-12 bg-background/90 border-muted-foreground/20 focus:bg-background transition-all"
                         aria-label="Senha"
                         {...field}
                       />

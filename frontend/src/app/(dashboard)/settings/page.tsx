@@ -20,7 +20,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="personalization" className="space-y-6">
-        <TabsList className="bg-background/70 backdrop-blur p-1 rounded-full border">
+        <TabsList className="bg-background/95 backdrop-blur p-1 rounded-full border">
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
             Perfil

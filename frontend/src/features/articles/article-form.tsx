@@ -70,7 +70,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
   })
 
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as any,
     defaultValues: {
       title: initialData?.title || "",
       slug: initialData?.slug || "",
@@ -135,7 +135,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
   return (
     <div className="space-y-6">
       {/* Header Fixo/Stick no mobile para ações rápidas */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-6 sticky top-0 bg-background/80 backdrop-blur-sm z-10 pt-2">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 pt-2">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={onCancel} className="hover:bg-primary/10 hover:text-primary">
             <ArrowLeft className="h-4 w-4" />

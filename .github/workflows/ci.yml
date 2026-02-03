@@ -1,68 +1,78 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - sprint-1/correcoes-criticas
-      - main
-      - master
+    branches: [ main, develop ]
   pull_request:
-    branches:
-      - "**"
+    branches: [ main, develop ]
 
 jobs:
-  lint:
+  backend-lint-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Python
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: "pip"
-      - name: Install linters
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff==0.1.14 black==23.12.1 isort==5.12.0 pre-commit
-      - name: Ruff lint
-        run: |
-          ruff check backend apps || true
-      - name: Black check
-        run: |
-          black --check backend || true
-      - name: Run pre-commit (all files)
-        run: |
-          pre-commit run --all-files || true
-
-  test-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: '3.12'
+          cache: 'pip'
+          
       - name: Install dependencies
-        working-directory: backend
+        working-directory: ./backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt coverage
-      - name: Run Django tests
-        working-directory: backend
+          pip install -r requirements.txt
+          
+      - name: Run Ruff
+        working-directory: ./backend
+        run: ruff check .
+        
+      - name: Run Mypy
+        working-directory: ./backend
+        run: mypy .
+        
+      - name: Run Tests
+        working-directory: ./backend
+        run: python manage.py test
         env:
-          DJANGO_SETTINGS_MODULE: config.settings
-          SECRET_KEY: dummy
-        run: |
-          coverage run manage.py test
-      - name: Coverage XML
-        working-directory: backend
-        run: |
-          coverage xml -o coverage.xml
-      - name: Upload Coverage Artifact
-        uses: actions/upload-artifact@v4
+          SECRET_KEY: 'ci-test-key'
+          DEBUG: 'True'
+          DATABASE_URL: 'sqlite:///db.sqlite3'
+
+  frontend-lint-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          name: coverage-xml
-          path: backend/coverage.xml
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+        
+      - name: Run Lint
+        working-directory: ./frontend
+        run: npm run lint
+        
+      - name: Run Build
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: 'http://localhost:8000'
+
+  docker-build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check Backend Dockerfile
+        run: docker build -t backbone-backend-test ./backend --target development
+        
+      - name: Check Frontend Dockerfile
+        run: docker build -t backbone-frontend-test ./frontend --target deps

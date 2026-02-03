@@ -48,10 +48,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
             // Default error UI
             return (
-                <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-                    <Card className="max-w-md w-full p-8 text-center space-y-6">
+                <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
+                    {/* Decorative background elements */}
+                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
+
+                    <div className="max-w-md w-full p-10 text-center space-y-8 glass-morphism shadow-premium rounded-3xl relative z-10 border-white/10">
                         <div className="flex justify-center">
-                            <div className="rounded-full bg-destructive/10 p-4">
+                            <div className="rounded-2xl bg-destructive/10 p-5 animate-pulse">
                                 <AlertCircle className="h-12 w-12 text-destructive" />
                             </div>
                         </div>
@@ -96,7 +100,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                                 Voltar ao Início
                             </Button>
                         </div>
-                    </Card>
+                    </div>
                 </div>
             )
         }

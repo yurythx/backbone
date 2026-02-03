@@ -1,15 +1,19 @@
 "use client"
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Plan, License } from "@/types"
 import { PlanCard } from "@/features/licensing/plan-card"
-import { useToast } from "@/hooks/use-toast"
 import { H2, P } from "@/components/ui/typography"
+import { motion } from "framer-motion"
+import { CheckoutModal } from "@/features/licensing/checkout-modal"
+import { SlideUp, FadeIn } from "@/components/ui/motion"
+import { Sparkles, ShieldCheck, Zap } from "lucide-react"
 
 export default function LicensingPage() {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
 
   // Fetch Plans
   const { data: plans, isLoading: isLoadingPlans } = useQuery({
@@ -29,56 +33,108 @@ export default function LicensingPage() {
     }
   })
 
-  // Improve plan change mutation (mocked for now as we don't have payment gateway)
-  const changePlanMutation = useMutation({
-    mutationFn: async (planId: number) => {
-      // In a real app, this would redirect to Stripe checkout or call an upgrade endpoint
-      // For now, we mock an update
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // We can't actually change the plan without backend logic to create new license
-      // So this is a placeholder
-      throw new Error("Integração com pagamento não implementada.")
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Upgrade Indisponível",
-        description: "A mudança automática de plano requer integração com gateway de pagamento.",
-        variant: "destructive"
-      })
-    }
-  })
+  const handleUpgrade = (plan: Plan) => {
+    setSelectedPlan(plan)
+    setIsCheckoutOpen(true)
+  }
 
   if (isLoadingPlans || isLoadingLicense) {
-    return <div className="p-8 text-center text-muted-foreground">Carregando planos...</div>
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <div className="h-12 w-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <p className="text-muted-foreground font-medium animate-pulse">Sincronizando planos e licenças...</p>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-12 max-w-6xl mx-auto p-6 pb-20">
-      <div className="text-center space-y-4">
-        <H2 className="border-none text-3xl lg:text-4xl text-primary">Planos e Preços</H2>
-        <P className="text-muted-foreground max-w-2xl mx-auto text-lg mt-0">
-          Escolha o plano ideal para escalar o seu negócio. Mude a qualquer momento.
-        </P>
+    <div className="relative min-h-screen pb-20 overflow-hidden">
+      {/* Background Decorative Elements */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] -z-10 animate-pulse" />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-primary/5 rounded-full blur-[100px] -z-10" />
+
+      <div className="max-w-7xl mx-auto px-6 pt-12 space-y-16 relative z-10">
+        <header className="text-center space-y-6 max-w-3xl mx-auto">
+          <FadeIn>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 mb-4">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-primary">Upgrade de Potência</span>
+            </div>
+          </FadeIn>
+
+          <SlideUp>
+            <H2 className="border-none text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/50 leading-tight">
+              O plano perfeito para o seu crescimento.
+            </H2>
+          </SlideUp>
+
+          <SlideUp delay={0.1}>
+            <P className="text-muted-foreground text-lg md:text-xl font-medium leading-relaxed">
+              Liberte todo o potencial do seu tenant com recursos avançados, segurança reforçada e suporte dedicado.
+            </P>
+          </SlideUp>
+        </header>
+
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end pb-12">
+          {plans?.map((plan, index) => (
+            <SlideUp key={plan.id} delay={0.2 + index * 0.1}>
+              <PlanCard
+                plan={plan}
+                isCurrent={license?.plan === plan.id}
+                onUpgrade={() => handleUpgrade(plan)}
+              />
+            </SlideUp>
+          ))}
+        </section>
+
+        <FadeIn delay={0.6}>
+          <div className="glass-morphism rounded-3xl p-8 border border-white/5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden relative group">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+
+            <div className="flex items-center gap-6 relative z-10">
+              <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
+                <ShieldCheck className="h-8 w-8" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-xl font-bold">Segurança & Conformidade</h4>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Todos os planos incluem criptografia de ponta a ponta e conformidade total com LGPD/GDPR.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-12 relative z-10">
+              <div className="flex -space-x-4">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-10 w-10 rounded-full border-2 border-background bg-muted flex items-center justify-center overflow-hidden">
+                    <img src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User" />
+                  </div>
+                ))}
+              </div>
+              <div className="text-center md:text-left">
+                <p className="text-sm font-bold">+500 Empresas</p>
+                <p className="text-xs text-muted-foreground">Confiam no Backbone</p>
+              </div>
+            </div>
+          </div>
+        </FadeIn>
+
+        <div className="text-center space-y-4 pb-20">
+          <div className="flex items-center justify-center gap-8 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+            <Zap className="h-6 w-6" />
+            <span className="font-black text-xl italic tracking-tighter">POWERED BY BACKBONE</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Precisa de algo sob medida? <a href="#" className="font-bold text-primary hover:underline">Entre em contato para um plano Enterprise</a>.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
-        {plans?.map(plan => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            isCurrent={license?.plan === plan.id}
-            onUpgrade={(planId) => changePlanMutation.mutate(planId)}
-            isLoading={changePlanMutation.isPending}
-          />
-        ))}
-      </div>
-
-      <div className="bg-muted/50 rounded-lg p-6 text-center text-sm text-muted-foreground">
-        <p>
-          Precisa de um plano customizado para sua empresa? <a href="#" className="underline hover:text-primary">Fale com nosso time de vendas</a>.
-        </p>
-      </div>
+      <CheckoutModal
+        plan={selectedPlan}
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+      />
     </div>
   )
 }

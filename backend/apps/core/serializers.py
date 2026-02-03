@@ -6,7 +6,11 @@ from django.contrib.auth import get_user_model
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
-        fields = ['id', 'name', 'slug', 'domain', 'created_at', 'updated_at']
+        fields = [
+            'id', 'name', 'slug', 'domain', 
+            'onboarding_completed', 'onboarding_step',
+            'created_at', 'updated_at'
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -71,3 +75,41 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'resource', 'resource_id', 'details', 'ip_address', 'created_at'
         ]
         read_only_fields = fields
+
+
+class DashboardCounterSerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    new_this_month = serializers.IntegerField()
+    growth = serializers.FloatField()
+
+
+class DashboardChartDataSerializer(serializers.Serializer):
+    date = serializers.DateField(required=False)
+    name = serializers.CharField(required=False)
+    count = serializers.IntegerField(required=False)
+    article_count = serializers.IntegerField(required=False)
+
+
+class RecentActivityUserSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    avatar = serializers.URLField(allow_null=True)
+
+
+class RecentActivitySerializer(serializers.Serializer):
+    action = serializers.CharField()
+    resource = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    user = RecentActivityUserSerializer()
+
+
+class SystemStatusSerializer(serializers.Serializer):
+    storage_used = serializers.CharField()
+    api_uptime = serializers.CharField()
+    last_backup = serializers.DateTimeField()
+
+
+class DashboardStatsSerializer(serializers.Serializer):
+    counters = serializers.DictField(child=DashboardCounterSerializer())
+    charts = serializers.DictField(child=serializers.ListField(child=DashboardChartDataSerializer()))
+    recent_activity = RecentActivitySerializer(many=True)
+    system_status = SystemStatusSerializer()

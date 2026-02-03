@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y netcat-openbsd gcc postgresql-client libpq-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y netcat-openbsd gcc postgresql-client libpq-dev libmagic1 && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY requirements.txt /app/

@@ -6,33 +6,43 @@ import { useTheme } from "next-themes"
 
 interface AnalyticsChartProps {
     data: { date: string; count: number }[]
+    title?: string
 }
 
-export function AnalyticsChart({ data }: AnalyticsChartProps) {
+export function AnalyticsChart({ data, title = "Visualizações de Artigos (30 dias)" }: AnalyticsChartProps) {
     const { theme } = useTheme()
+
+    const chartData = (data || []).map(item => ({
+        date: new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        views: item.count
+    }))
 
     if (!data || data.length === 0) {
         return (
-            <Card>
+            <Card className="border-border/50 shadow-sm">
                 <CardHeader>
-                    <CardTitle>Visualizações de Artigos (30 dias)</CardTitle>
+                    <CardTitle className="text-lg font-bold">{title}</CardTitle>
                 </CardHeader>
-                <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground">
-                    Sem dados suficientes ainda.
+                <CardContent className="h-[300px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
+                    <div className="p-4 rounded-full bg-background mb-4 shadow-sm">
+                        <AreaChart width={24} height={24} data={[{ v: 1 }, { v: 2 }]}><Area dataKey="v" /></AreaChart>
+                    </div>
+                    <span className="text-sm font-medium">Coletando dados...</span>
                 </CardContent>
             </Card>
         )
     }
 
-    const chartData = data.map(item => ({
-        date: new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        views: item.count
-    }))
-
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Visualizações de Artigos (30 dias)</CardTitle>
+        <Card className="border-border/50 shadow-sm overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-8">
+                <CardTitle className="text-lg font-bold">{title}</CardTitle>
+                <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-primary/20 flex items-center justify-center">
+                        <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                    </div>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Live</span>
+                </div>
             </CardHeader>
             <CardContent>
                 <div className="h-[300px] w-full">

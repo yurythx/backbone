@@ -92,7 +92,7 @@ export function ContactList({
 
             return (
               <div key={groupName} className="space-y-1">
-                <div className="px-3 py-1 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-sm z-10">
+                <div className="px-3 py-1 flex items-center justify-between sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                     {groupName}
                   </span>

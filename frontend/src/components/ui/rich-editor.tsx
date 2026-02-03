@@ -7,6 +7,8 @@ import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
 import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { Color } from '@tiptap/extension-color'
 import {
     Bold,
     Italic,
@@ -72,6 +74,8 @@ export function RichEditor({ content, onChange, placeholder, className }: RichEd
                 placeholder: placeholder || 'Comece a escrever a magia...',
                 emptyEditorClass: 'is-editor-empty before:text-muted-foreground before:content-[attr(data-placeholder)] before:float-left before:h-0 before:pointer-events-none',
             }),
+            TextStyle,
+            Color,
         ],
         content: content,
         onUpdate: ({ editor }) => {
@@ -234,6 +238,15 @@ export function RichEditor({ content, onChange, placeholder, className }: RichEd
                             </div>
                         }
                     />
+
+                    <div className="flex items-center gap-1 px-1">
+                        <input
+                            type="color"
+                            onInput={e => editor.chain().focus().setColor((e.target as HTMLInputElement).value).run()}
+                            value={editor.getAttributes('textStyle').color || '#000000'}
+                            className="h-6 w-6 rounded border-none bg-transparent cursor-pointer"
+                        />
+                    </div>
 
                     <ToolbarButton
                         icon={LinkIcon}

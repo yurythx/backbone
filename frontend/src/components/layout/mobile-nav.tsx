@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Menu, X, LayoutDashboard, MessageSquare, FileText, Settings, ShieldCheck, Box, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
@@ -74,7 +75,7 @@ export function MobileNav() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={() => setIsOpen(false)}
-                            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100]"
+                            className="fixed inset-0 bg-background/95 backdrop-blur-sm z-[100]"
                         />
 
                         {/* Content */}
@@ -83,7 +84,7 @@ export function MobileNav() {
                             animate={{ x: 0 }}
                             exit={{ x: "-100%" }}
                             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                            className="fixed inset-y-0 left-0 w-3/4 max-w-sm bg-background border-r z-[101] shadow-2xl flex flex-col p-6"
+                            className="fixed inset-y-0 left-0 w-full bg-background border-r z-[101] shadow-2xl flex flex-col p-6"
                         >
                             <div className="flex items-center justify-between mb-8">
                                 <div className="flex items-center gap-2">
@@ -138,7 +139,18 @@ export function MobileNav() {
                                     </div>
                                 </div>
 
-                                <Button variant="outline" className="w-full justify-start gap-3 rounded-xl h-12 text-destructive border-destructive/20 hover:bg-destructive/5">
+                                <Button
+                                    variant="outline"
+                                    className="w-full justify-start gap-3 rounded-xl h-12 text-destructive border-destructive/20 hover:bg-destructive/5"
+                                    onClick={() => {
+                                        setIsOpen(false)
+                                        localStorage.removeItem('accessToken')
+                                        localStorage.removeItem('refreshToken')
+                                        localStorage.removeItem('companySlug')
+                                        toast.success("Você saiu da conta. Até logo!")
+                                        window.location.href = '/login'
+                                    }}
+                                >
                                     <LogOut className="h-5 w-5" />
                                     Sair da Conta
                                 </Button>

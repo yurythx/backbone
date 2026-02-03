@@ -175,7 +175,7 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                 <div className="flex items-center gap-2">
                     <div className="flex bg-muted p-1 rounded-lg">
                         <Button
-                            variant={filterType === "all" ? "background" : "ghost"}
+                            variant={filterType === "all" ? "secondary" : "ghost"}
                             size="sm"
                             className="h-8 px-3 rounded-md shadow-none"
                             onClick={() => setFilterType("all")}
@@ -183,7 +183,7 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                             Todos
                         </Button>
                         <Button
-                            variant={filterType === "image" ? "background" : "ghost"}
+                            variant={filterType === "image" ? "secondary" : "ghost"}
                             size="sm"
                             className="h-8 px-3 rounded-md shadow-none"
                             onClick={() => setFilterType("image")}
@@ -191,7 +191,7 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                             Imagens
                         </Button>
                         <Button
-                            variant={filterType === "document" ? "background" : "ghost"}
+                            variant={filterType === "document" ? "secondary" : "ghost"}
                             size="sm"
                             className="h-8 px-3 rounded-md shadow-none"
                             onClick={() => setFilterType("document")}

@@ -5,6 +5,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   groups: string[];
+  is_superuser?: boolean;
 }
 
 export interface Contact {
@@ -55,6 +56,11 @@ export interface TenantBranding {
   icon_url: string | null;
   primary_color: string;
   theme_palette: string;
+  footer_text: string | null;
+  facebook_url: string | null;
+  instagram_url: string | null;
+  linkedin_url: string | null;
+  twitter_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -74,11 +80,13 @@ export interface Company {
   name: string;
   slug: string;
   domain?: string;
+  onboarding_completed: boolean;
+  onboarding_step: number;
   branding: {
     primaryColor?: string;
     logoUrl?: string;
   };
-  theme_branding?: TenantBranding; // Adicionado para suportar o novo modelo
+  theme_branding?: TenantBranding;
 }
 
 export interface AuthResponse {
@@ -114,9 +122,13 @@ export interface Article {
   created_at: string;
   updated_at: string;
   image?: string | null;
+  author_name?: string;
+  category_name?: string;
   meta_title?: string;
   meta_description?: string;
   meta_keywords?: string;
+  company_name?: string;
+  company_slug?: string;
 }
 
 export interface PlanFeature {

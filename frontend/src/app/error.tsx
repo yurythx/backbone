@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { AlertCircle, Home, RefreshCw } from 'lucide-react'
+import { useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { AlertTriangle, RefreshCcw, Home } from "lucide-react"
+import Link from "next/link"
 
 export default function Error({
     error,
@@ -13,66 +13,52 @@ export default function Error({
     reset: () => void
 }) {
     useEffect(() => {
-        // Log error to monitoring service
-        console.error('Global error:', error)
-
-        // TODO: Send to Sentry when configured
-        // if (typeof window !== 'undefined' && window.Sentry) {
-        //   window.Sentry.captureException(error)
-        // }
+        // Log error to console - in production this would go to Sentry
+        console.error("Application error:", error)
     }, [error])
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-            <Card className="max-w-md w-full p-8 text-center space-y-6">
+        <div className="min-h-screen flex items-center justify-center bg-background px-6">
+            <div className="max-w-md w-full text-center space-y-10 p-12 rounded-[40px] border border-destructive/10 bg-destructive/5 glass-morphism shadow-2xl shadow-destructive/5">
                 <div className="flex justify-center">
-                    <div className="rounded-full bg-destructive/10 p-4">
-                        <AlertCircle className="h-12 w-12 text-destructive" />
+                    <div className="h-24 w-24 rounded-3xl bg-destructive/10 flex items-center justify-center animate-pulse">
+                        <AlertTriangle className="h-12 w-12 text-destructive" />
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <h2 className="text-2xl font-bold tracking-tight">
-                        Ops! Algo deu errado
-                    </h2>
-                    <p className="text-muted-foreground">
-                        Encontramos um erro inesperado. Nossa equipe foi notificada.
-                    </p>
+                <div className="space-y-3">
+                    <h2 className="text-3xl font-black tracking-tight text-foreground">Algo deu errado</h2>
+                    <p className="text-muted-foreground leading-relaxed">Ocorreu um erro inesperado no sistema. Nossa equipe técnica já foi notificada automaticamente.</p>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                    <Button
+                        onClick={() => reset()}
+                        size="lg"
+                        className="rounded-2xl h-14 bg-destructive text-white hover:bg-destructive/90 shadow-xl shadow-destructive/20 transition-all active:scale-95 font-bold"
+                    >
+                        <RefreshCcw className="h-5 w-5 mr-3" />
+                        Tentar novamente
+                    </Button>
+                    <Button
+                        asChild
+                        variant="ghost"
+                        className="h-14 rounded-2xl text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-all"
+                    >
+                        <Link href="/">
+                            <Home className="h-5 w-5 mr-3" />
+                            Voltar para o Início
+                        </Link>
+                    </Button>
                 </div>
 
                 {process.env.NODE_ENV === 'development' && (
-                    <div className="text-left">
-                        <details className="text-xs">
-                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground mb-2">
-                                Detalhes do erro (apenas em desenvolvimento)
-                            </summary>
-                            <pre className="bg-muted p-3 rounded-md overflow-auto max-h-40 text-destructive font-mono">
-                                {error.message}
-                                {error.digest && `\n\nDigest: ${error.digest}`}
-                            </pre>
-                        </details>
+                    <div className="mt-8 p-5 rounded-2xl bg-black/5 text-left overflow-hidden border border-black/5">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2 tracking-widest">Debug Info</p>
+                        <code className="text-xs text-destructive font-mono break-all line-clamp-4">{error.message}</code>
                     </div>
                 )}
-
-                <div className="flex gap-3 justify-center flex-wrap">
-                    <Button
-                        onClick={reset}
-                        variant="outline"
-                        className="gap-2"
-                    >
-                        <RefreshCw className="h-4 w-4" />
-                        Tentar Novamente
-                    </Button>
-                    <Button
-                        onClick={() => window.location.href = '/'}
-                        variant="default"
-                        className="gap-2"
-                    >
-                        <Home className="h-4 w-4" />
-                        Voltar ao Início
-                    </Button>
-                </div>
-            </Card>
+            </div>
         </div>
     )
 }

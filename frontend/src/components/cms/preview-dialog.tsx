@@ -63,7 +63,7 @@ export function PreviewDialog({
                 </Button>
             </DialogTrigger>
             <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0 overflow-hidden flex flex-col border-none shadow-2xl">
-                <DialogHeader className="p-4 border-b bg-background/80 backdrop-blur-md sticky top-0 z-50 flex flex-row items-center justify-between">
+                <DialogHeader className="p-4 border-b bg-background/95 backdrop-blur-md sticky top-0 z-50 flex flex-row items-center justify-between">
                     <div>
                         <DialogTitle className="text-lg font-bold flex items-center gap-2">
                             <Eye className="h-5 w-5 text-primary" />
@@ -74,7 +74,7 @@ export function PreviewDialog({
 
                     <div className="flex bg-muted p-1 rounded-lg mr-8">
                         <Button
-                            variant={device === 'mobile' ? "background" : "ghost"}
+                            variant={device === 'mobile' ? "secondary" : "ghost"}
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => setDevice('mobile')}
@@ -82,7 +82,7 @@ export function PreviewDialog({
                             <Smartphone className="h-4 w-4" />
                         </Button>
                         <Button
-                            variant={device === 'tablet' ? "background" : "ghost"}
+                            variant={device === 'tablet' ? "secondary" : "ghost"}
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => setDevice('tablet')}
@@ -90,7 +90,7 @@ export function PreviewDialog({
                             <Tablet className="h-4 w-4" />
                         </Button>
                         <Button
-                            variant={device === 'desktop' ? "background" : "ghost"}
+                            variant={device === 'desktop' ? "secondary" : "ghost"}
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => setDevice('desktop')}

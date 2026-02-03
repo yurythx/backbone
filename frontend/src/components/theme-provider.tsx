@@ -8,6 +8,13 @@ interface ThemeContextType {
   logo: string;
   icon: string;
   companyName: string;
+  footerText: string;
+  socialLinks: {
+    facebook: string;
+    instagram: string;
+    linkedin: string;
+    twitter: string;
+  };
   currentPalette: string;
   isLoading: boolean;
   refreshConfig: () => Promise<void>;
@@ -56,6 +63,8 @@ export function ThemeProvider({
       logo: themeConfig.logo,
       icon: themeConfig.icon,
       companyName: themeConfig.companyName,
+      footerText: themeConfig.footerText,
+      socialLinks: themeConfig.socialLinks,
       currentPalette: themeConfig.currentPalette,
       isLoading: themeConfig.isLoading,
       refreshConfig: themeConfig.refreshConfig,

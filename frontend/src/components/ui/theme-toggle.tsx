@@ -33,7 +33,7 @@ export function ThemeToggle() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 relative overflow-hidden group">
+                <Button variant="outline" size="icon" className="h-9 w-9 relative overflow-hidden group bg-background">
                     <AnimatePresence mode="wait" initial={false}>
                         {theme === "light" ? (
                             <motion.div
@@ -70,7 +70,7 @@ export function ThemeToggle() {
                     <span className="sr-only">Alternar tema</span>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40 p-1">
+            <DropdownMenuContent align="end" className="w-40 p-1 bg-background border">
                 <DropdownMenuItem
                     onClick={() => setTheme("light")}
                     className="flex items-center justify-between cursor-pointer"

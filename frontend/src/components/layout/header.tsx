@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import React from "react"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,13 +23,13 @@ import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { MobileNav } from "@/components/layout/mobile-nav"
+import { NotificationBell } from "@/components/layout/notification-bell"
 
 const navItems = [
   { label: "Visão Geral", href: "/admin" },
   { label: "Páginas", href: "/cms" },
   { label: "Artigos", href: "/artigos" },
   { label: "Messenger", href: "/messenger" },
-  { label: "Administração", href: "/admin" },
 ]
 
 export function Header() {
@@ -60,11 +61,13 @@ export function Header() {
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('companySlug')
     }
+    toast.success("Você saiu da conta. Até logo!", { duration: 2000 })
     router.replace('/login')
   }
 
+
   return (
-    <header className="h-20 glass-morphism sticky top-0 z-50 px-8 flex items-center justify-between border-b-0 shadow-sm transition-all duration-500">
+    <header className="h-20 sticky top-0 z-50 px-8 flex items-center justify-between border-b border-border/40 backdrop-blur-xl bg-background/95 shadow-sm transition-all duration-500">
       <div className="flex items-center gap-12">
         <SlideUp className="flex items-center gap-12">
           {/* Logo Section */}
@@ -123,6 +126,9 @@ export function Header() {
         {/* Theme Toggle Premium */}
         <ThemeToggle />
 
+        {/* Global Notifications Bell */}
+        <NotificationBell />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 border bg-muted/30 hover:bg-muted/50 transition-all shadow-sm">
@@ -130,30 +136,40 @@ export function Header() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 mt-2 glass-morphism shadow-xl border-0 p-1">
-            <DropdownMenuLabel className="font-normal px-3 py-2">
-              <div className="flex flex-col space-y-1">
-                <span className="text-sm font-medium leading-none">{me?.first_name || me?.username || 'Usuário'}</span>
+            <DropdownMenuLabel className="font-normal px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm group">
+              <Link href="/settings/profile" className="flex flex-col space-y-1">
+                <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{me?.first_name || me?.username || 'Usuário'}</span>
                 <span className="text-xs leading-none text-muted-foreground">{me?.email || ''}</span>
-              </div>
+              </Link>
             </DropdownMenuLabel>
+
             <DropdownMenuSeparator className="bg-muted/50 mx-1" />
-            <DropdownMenuLabel className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground px-3 py-1">Trocar Empresa</DropdownMenuLabel>
-            <div className="max-h-40 overflow-y-auto px-1">
-              {(companies || []).map((c: any) => (
-                <button
-                  key={c.slug}
-                  onClick={() => {
-                    localStorage.setItem('companySlug', c.slug)
-                    window.dispatchEvent(new Event('app-company-changed'))
-                    window.location.reload()
-                  }}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-primary/5 hover:text-primary transition-colors text-left"
-                >
-                  <Building2 className="h-4 w-4 text-primary" />
-                  <span className="text-sm">{c.name}</span>
-                </button>
-              ))}
-            </div>
+
+            {(me?.is_superuser) && (
+              <>
+                <DropdownMenuLabel className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground px-3 py-1 flex items-center gap-2">
+                  <Building2 className="h-3 w-3" />
+                  Trocar Empresa
+                </DropdownMenuLabel>
+                <div className="max-h-40 overflow-y-auto px-1 space-y-0.5">
+                  {(companies || []).map((c: any) => (
+                    <button
+                      key={c.slug}
+                      onClick={() => {
+                        localStorage.setItem('companySlug', c.slug)
+                        window.dispatchEvent(new Event('app-company-changed'))
+                        window.location.reload()
+                      }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-primary/10 hover:text-primary transition-colors text-left group"
+                    >
+                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 group-hover:bg-primary transition-colors" />
+                      <span className="text-sm truncate">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+                <DropdownMenuSeparator className="bg-muted/50 mx-1" />
+              </>
+            )}
             <DropdownMenuSeparator className="bg-muted/50 mx-1" />
             <DropdownMenuItem asChild className="cursor-pointer rounded-md focus:bg-primary/5 focus:text-primary transition-colors">
               <Link href="/settings" className="flex items-center gap-2">

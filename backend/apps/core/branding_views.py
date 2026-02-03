@@ -23,12 +23,19 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     """
     queryset = TenantBranding.objects.all()
     serializer_class = TenantBrandingSerializer
-    permission_classes = [IsAuthenticated]
-    
     @tenant_cached(timeout=3600, key_prefix='branding')
     @action(detail=False, methods=['get'])
     def current(self, request):
-        """Obtém branding do tenant atual"""
+        """Obtém branding do tenant atual (requer autenticação)"""
+        return self._get_current_branding()
+
+    @tenant_cached(timeout=3600, key_prefix='branding_public')
+    @action(detail=False, methods=['get'], permission_classes=[])
+    def public_current(self, request):
+        """Obtém branding do tenant atual (público)"""
+        return self._get_current_branding()
+
+    def _get_current_branding(self):
         company = get_current_company()
         if not company:
             return Response(
@@ -46,6 +53,11 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(branding)
         return Response(serializer.data)
+
+    def get_permissions(self):
+        if self.action in ['public_current', 'palettes']:
+            return []
+        return [IsAuthenticated()]
     
     @action(detail=False, methods=['put'])
     def update_current(self, request):

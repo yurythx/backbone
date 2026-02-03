@@ -15,6 +15,8 @@ export function useThemeConfig() {
             const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
 
             if (!token) {
+                const publicBrandingRes = await api.get('/api/core/branding/public_current/').catch(() => null)
+                if (publicBrandingRes?.data) setTenantTheme(publicBrandingRes.data)
                 setIsLoading(false)
                 return
             }
@@ -94,6 +96,13 @@ export function useThemeConfig() {
     const logo = tenantTheme?.logo_url || '/logo.svg' // Fallback to default
     const icon = tenantTheme?.icon_url || '/favicon.ico'
     const companyName = tenantTheme?.company_name || 'Backbone'
+    const footerText = tenantTheme?.footer_text || ""
+    const socialLinks = {
+        facebook: tenantTheme?.facebook_url || "",
+        instagram: tenantTheme?.instagram_url || "",
+        linkedin: tenantTheme?.linkedin_url || "",
+        twitter: tenantTheme?.twitter_url || ""
+    }
 
     return {
         tenantTheme,
@@ -102,6 +111,8 @@ export function useThemeConfig() {
         logo,
         icon,
         companyName,
+        footerText,
+        socialLinks,
         isLoading,
         updatePalette,
         resetToTenantTheme,

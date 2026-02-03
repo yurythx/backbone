@@ -29,7 +29,16 @@ export function SmtpSettings() {
             try {
                 setIsLoading(true)
                 const res = await api.get('/api/core/branding/email_config/')
-                setConfig(res.data)
+                const data = res.data
+                setConfig({
+                    use_custom_smtp: data.use_custom_smtp ?? false,
+                    smtp_host: data.smtp_host ?? "",
+                    smtp_port: data.smtp_port ?? 587,
+                    smtp_user: data.smtp_user ?? "",
+                    smtp_password: data.smtp_password ?? "",
+                    smtp_use_tls: data.smtp_use_tls ?? true,
+                    from_email: data.from_email ?? ""
+                })
             } catch (error) {
                 console.error("Failed to fetch email config", error)
             } finally {
@@ -109,7 +118,7 @@ export function SmtpSettings() {
                     <Label>Host SMTP</Label>
                     <Input
                         placeholder="smtp.example.com"
-                        value={config.smtp_host}
+                        value={config.smtp_host || ""}
                         onChange={(e) => setConfig({ ...config, smtp_host: e.target.value })}
                     />
                 </div>
@@ -126,7 +135,7 @@ export function SmtpSettings() {
                     <Label>Usuário / E-mail</Label>
                     <Input
                         placeholder="contato@empresa.com"
-                        value={config.smtp_user}
+                        value={config.smtp_user || ""}
                         onChange={(e) => setConfig({ ...config, smtp_user: e.target.value })}
                     />
                 </div>
@@ -135,7 +144,7 @@ export function SmtpSettings() {
                     <Input
                         type="password"
                         placeholder="••••••••"
-                        value={config.smtp_password}
+                        value={config.smtp_password || ""}
                         onChange={(e) => setConfig({ ...config, smtp_password: e.target.value })}
                     />
                 </div>
@@ -143,7 +152,7 @@ export function SmtpSettings() {
                     <Label>E-mail Remetente (From)</Label>
                     <Input
                         placeholder="noreply@empresa.com"
-                        value={config.from_email}
+                        value={config.from_email || ""}
                         onChange={(e) => setConfig({ ...config, from_email: e.target.value })}
                     />
                     <Muted className="text-[10px]">Deve ser um e-mail autorizado no seu servidor SMTP.</Muted>
