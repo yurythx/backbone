@@ -97,6 +97,12 @@ export function useThemeConfig() {
     const icon = tenantTheme?.icon_url || '/favicon.ico'
     const companyName = tenantTheme?.company_name || 'Backbone'
     const footerText = tenantTheme?.footer_text || ""
+    const secondaryColor = tenantTheme?.secondary_color || '#111827'
+    const backgroundColor = tenantTheme?.background_color || '#FFFFFF'
+    const fontFamily = tenantTheme?.font_family || 'Inter'
+    const customCss = tenantTheme?.custom_css || ''
+    const customJs = tenantTheme?.custom_js || ''
+
     const socialLinks = {
         facebook: tenantTheme?.facebook_url || "",
         instagram: tenantTheme?.instagram_url || "",
@@ -112,6 +118,11 @@ export function useThemeConfig() {
         icon,
         companyName,
         footerText,
+        secondaryColor,
+        backgroundColor,
+        fontFamily,
+        customCss,
+        customJs,
         socialLinks,
         isLoading,
         updatePalette,

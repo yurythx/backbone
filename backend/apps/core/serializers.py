@@ -3,17 +3,6 @@ from .models import Company, TenantBranding, AuditLog
 from django.contrib.auth import get_user_model
 
 
-class CompanySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Company
-        fields = [
-            'id', 'name', 'slug', 'domain', 
-            'onboarding_completed', 'onboarding_step',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
-
-
 class TenantBrandingSerializer(serializers.ModelSerializer):
     """
     Serializer para configurações de branding do tenant.
@@ -21,14 +10,15 @@ class TenantBrandingSerializer(serializers.ModelSerializer):
     """
     logo_url = serializers.SerializerMethodField()
     icon_url = serializers.SerializerMethodField()
-    company_details = CompanySerializer(source='company', read_only=True)
     
     class Meta:
         model = TenantBranding
         fields = [
-            'id', 'company', 'company_details', 'company_name',
+            'id', 'company', 'company_name',
             'logo', 'logo_url', 'icon', 'icon_url',
-            'primary_color', 'theme_palette',
+            'primary_color', 'secondary_color', 'background_color',
+            'font_family', 'theme_palette',
+            'custom_css', 'custom_js',
             'footer_text', 'facebook_url', 'instagram_url',
             'linkedin_url', 'twitter_url',
             'created_at', 'updated_at'
@@ -50,6 +40,20 @@ class TenantBrandingSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.icon.url)
             return obj.icon.url
         return None
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    theme_branding = TenantBrandingSerializer(read_only=True)
+
+    class Meta:
+        model = Company
+        fields = [
+            'id', 'name', 'slug', 'domain', 
+            'onboarding_completed', 'onboarding_step',
+            'theme_branding',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class TenantEmailConfigSerializer(serializers.ModelSerializer):

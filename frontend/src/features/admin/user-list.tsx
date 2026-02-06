@@ -66,7 +66,7 @@ export function UserList({ onEdit, onCreate }: UserListProps) {
       id: "actions",
       cell: ({ row }) => {
         const user = row.original
- 
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -80,7 +80,7 @@ export function UserList({ onEdit, onCreate }: UserListProps) {
               <DropdownMenuItem onClick={() => onEdit(user)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={() => {
                   if (confirm('Are you sure?')) deleteMutation.mutate(user.id)
                 }}
@@ -97,19 +97,12 @@ export function UserList({ onEdit, onCreate }: UserListProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold tracking-tight">Users</h2>
-        <Button onClick={onCreate}>
-          <Plus className="mr-2 h-4 w-4" /> New User
-        </Button>
-      </div>
-
-      <DataTable 
-        columns={columns} 
-        data={users || []} 
-        isLoading={isLoading} 
+      <DataTable
+        columns={columns}
+        data={users || []}
+        isLoading={isLoading}
         searchKey="username"
-        searchPlaceholder="Filter username..."
+        searchPlaceholder="Filtrar por usuário..."
       />
     </div>
   )

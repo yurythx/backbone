@@ -26,7 +26,7 @@ export function useChat(conversationId: number | null) {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.hostname === 'localhost' ? 'localhost:8005' : window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/chat/chat_${conversationId}/?token=${token}`;
+    const wsUrl = `${protocol}//${host}/ws/chat/${conversationId}/?token=${token}`;
 
     const connect = () => {
       const ws = new WebSocket(wsUrl);
@@ -106,6 +106,15 @@ export function useChat(conversationId: number | null) {
               }
               return msg;
             }));
+          }
+          if (data.type === 'read_receipt') {
+            setRealtimeMessages((prev) => prev.map(msg => {
+              if (msg.id === data.message_id) {
+                return { ...msg, is_read: true };
+              }
+              return msg;
+            }));
+            return;
           }
         } catch (err) {
           console.error('Chat WebSocket message error:', err);

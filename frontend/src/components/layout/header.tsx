@@ -2,7 +2,7 @@
 
 import { useTheme as useNextTheme } from "next-themes"
 import { useTheme } from "@/components/theme-provider"
-import { Moon, Sun, Menu, User, Settings, LogOut, Building2 } from "lucide-react"
+import { Moon, Sun, Menu, User, Settings, LogOut, Building2, Plus, FileText, ShieldCheck, UserPlus } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import React from "react"
@@ -126,13 +126,56 @@ export function Header() {
         {/* Theme Toggle Premium */}
         <ThemeToggle />
 
+        {/* Quick Action Menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="hidden lg:flex rounded-xl font-bold bg-primary/5 hover:bg-primary/10 border-primary/20 transition-all gap-2 group h-10 px-4">
+              <Plus className="h-4 w-4 text-primary transition-transform group-hover:rotate-90" />
+              Ação Rápida
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 mt-2 glass-morphism shadow-xl border-0 p-1.5 translate-y-2">
+            <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2">
+              Atalhos de Criação
+            </DropdownMenuLabel>
+            <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
+              <Link href="/artigos/novo" className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                  <FileText className="h-4 w-4 text-orange-500" />
+                </div>
+                <span>Novo Artigo</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
+              <Link href="/cms/novo" className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <ShieldCheck className="h-4 w-4 text-blue-500" />
+                </div>
+                <span>Nova Página</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
+              <Link href="/admin" className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <UserPlus className="h-4 w-4 text-emerald-500" />
+                </div>
+                <span>Novo Usuário</span>
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {/* Global Notifications Bell */}
         <NotificationBell />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 border bg-muted/30 hover:bg-muted/50 transition-all shadow-sm">
-              <User className="h-5 w-5 text-muted-foreground" />
+            <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 border bg-muted/30 hover:bg-muted/50 transition-all shadow-sm p-0 overflow-hidden">
+              {me?.avatar ? (
+                <img src={me.avatar} alt="Avatar" className="h-full w-full object-cover" />
+              ) : (
+                <User className="h-5 w-5 text-muted-foreground" />
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 mt-2 glass-morphism shadow-xl border-0 p-1">

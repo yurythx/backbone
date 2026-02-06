@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, User, Mail, UserCheck, Save } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { AvatarUpload } from "@/components/avatar-upload"
 
 const profileSchema = z.object({
   username: z.string().min(2, "O nome de usuário deve ter pelo menos 2 caracteres."),
@@ -40,34 +41,53 @@ export function ProfileForm() {
     }
   })
 
-  const form = useForm<z.infer<typeof profileSchema>>({
-    resolver: zodResolver(profileSchema),
+  // Schema now accepts File or string for avatar
+  const extendedSchema = profileSchema.extend({
+    avatar: z.union([z.instanceof(File), z.string(), z.null()]).optional()
+  })
+
+  const form = useForm<z.infer<typeof extendedSchema>>({
+    resolver: zodResolver(extendedSchema),
     defaultValues: {
       username: "",
       email: "",
       firstName: "",
       lastName: "",
+      avatar: null,
     },
     values: user ? {
       username: user.username,
       email: user.email || "",
       firstName: user.firstName || "",
       lastName: user.lastName || "",
+      avatar: user.avatar || null,
     } : undefined
   })
 
   const mutation = useMutation({
-    mutationFn: async (values: z.infer<typeof profileSchema>) => {
-      const payload = {
-        username: values.username,
-        email: values.email,
-        first_name: values.firstName,
-        last_name: values.lastName,
+    mutationFn: async (values: z.infer<typeof extendedSchema>) => {
+      const formData = new FormData()
+      formData.append('username', values.username)
+      if (values.firstName) formData.append('first_name', values.firstName)
+      if (values.lastName) formData.append('last_name', values.lastName)
+
+      // Avatar handling
+      if (values.avatar instanceof File) {
+        formData.append('avatar', values.avatar)
+      } else if (values.avatar === null && user?.avatar) {
+        // Handle removal if needed, but for now we just support update
+        // To support deletion we might need a separate flag or empty string logic in backend
       }
-      await api.patch('/api/accounts/users/me/', payload)
+
+      await api.patch('/api/accounts/users/me/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] })
+      queryClient.invalidateQueries({ queryKey: ['auth', 'user'] }) // Update global auth context
       toast.success("Perfil atualizado com sucesso!")
     },
     onError: (error) => {
@@ -84,19 +104,18 @@ export function ProfileForm() {
           <Skeleton className="h-4 w-1/2" />
         </CardHeader>
         <CardContent className="space-y-6">
-          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-24 w-24 rounded-full" />
           <Skeleton className="h-12 w-full" />
           <div className="grid grid-cols-2 gap-4">
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
-          <Skeleton className="h-12 w-32" />
         </CardContent>
       </Card>
     )
   }
 
-  function onSubmit(values: z.infer<typeof profileSchema>) {
+  function onSubmit(values: z.infer<typeof extendedSchema>) {
     mutation.mutate(values)
   }
 
@@ -116,6 +135,25 @@ export function ProfileForm() {
       <CardContent className="px-0 pt-4">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-2xl">
+
+            {/* Avatar Section */}
+            <FormField
+              control={form.control}
+              name="avatar"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <AvatarUpload
+                      value={field.value}
+                      onChange={field.onChange}
+                      initials={user?.username?.substring(0, 2).toUpperCase()}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}

@@ -41,7 +41,7 @@ log_info "Backup directory: ${BACKUP_DIR}/${BACKUP_NAME}"
 # 1. Backup PostgreSQL
 log_info "Backing up PostgreSQL database..."
 
-if [command -v docker-compose &> /dev/null]; then
+if command -v docker-compose &> /dev/null; then
     # Using docker-compose
     docker-compose exec -T db pg_dumpall -U postgres | gzip > postgres_${TIMESTAMP}.sql.gz
     
@@ -51,7 +51,7 @@ if [command -v docker-compose &> /dev/null]; then
         log_error "✗ PostgreSQL backup failed!"
         exit 1
     fi
-elif [ command -v docker &> /dev/null ]; then
+elif command -v docker &> /dev/null; then
     # Using docker directly
     CONTAINER_ID=$(docker ps --filter "name=backbone_db" --format "{{.ID}}" | head -n 1)
     
@@ -70,13 +70,13 @@ fi
 # 2. Backup MinIO/S3 Storage
 log_info "Backing up MinIO storage..."
 
-if [ -command -v mc &> /dev/null ]; then
+if command -v mc &> /dev/null; then
     # Using MinIO client (mc)
     # Configure mc alias if not exists
     mc alias set backbone-minio http://localhost:9000 minioadmin minioadmin 2>/dev/null || true
     
     # Mirror bucket to backup directory
-    mc mirror backbone-minio/blackbone-media ./minio_backup
+    mc mirror backbone-minio/backbone-media ./minio_backup
     
     # Create tar.gz archive
     tar -czf minio_${TIMESTAMP}.tar.gz minio_backup

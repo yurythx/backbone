@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, RefreshCcw, Home } from "lucide-react"
 import Link from "next/link"
+import { SlideUp } from "@/components/ui/motion"
 
 export default function Error({
     error,
@@ -19,7 +20,7 @@ export default function Error({
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-background px-6">
-            <div className="max-w-md w-full text-center space-y-10 p-12 rounded-[40px] border border-destructive/10 bg-destructive/5 glass-morphism shadow-2xl shadow-destructive/5">
+            <SlideUp className="max-w-md w-full text-center space-y-10 p-12 rounded-[40px] border border-destructive/10 bg-destructive/5 glass-morphism shadow-2xl shadow-destructive/5">
                 <div className="flex justify-center">
                     <div className="h-24 w-24 rounded-3xl bg-destructive/10 flex items-center justify-center animate-pulse">
                         <AlertTriangle className="h-12 w-12 text-destructive" />
@@ -58,7 +59,7 @@ export default function Error({
                         <code className="text-xs text-destructive font-mono break-all line-clamp-4">{error.message}</code>
                     </div>
                 )}
-            </div>
+            </SlideUp>
         </div>
     )
 }

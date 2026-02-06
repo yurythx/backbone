@@ -6,18 +6,18 @@ import { api } from "@/lib/axios"
 import { Company } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import { BrandingSettings } from "@/components/settings/branding-settings"
 import { SmtpSettings } from "@/features/settings/smtp-settings"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Check, ChevronRight, Rocket, Shield, Globe, Mail, Palette } from "lucide-react"
+import { Check, ChevronRight, Rocket, Shield, Globe, Mail, Palette, Sparkles, Layout, ArrowRight, CheckCircle2 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { cn } from "@/lib/utils"
 
 export function OnboardingWizard() {
     const queryClient = useQueryClient()
-    const [step, setStep] = useState(1)
-    const totalSteps = 4
+    const [step, setStep] = useState(0)
+    const totalSteps = 5 // welcome + 4 internal
 
     const { data: company, isLoading } = useQuery({
         queryKey: ['current-company'],
@@ -33,14 +33,14 @@ export function OnboardingWizard() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['current-company'] })
-            window.location.reload() // Refresh to clear wizard overlay
+            window.location.reload()
         }
     })
 
     if (isLoading || !company) return null
 
     const handleNext = () => {
-        if (step < totalSteps) {
+        if (step < totalSteps - 1) {
             setStep(step + 1)
         } else {
             completeMutation.mutate()
@@ -49,35 +49,61 @@ export function OnboardingWizard() {
 
     const renderStep = () => {
         switch (step) {
+            case 0:
+                return (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col items-center justify-center py-12 text-center space-y-8"
+                    >
+                        <div className="relative">
+                            <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
+                            <div className="relative h-24 w-24 rounded-3xl bg-primary flex items-center justify-center shadow-2xl shadow-primary/20">
+                                <Rocket className="h-12 w-12 text-primary-foreground animate-bounce" />
+                            </div>
+                        </div>
+                        <div className="space-y-3 max-w-md">
+                            <h2 className="text-4xl font-black tracking-tight text-foreground">Welcome to Backbone</h2>
+                            <p className="text-muted-foreground text-lg px-4">
+                                Olá, <span className="text-primary font-bold">{company.name}</span>! Vamos configurar sua nova plataforma de inteligência em apenas alguns passos.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4 w-full max-w-sm pt-4">
+                            <WelcomeFeature icon={Palette} label="Identidade" />
+                            <WelcomeFeature icon={Mail} label="Comunicação" />
+                            <WelcomeFeature icon={Globe} label="Domínio" />
+                        </div>
+                        <Button size="lg" onClick={handleNext} className="rounded-full px-12 font-bold h-14 text-lg shadow-xl shadow-primary/20 group">
+                            Começar Setup <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                        </Button>
+                    </motion.div>
+                )
             case 1:
                 return (
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="space-y-6"
+                        className="space-y-8"
                     >
-                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary/10 border border-primary/20">
-                            <div className="p-3 rounded-xl bg-primary text-primary-foreground">
-                                <Shield className="h-6 w-6" />
+                        <StepHeader
+                            icon={Shield}
+                            title="Identidade da Plataforma"
+                            description="Estes são seus dados fundamentais de identificação no ecossistema."
+                        />
+                        <div className="grid gap-6">
+                            <div className="space-y-2 px-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Nome da Empresa</Label>
+                                <Input value={company.name} readOnly className="h-12 rounded-xl bg-muted/30 border-none font-semibold text-lg" />
                             </div>
-                            <div>
-                                <h3 className="font-bold text-lg">Identidade da Plataforma</h3>
-                                <p className="text-muted-foreground text-sm">Confirme o nome e o endereço único da sua empresa.</p>
-                            </div>
-                        </div>
-
-                        <div className="grid gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Nome da Empresa</Label>
-                                <Input id="name" value={company.name} readOnly className="bg-muted cursor-not-allowed" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="slug">Slug da URL</Label>
-                                <div className="flex items-center gap-2">
-                                    <Input id="slug" value={company.slug} readOnly className="bg-muted cursor-not-allowed" />
-                                    <span className="text-sm text-muted-foreground">.backbone.io</span>
+                            <div className="space-y-2 px-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Slug da URL (Ambiente)</Label>
+                                <div className="relative">
+                                    <Input value={company.slug} readOnly className="h-12 rounded-xl bg-muted/30 border-none font-semibold text-lg pr-32" />
+                                    <div className="absolute inset-y-0 right-0 flex items-center pr-4">
+                                        <span className="text-xs font-bold text-primary/40">.backbone.io</span>
+                                    </div>
                                 </div>
-                                <p className="text-xs text-muted-foreground">Este é o seu identificador único no sistema.</p>
+                                <p className="text-[10px] text-muted-foreground italic px-1">Este identificador não pode ser alterado após a criação.</p>
                             </div>
                         </div>
                     </motion.div>
@@ -87,9 +113,16 @@ export function OnboardingWizard() {
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="space-y-4"
+                        className="space-y-6"
                     >
-                        <BrandingSettings />
+                        <StepHeader
+                            icon={Palette}
+                            title="Identidade Visual (White-label)"
+                            description="Personalize cores e logos para que a plataforma tenha a cara do seu negócio."
+                        />
+                        <div className="border rounded-3xl p-6 bg-background/50">
+                            <BrandingSettings isOnboarding />
+                        </div>
                     </motion.div>
                 )
             case 3:
@@ -97,9 +130,16 @@ export function OnboardingWizard() {
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="space-y-4"
+                        className="space-y-6"
                     >
-                        <SmtpSettings />
+                        <StepHeader
+                            icon={Mail}
+                            title="Comunicação Corporativa"
+                            description="Configure seu SMTP para que os e-mails do sistema usem seu próprio domínio."
+                        />
+                        <div className="border rounded-3xl p-6 bg-background/50">
+                            <SmtpSettings isOnboarding />
+                        </div>
                     </motion.div>
                 )
             case 4:
@@ -107,26 +147,21 @@ export function OnboardingWizard() {
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="space-y-6"
+                        className="space-y-8"
                     >
-                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary/10 border border-primary/20">
-                            <div className="p-3 rounded-xl bg-primary text-primary-foreground">
-                                <Globe className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-lg">Domínio Customizado</h3>
-                                <p className="text-muted-foreground text-sm">Pronto para usar seu próprio endereço?</p>
-                            </div>
-                        </div>
+                        <StepHeader
+                            icon={Globe}
+                            title="Domínio Customizado"
+                            description="Pronto para usar seu próprio endereço web (ex: app.suaempresa.com)?"
+                        />
 
-                        <div className="space-y-4">
-                            <p className="text-sm">Você pode configurar isso agora ou deixar para depois nas configurações.</p>
-                            <div className="space-y-2">
-                                <Label htmlFor="domain-input">Seu Domínio (opcional)</Label>
+                        <div className="space-y-6">
+                            <div className="space-y-2 px-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Seu Domínio de Produção</Label>
                                 <Input
-                                    id="domain-input"
-                                    placeholder="ex: app.suaempresa.com"
+                                    placeholder="ex: painel.minhaempresa.com.br"
                                     defaultValue={company.domain || ''}
+                                    className="h-14 rounded-2xl border-primary/20 text-lg"
                                     onBlur={async (e) => {
                                         const val = (e.target as HTMLInputElement).value
                                         if (val !== company.domain) {
@@ -136,13 +171,16 @@ export function OnboardingWizard() {
                                     }}
                                 />
                             </div>
-                        </div>
 
-                        <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex gap-3">
-                            <div className="text-yellow-500 mt-0.5">⚠️</div>
-                            <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                                Lembre-se que para domínios customizados funcionarem, você precisará apontar o DNS (CNAME) para nossos servidores.
-                            </p>
+                            <div className="bg-primary/5 border border-primary/10 p-6 rounded-3xl flex gap-4">
+                                <Sparkles className="h-6 w-6 text-primary shrink-0 mt-1" />
+                                <div className="space-y-1">
+                                    <h4 className="font-bold text-sm">Quase lá!</h4>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Para que este domínio funcione, lembre-se de configurar um registro **CNAME** apontando para `cname.backbone.io` no seu provedor de DNS.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </motion.div>
                 )
@@ -152,53 +190,79 @@ export function OnboardingWizard() {
     }
 
     return (
-        <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-xl flex items-center justify-center p-4">
-            <Card className="w-full max-w-4xl shadow-2xl border-primary/20 overflow-hidden bg-card/50 backdrop-blur-md">
-                <div className="h-1 bg-muted">
-                    <motion.div
-                        className="h-full bg-primary"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(step / totalSteps) * 100}%` }}
-                    />
-                </div>
-
-                <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 text-primary font-bold tracking-tight">
-                            <Rocket className="h-5 w-5" />
-                            <span>WELCOME TO BACKBONE</span>
-                        </div>
-                        <span className="text-sm font-medium text-muted-foreground">Passo {step} de {totalSteps}</span>
+        <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-3xl flex items-center justify-center p-4">
+            <Card className="w-full max-w-5xl shadow-2xl border-primary/20 overflow-hidden bg-card/40 border-t-4 border-t-primary">
+                {step > 0 && (
+                    <div className="h-1 bg-muted">
+                        <motion.div
+                            className="h-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(step / (totalSteps - 1)) * 100}%` }}
+                        />
                     </div>
-                    <CardTitle className="text-3xl font-extrabold tracking-tight">Configuração Inicial</CardTitle>
-                    <CardDescription>Vamos deixar a plataforma com a cara da sua empresa em poucos minutos.</CardDescription>
-                </CardHeader>
+                )}
 
-                <CardContent className="min-h-[400px] max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <CardContent className={cn(
+                    "custom-scrollbar",
+                    step === 0 ? "p-12" : "p-10 min-h-[500px] max-h-[75vh] overflow-y-auto"
+                )}>
                     <AnimatePresence mode="wait">
                         {renderStep()}
                     </AnimatePresence>
                 </CardContent>
 
-                <CardFooter className="flex justify-between border-t bg-muted/20 p-6">
-                    <Button
-                        variant="ghost"
-                        onClick={() => setStep(Math.max(1, step - 1))}
-                        disabled={step === 1 || completeMutation.isPending}
-                    >
-                        Anterior
-                    </Button>
-                    <Button
-                        size="lg"
-                        onClick={handleNext}
-                        disabled={completeMutation.isPending}
-                        className="rounded-xl px-8 font-bold gap-2"
-                    >
-                        {step === totalSteps ? 'Finalizar Setup' : 'Próximo Passo'}
-                        {step === totalSteps ? <Check className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                    </Button>
-                </CardFooter>
+                {step > 0 && (
+                    <CardFooter className="flex justify-between border-t bg-muted/10 p-6 px-10">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setStep(Math.max(0, step - 1))}
+                            disabled={completeMutation.isPending}
+                            className="rounded-xl font-bold gap-2"
+                        >
+                            Anterior
+                        </Button>
+                        <div className="flex items-center gap-6">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden sm:block">
+                                Passo {step} de {totalSteps - 1}
+                            </span>
+                            <Button
+                                size="lg"
+                                onClick={handleNext}
+                                disabled={completeMutation.isPending}
+                                className="rounded-xl px-10 font-bold gap-2 shadow-lg shadow-primary/10"
+                            >
+                                {step === totalSteps - 1 ? 'Lançar Plataforma' : 'Continuar Setup'}
+                                {step === totalSteps - 1 ? <CheckCircle2 className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                            </Button>
+                        </div>
+                    </CardFooter>
+                )}
             </Card>
+        </div>
+    )
+}
+
+function WelcomeFeature({ icon: Icon, label }: { icon: any, label: string }) {
+    return (
+        <div className="flex flex-col items-center gap-2">
+            <div className="h-12 w-12 rounded-2xl bg-muted/50 border flex items-center justify-center">
+                <Icon className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
+        </div>
+    )
+}
+
+function StepHeader({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
+    return (
+        <div className="flex items-center gap-5 pb-2">
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                <Icon className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+                <CardTitle className="text-2xl font-black tracking-tight">{title}</CardTitle>
+                <CardDescription className="text-base text-muted-foreground italic">{description}</CardDescription>
+            </div>
         </div>
     )
 }

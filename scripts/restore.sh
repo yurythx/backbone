@@ -76,7 +76,7 @@ fi
 
 log_info "Found backup: ${POSTGRES_BACKUP}"
 
-if [ -command -v docker-compose &> /dev/null ]; then
+if command -v docker-compose &> /dev/null; then
     # Using docker-compose
     gunzip -c "$POSTGRES_BACKUP" | docker-compose exec -T db psql -U postgres
     
@@ -86,7 +86,7 @@ if [ -command -v docker-compose &> /dev/null ]; then
         log_error "✗ PostgreSQL restore failed!"
         exit 1
     fi
-elif [ -command -v docker &> /dev/null ]; then
+elif command -v docker &> /dev/null; then
     # Using docker directly
     CONTAINER_ID=$(docker ps --filter "name=backbone_db" --format "{{.ID}}" | head -n 1)
     
@@ -112,7 +112,7 @@ if [ -z "$MINIO_BACKUP" ]; then
 else
     log_info "Found backup: ${MINIO_BACKUP}"
     
-    if [ -command -v mc &> /dev/null ]; then
+    if command -v mc &> /dev/null; then
         # Extract backup
         tar -xzf "$MINIO_BACKUP"
         
@@ -120,7 +120,7 @@ else
         mc alias set backbone-minio http://localhost:9000 minioadmin minioadmin 2>/dev/null || true
         
         # Mirror backup to bucket
-        mc mirror --overwrite minio_backup backbone-minio/blackbone-media
+        mc mirror --overwrite minio_backup backbone-minio/backbone-media
         
         # Clean up
         rm -rf minio_backup

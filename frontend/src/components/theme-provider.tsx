@@ -9,6 +9,12 @@ interface ThemeContextType {
   icon: string;
   companyName: string;
   footerText: string;
+  primaryColor: string;
+  secondaryColor: string;
+  backgroundColor: string;
+  fontFamily: string;
+  customCss: string;
+  customJs: string;
   socialLinks: {
     facebook: string;
     instagram: string;
@@ -38,12 +44,43 @@ export function ThemeProvider({
 }: React.ComponentProps<typeof NextThemesProvider>) {
   const themeConfig = useThemeConfig()
 
-  // Inject palette into standard HTML attribute for CSS selection
+  // Inject palette and custom colors as CSS variables
   React.useEffect(() => {
     if (typeof window !== "undefined") {
-      document.documentElement.setAttribute("data-palette", themeConfig.currentPalette)
+      const root = document.documentElement;
+      root.setAttribute("data-palette", themeConfig.currentPalette)
+
+      // Inject HEX colors as CSS Variables
+      if (themeConfig.tenantTheme?.primary_color) {
+        root.style.setProperty('--primary', themeConfig.tenantTheme.primary_color);
+      }
+      if (themeConfig.secondaryColor) {
+        root.style.setProperty('--secondary', themeConfig.secondaryColor);
+      }
+      if (themeConfig.backgroundColor) {
+        root.style.setProperty('--background', themeConfig.backgroundColor);
+      }
+      if (themeConfig.fontFamily) {
+        root.style.setProperty('--font-family', `"${themeConfig.fontFamily}", sans-serif`);
+      }
     }
-  }, [themeConfig.currentPalette])
+  }, [themeConfig.currentPalette, themeConfig.tenantTheme, themeConfig.secondaryColor, themeConfig.backgroundColor, themeConfig.fontFamily])
+
+  // Google Fonts Injection
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && themeConfig.fontFamily) {
+      const fontId = 'dynamic-google-font';
+      let link = document.getElementById(fontId) as HTMLLinkElement;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = fontId;
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+      }
+      const fontName = themeConfig.fontFamily.replace(/\s+/g, '+');
+      link.href = `https://fonts.googleapis.com/css2?family=${fontName}:wght@300;400;500;600;700&display=swap`;
+    }
+  }, [themeConfig.fontFamily])
 
   // Optional: Update Favicon dynamically
   React.useEffect(() => {
@@ -64,6 +101,12 @@ export function ThemeProvider({
       icon: themeConfig.icon,
       companyName: themeConfig.companyName,
       footerText: themeConfig.footerText,
+      primaryColor: themeConfig.tenantTheme?.primary_color || '#0C4B33',
+      secondaryColor: themeConfig.secondaryColor,
+      backgroundColor: themeConfig.backgroundColor,
+      fontFamily: themeConfig.fontFamily,
+      customCss: themeConfig.customCss,
+      customJs: themeConfig.customJs,
       socialLinks: themeConfig.socialLinks,
       currentPalette: themeConfig.currentPalette,
       isLoading: themeConfig.isLoading,

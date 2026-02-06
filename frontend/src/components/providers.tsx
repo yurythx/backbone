@@ -2,10 +2,20 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ThemeProvider } from "./theme-provider"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Toaster } from "sonner"
+import { PushNotificationManager } from "./notifications/PushNotificationManager"
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((registration) => console.log('SW scope:', registration.scope))
+        .catch((err) => console.log('SW registration failed:', err));
+    }
+  }, []);
+
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
@@ -13,7 +23,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         refetchOnWindowFocus: false,
         staleTime: 30_000,
         gcTime: 5 * 60_000,
-
       }
     }
   }))
@@ -27,6 +36,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         {children}
+        <PushNotificationManager />
         <Toaster
           position="bottom-right"
           expand={true}

@@ -174,6 +174,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'action': event['action']
         }))
 
+    async def read_receipt_update(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'read_receipt',
+            'message_id': event['message_id'],
+            'user_id': event['user_id'],
+            'is_read': event['is_read']
+        }))
+
     @database_sync_to_async
     def get_conversation(self, conversation_id, user):
         try:

@@ -54,7 +54,7 @@ export default function DashboardPage() {
       <div className="container mx-auto px-6 space-y-16">
 
         {/* Quick Stats Grid */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <SlideUp delay={0.1}>
             <StatItem
               title="Usuários Ativos"
@@ -73,6 +73,14 @@ export default function DashboardPage() {
           </SlideUp>
           <SlideUp delay={0.3}>
             <StatItem
+              title="Mensagens Trocadas"
+              value={stats?.counters?.messages?.total || 0}
+              growth={stats?.counters?.messages?.growth}
+              icon={MessageSquare}
+            />
+          </SlideUp>
+          <SlideUp delay={0.4}>
+            <StatItem
               title="Status do Sistema"
               value={stats?.system_status?.api_uptime || "100%"}
               label="API Uptime"
@@ -85,7 +93,11 @@ export default function DashboardPage() {
         {/* Analytics Section */}
         <section id="analytics-section" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <FadeIn delay={0.4} className="lg:col-span-2">
-            <AnalyticsChart data={stats?.charts?.views_series || []} title="Tráfego de Conteúdo (30d)" />
+            <AnalyticsChart
+              data={stats?.charts?.views_series || []}
+              title="Tráfego de Conteúdo (30d)"
+              isLoading={statsLoading}
+            />
           </FadeIn>
           <div className="space-y-6">
             <SlideUp delay={0.5}>

@@ -41,6 +41,7 @@ class User(AbstractUser, BaseTenantModel):
         blank=True,
         related_name='users'
     )
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True, help_text="Foto de perfil do usuário")
 
     # Managers
     objects = TenantUserManager()

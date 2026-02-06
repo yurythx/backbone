@@ -31,10 +31,10 @@ import { Shield, Lock, CheckCircle2 } from "lucide-react"
 const AVAILABLE_PERMISSIONS = [
     { id: 'articles.article_manage', label: 'Gerenciar Artigos', description: 'Criar, editar e excluir artigos.' },
     { id: 'articles.category_manage', label: 'Gerenciar Categorias', description: 'Criar e editar categorias de artigos.' },
-    { id: 'media.upload', label: 'Upload de Mídia', description: 'Enviar arquivos para a biblioteca.' },
-    { id: 'media.delete', label: 'Excluir Mídia', description: 'Remover arquivos da biblioteca.' },
-    { id: 'pages.manage', label: 'Gerenciar Páginas', description: 'Criar e editar páginas institucionais.' },
-    { id: 'users.manage', label: 'Gerenciar Usuários', description: 'Convidar e editar membros da equipe.' },
+    { id: 'cms.page_manage', label: 'Gerenciar Páginas', description: 'Criar e editar páginas institucionais.' },
+    { id: 'messenger.view', label: 'Acesso ao Chat', description: 'Visualizar e participar de conversas no Messenger.' },
+    { id: 'admin.user_manage', label: 'Gerenciar Equipe', description: 'Convidar novos membros e alterar papéis.' },
+    { id: 'admin.smtp_manage', label: 'Configurações de E-mail', description: 'Alterar configurações de SMTP da empresa.' },
 ]
 
 const formSchema = z.object({

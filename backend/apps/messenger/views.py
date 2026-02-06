@@ -10,13 +10,16 @@ from apps.module_manager.permissions import HasModuleAccess
 
 User = get_user_model()
 
+from apps.accounts.permissions import HasRolePermission
+
 @extend_schema_view(
     list=extend_schema(tags=['Messenger']),
     retrieve=extend_schema(tags=['Messenger']),
 )
 class ContactViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ContactSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
+    required_permission = 'messenger.view'
     module_code = 'messenger'
     
 
@@ -50,11 +53,17 @@ class ConversationViewSet(viewsets.ModelViewSet):
     module_code = 'messenger'
 
     def create(self, request, *args, **kwargs):
+        participant_usernames = request.data.get('participant_usernames', [])
         target_username = request.data.get('target_username')
+        if target_username and target_username not in participant_usernames:
+            participant_usernames.append(target_username)
+            
         conversation = MessengerService.create_conversation(
             creator=request.user,
             company=request.company,
-            participant_usernames=[target_username] if target_username else []
+            participant_usernames=participant_usernames,
+            title=request.data.get('title'),
+            is_group=request.data.get('is_group', False)
         )
         serializer = self.get_serializer(conversation)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -62,6 +71,53 @@ class ConversationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Retorna apenas conversas onde o usuário é participante
         return Conversation.objects.filter(participants=self.request.user).order_by('-created_at')
+
+    @action(detail=True, methods=['post'])
+    def add_participant(self, request, pk=None):
+        conversation = self.get_object()
+        if not conversation.is_group:
+            return Response({"error": "Only group conversations can have participants added"}, status=400)
+            
+        username = request.data.get('username')
+        try:
+            target_user = User.objects.get(company=request.company, username=username)
+            conversation.participants.add(target_user)
+            return Response({"status": "Participant added"})
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def remove_participant(self, request, pk=None):
+        conversation = self.get_object()
+        if not conversation.is_group:
+            return Response({"error": "Only group conversations can have participants removed"}, status=400)
+            
+        username = request.data.get('username')
+        try:
+            target_user = User.objects.get(company=request.company, username=username)
+            conversation.participants.remove(target_user)
+            return Response({"status": "Participant removed"})
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("q", OpenApiTypes.STR, description="Termo de pesquisa")],
+        responses={200: MessageSerializer(many=True)},
+        description="Global search in message history"
+    )
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        query = request.query_params.get('q')
+        if not query:
+            return Response({"error": "Query parameter 'q' is required"}, status=400)
+            
+        messages = Message.objects.filter(
+            conversation__participants=request.user,
+            content__icontains=query
+        ).order_by('-created_at')
+        
+        serializer = MessageSerializer(messages, many=True, context={'request': request})
+        return Response(serializer.data)
 
     @extend_schema(
         request=OpenApiTypes.OBJECT,
@@ -96,24 +152,40 @@ class ConversationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
         conversation = self.get_object()
-        qs = conversation.messages.all().order_by('created_at')
+        # Order by -created_at for pagination (latest first) then reverse for display
+        qs = conversation.messages.all().order_by('-created_at')
+        
         before = request.query_params.get('before')
         if before:
             try:
-                # ISO format expected
                 from django.utils.dateparse import parse_datetime
                 dt = parse_datetime(before)
                 if dt:
                     qs = qs.filter(created_at__lt=dt)
             except Exception:
                 pass
-        messages = qs
-        page = self.paginate_queryset(messages)
+        
+        # Paginate (default is 50 usually)
+        page = self.paginate_queryset(qs)
         if page is not None:
-            serializer = MessageSerializer(page, many=True, context={'request': request})
-            return self.get_paginated_response(serializer.data)
+            # We want to return them in chronological order for the frontend
+            # but we paginate from latest to oldest
+            messages_list = sorted(page, key=lambda x: x.created_at)
+            serializer = MessageSerializer(messages_list, many=True, context={'request': request})
+            response = self.get_paginated_response(serializer.data)
+            
+            # Enrich response with 'before' param for next page if exists
+            if page:
+                oldest_msg = page[-1] # The last one in the page (oldest)
+                # Note: Default pagination 'next' uses ?page=2. 
+                # We might want to keep using standard pagination but adjust it, 
+                # or manually construct the next link.
+                pass
+            
+            return response
 
-        serializer = MessageSerializer(messages, many=True, context={'request': request})
+        messages_list = sorted(qs, key=lambda x: x.created_at)
+        serializer = MessageSerializer(messages_list, many=True, context={'request': request})
         return Response(serializer.data)
 
 @extend_schema_view(
@@ -123,7 +195,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
 class MessageViewSet(viewsets.GenericViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
+    required_permission = 'messenger.view'
     module_code = 'messenger'
 
     def get_queryset(self):
@@ -166,4 +239,13 @@ class MessageViewSet(viewsets.GenericViewSet):
             return Response({'error': 'Sender cannot mark own message as read'}, status=status.HTTP_400_BAD_REQUEST)
         message.is_read = True
         message.save(update_fields=['is_read'])
+        
+        # Broadcast to conversation group
+        MessengerService.broadcast_read_receipt(
+            request.company, 
+            message.conversation, 
+            message.id, 
+            request.user.id
+        )
+        
         return Response({'status': 'success', 'is_read': True})

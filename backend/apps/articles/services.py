@@ -2,6 +2,9 @@ from django.utils.text import slugify
 from .models import Article, Category, Tag
 from apps.core.models import AuditLog
 from shared_kernel.audit import log_create, log_update, log_delete
+from apps.webhooks.tasks import trigger_webhooks
+from apps.notifications.tasks import notify_user_push
+from apps.accounts.models import User
 
 class ArticleService:
     @staticmethod
@@ -44,6 +47,13 @@ class ArticleService:
             
         from types import SimpleNamespace
         log_create(user, "Article", article, request=SimpleNamespace(company=company))
+        
+        trigger_webhooks(company, 'article.created', {
+            'id': str(article.id),
+            'title': article.title,
+            'slug': article.slug,
+            'author': user.username
+        })
         return article
 
     @staticmethod
@@ -78,6 +88,13 @@ class ArticleService:
             
         from types import SimpleNamespace
         log_update(user, "Article", article, request=SimpleNamespace(company=article.company))
+        
+        trigger_webhooks(article.company, 'article.updated', {
+            'id': str(article.id),
+            'title': article.title,
+            'slug': article.slug,
+            'status': article.status
+        })
         return article
 
     @staticmethod
@@ -97,11 +114,30 @@ class ArticleService:
         if article.status not in [Article.STATUS_PENDING, Article.STATUS_DRAFT]:
              raise ValueError("Only pending or draft articles can be published")
 
-        return ArticleService.update_article(user, article, {
+        article = ArticleService.update_article(user, article, {
             'status': Article.STATUS_PUBLISHED, 
             'is_published': True,
             'published_at':  article.published_at or __import__('django.utils.timezone', fromlist=['now']).now()
         })
+        
+        trigger_webhooks(article.company, 'article.published', {
+            'id': str(article.id),
+            'title': article.title,
+            'slug': article.slug,
+            'url': f"/artigos/{article.slug}"
+        })
+
+        # Notificar todos os usuários da empresa via Push
+        active_users = User.objects.filter(company=article.company, is_active=True)
+        for target_user in active_users:
+            notify_user_push(
+                target_user, 
+                title=f"Novo Artigo: {article.title}", 
+                message=article.excerpt or "Confira a nova publicação!",
+                link=f"/artigos/{article.slug}"
+            )
+
+        return article
 
     @staticmethod
     def reject_article(user, article, reason=None):
@@ -117,7 +153,16 @@ class ArticleService:
         Deletes an article and logs the removal.
         """
         log_delete(user, "Article", article)
+        
+        company = article.company
+        article_data = {
+            'id': str(article.id),
+            'title': article.title
+        }
+        
         article.delete()
+        
+        trigger_webhooks(company, 'article.deleted', article_data)
 
     @staticmethod
     def record_view(user, article, ip_address=None):

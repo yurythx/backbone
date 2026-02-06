@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, ArrowLeft, Image as ImageIcon, X, Globe, MessageSquareQuote, Layout, CheckCircle2, XCircle, Send } from "lucide-react"
+import { Loader2, ArrowLeft, Image as ImageIcon, X, Globe, MessageSquareQuote, Layout, CheckCircle2, XCircle, Send, Sparkles } from "lucide-react"
 import { RichEditor } from "@/components/ui/rich-editor"
 import { PreviewDialog } from "@/components/cms/preview-dialog"
 import { MediaDialog } from "@/features/media/media-dialog"
@@ -128,6 +128,32 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
     }
   })
 
+  const seoMutation = useMutation({
+    mutationFn: async ({ title, content }: { title: string, content: string }) => {
+      const res = await api.post('/api/ai/seo-suggest/', { title, content })
+      return res.data
+    },
+    onSuccess: (data) => {
+      if (data.meta_title) form.setValue("meta_title", data.meta_title)
+      if (data.meta_description) form.setValue("meta_description", data.meta_description)
+      if (data.keywords) form.setValue("meta_keywords", data.keywords)
+      notify.success("Sugestões de SEO geradas!", "As tags foram preenchidas por IA.")
+    },
+    onError: (error: any) => {
+      notify.error("Falha ao gerar sugestões SEO", error)
+    }
+  })
+
+  const handleAISuggest = () => {
+    const title = form.getValues("title")
+    const content = form.getValues("content")
+    if (!title || title.length < 5 || !content || content.length < 10) {
+      notify.warning("Conteúdo insuficiente", "Preencha o título e o corpo do artigo primeiro.")
+      return
+    }
+    seoMutation.mutate({ title, content })
+  }
+
   function onSubmit(values: z.infer<typeof formSchema>) {
     mutation.mutate(values)
   }
@@ -229,9 +255,26 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
             />
 
             <div className="pt-8 space-y-6">
-              <div className="flex items-center gap-2 border-b pb-2">
-                <Globe className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-bold">SEO & Otimização de Busca</h3>
+              <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-bold">SEO & Otimização de Busca</h3>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 text-primary border-primary/20 hover:bg-primary/10"
+                  onClick={handleAISuggest}
+                  disabled={seoMutation.isPending}
+                >
+                  {seoMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  Sugerir com IA
+                </Button>
               </div>
 
               <div className="grid grid-cols-1 gap-6 p-6 rounded-2xl bg-muted/30 border">

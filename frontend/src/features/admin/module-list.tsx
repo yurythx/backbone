@@ -1,5 +1,7 @@
 "use client"
 
+import { Skeleton } from "@/components/ui/skeleton"
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Module, TenantModule } from "@/types"
@@ -82,7 +84,22 @@ export function ModuleList() {
   })
 
   if (isLoadingAll || isLoadingTenant) {
-    return <div>Loading modules...</div>
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="rounded-xl border bg-card text-card-foreground shadow-sm h-32 p-6 flex flex-col justify-between">
+            <div className="flex justify-between items-center">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-6 w-12 rounded-full" />
+            </div>
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-4 w-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (

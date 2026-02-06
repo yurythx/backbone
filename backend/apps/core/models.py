@@ -64,11 +64,36 @@ class TenantBranding(models.Model):
         default='#0C4B33',
         help_text="Cor primária em hexadecimal (ex: #0C4B33)"
     )
+    secondary_color = models.CharField(
+        max_length=7,
+        default='#111827',
+        help_text="Cor secundária em hexadecimal (ex: #111827)"
+    )
+    background_color = models.CharField(
+        max_length=7,
+        default='#FFFFFF',
+        help_text="Cor de fundo em hexadecimal (ex: #FFFFFF)"
+    )
+    font_family = models.CharField(
+        max_length=100,
+        default='Inter',
+        help_text="Nome da Fonte Google (ex: Inter, Roboto, Montserrat)"
+    )
     theme_palette = models.CharField(
         max_length=50,
         choices=PALETTE_CHOICES,
         default='django-green',
-        help_text="Paleta de cores pré-estabelecida"
+        help_text="Paleta de cores pré-estabelecida (opcional se usar cores customizadas)"
+    )
+    
+    # Custom Code Injection
+    custom_css = models.TextField(
+        blank=True,
+        help_text="Custom CSS para ser injetado no cabeçalho"
+    )
+    custom_js = models.TextField(
+        blank=True,
+        help_text="Custom JS para ser injetado antes do fechamento do body"
     )
     
     # Footer Customization

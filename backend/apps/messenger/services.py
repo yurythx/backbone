@@ -3,22 +3,27 @@ from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from .models import Conversation, Message
 from .serializers import MessageSerializer
+from apps.notifications.tasks import notify_user_push
 
 User = get_user_model()
 
 class MessengerService:
     @staticmethod
-    def create_conversation(creator, company, participant_usernames=None):
+    def create_conversation(creator, company, participant_usernames=None, title=None, is_group=False):
         """
         Creates a new conversation and adds participants.
         """
-        conversation = Conversation.objects.create(company=company)
+        conversation = Conversation.objects.create(
+            company=company,
+            title=title,
+            is_group=is_group
+        )
         conversation.participants.add(creator)
         
         if participant_usernames:
             for username in participant_usernames:
                 try:
-                    target_user = User.objects.get(username=username)
+                    target_user = User.objects.get(company=company, username=username)
                     conversation.participants.add(target_user)
                 except User.DoesNotExist:
                     continue
@@ -48,6 +53,16 @@ class MessengerService:
         # Signaling
         MessengerService.broadcast_message(company, conversation, message, request)
         
+        # Web Push Notification
+        participants = conversation.participants.exclude(id=user.id)
+        for participant in participants:
+            notify_user_push(
+                participant,
+                title=f"Nova mensagem de {user.username}",
+                message=content[:100] if content else "Enviou um arquivo.",
+                link=f"/messenger/conversas/{conversation.id}"
+            )
+
         return message
 
     @staticmethod
@@ -129,5 +144,22 @@ class MessengerService:
                 'username': user.username,
                 'emoji': emoji,
                 'action': action
+            }
+        )
+    @staticmethod
+    def broadcast_read_receipt(company, conversation, message_id, user_id):
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+            
+        group_name = f'chat_{company.slug}_{conversation.id}'
+        
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'read_receipt_update',
+                'message_id': message_id,
+                'user_id': user_id,
+                'is_read': True
             }
         )

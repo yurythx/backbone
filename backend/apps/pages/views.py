@@ -7,6 +7,8 @@ from .models import Page
 from .serializers import PageSerializer
 from apps.module_manager.permissions import HasModuleAccess
 
+from apps.accounts.permissions import HasRolePermission
+
 @extend_schema_view(
     list=extend_schema(tags=['CMS']),
     retrieve=extend_schema(tags=['CMS']),
@@ -20,7 +22,8 @@ class PageViewSet(viewsets.ModelViewSet):
     Gerencia páginas do CMS.
     """
     serializer_class = PageSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
+    required_permission = 'cms.page_manage'
     module_code = 'pages'
 
     def get_queryset(self):

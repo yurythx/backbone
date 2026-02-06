@@ -44,16 +44,20 @@ INSTALLED_APPS = [
     "apps.media",
     "apps.notifications",
     "apps.seo",
+    "apps.webhooks",
+    "apps.api_keys",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Whitenoise for static files
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "csp.middleware.CSPMiddleware",  # Content Security Policy
     "shared_kernel.middleware.TenantMiddleware",
+    "shared_kernel.middleware.LicensingMiddleware",
     "shared_kernel.logging_middleware.StructuredLoggingMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -163,8 +167,8 @@ CORS_ALLOW_HEADERS = [
 # Static & Media Files
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-# Desabilitado para evitar 500 por falta de manifesto em dev
-STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
+if not DEBUG:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # MinIO / S3 Configuration
 USE_S3 = env.bool("USE_S3", default=False)
@@ -332,6 +336,15 @@ LOGGING = {
     },
 }
 
+# Web Push (VAPID) Settings
+# Generate keys with: pywebpush generate-vapid-keys
+VAPID_PUBLIC_KEY = env('VAPID_PUBLIC_KEY', default='BBA-PLACEHOLDER-FOR-VAPID-PUBLIC-KEY-MUST-BE-65-CHARS-LONG-BASE64')
+VAPID_PRIVATE_KEY = env('VAPID_PRIVATE_KEY', default='-PLACEHOLDER-FOR-VAPID-PRIVATE-KEY-BASE64')
+VAPID_ADMIN_EMAIL = env('VAPID_ADMIN_EMAIL', default='admin@backbone.com')
+
+# AI Settings
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 # Sentry Configuration
 SENTRY_DSN = env("SENTRY_DSN", default=None)
 if SENTRY_DSN:
@@ -359,8 +372,8 @@ CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
-CELERY_TASK_ALWAYS_EAGER = True
-CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=DEBUG)
+CELERY_TASK_EAGER_PROPAGATES = env.bool("CELERY_TASK_EAGER_PROPAGATES", default=DEBUG)
 CELERY_TASK_IGNORE_RESULT = True
 
 # Content Security Policy (CSP)

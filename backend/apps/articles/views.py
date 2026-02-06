@@ -117,10 +117,12 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """
-        Permite leitura e escrita para usuários autenticados com acesso ao módulo.
-        (Pode ser refinado para exigir Role em operações específicas se necessário.)
+        Permite leitura para todos, mas exige Role específica para escrita e ações admin.
         """
-        return [permissions.IsAuthenticated(), HasModuleAccess()]
+        base = [permissions.IsAuthenticated(), HasModuleAccess()]
+        if self.request.method in permissions.SAFE_METHODS:
+            return base
+        return base + [HasRolePermission()]
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

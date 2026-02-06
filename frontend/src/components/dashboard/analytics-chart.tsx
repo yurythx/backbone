@@ -1,92 +1,111 @@
 "use client"
 
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useTheme } from "next-themes"
+import {
+    Area,
+    AreaChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+    CartesianGrid
+} from "recharts"
+import { motion } from "framer-motion"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
 
-interface AnalyticsChartProps {
-    data: { date: string; count: number }[]
-    title?: string
+interface ChartData {
+    date: string
+    count: number
 }
 
-export function AnalyticsChart({ data, title = "Visualizações de Artigos (30 dias)" }: AnalyticsChartProps) {
-    const { theme } = useTheme()
+interface AnalyticsChartProps {
+    data: ChartData[]
+    title: string
+    isLoading?: boolean
+}
 
-    const chartData = (data || []).map(item => ({
-        date: new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        views: item.count
-    }))
-
-    if (!data || data.length === 0) {
+export function AnalyticsChart({ data, title, isLoading }: AnalyticsChartProps) {
+    if (isLoading) {
         return (
-            <Card className="border-border/50 shadow-sm">
-                <CardHeader>
-                    <CardTitle className="text-lg font-bold">{title}</CardTitle>
-                </CardHeader>
-                <CardContent className="h-[300px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-                    <div className="p-4 rounded-full bg-background mb-4 shadow-sm">
-                        <AreaChart width={24} height={24} data={[{ v: 1 }, { v: 2 }]}><Area dataKey="v" /></AreaChart>
-                    </div>
-                    <span className="text-sm font-medium">Coletando dados...</span>
-                </CardContent>
-            </Card>
+            <div className="glass-morphism p-6 rounded-3xl border shadow-sm h-full flex flex-col animate-pulse">
+                <div className="h-6 w-1/3 bg-muted rounded-md mb-8" />
+                <div className="flex-1 bg-muted/20 rounded-2xl" />
+            </div>
         )
     }
 
+    // Sort data by date
+    const sortedData = [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
     return (
-        <Card className="border-border/50 shadow-sm overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between pb-8">
-                <CardTitle className="text-lg font-bold">{title}</CardTitle>
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-morphism p-6 rounded-3xl border shadow-sm h-full flex flex-col"
+        >
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h3 className="text-lg font-bold tracking-tight text-foreground">{title}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5 font-medium">Visualizações totais nos últimos 30 dias</p>
+                </div>
                 <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-primary/20 flex items-center justify-center">
-                        <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                    </div>
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Live</span>
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Views</span>
                 </div>
-            </CardHeader>
-            <CardContent>
-                <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
-                                    <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <XAxis
-                                dataKey="date"
-                                stroke="#888888"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                            />
-                            <YAxis
-                                stroke="#888888"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                                tickFormatter={(value) => `${value}`}
-                            />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: 'hsl(var(--card))',
-                                    borderColor: 'hsl(var(--border))',
-                                    borderRadius: 'var(--radius)',
-                                }}
-                                labelStyle={{ color: 'hsl(var(--foreground))' }}
-                            />
-                            <Area
-                                type="monotone"
-                                dataKey="views"
-                                stroke="#8884d8"
-                                fillOpacity={1}
-                                fill="url(#colorViews)"
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-            </CardContent>
-        </Card>
+            </div>
+
+            <div className="flex-1 min-h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={sortedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                            vertical={false}
+                            strokeDasharray="3 3"
+                            stroke="hsl(var(--muted-foreground) / 0.1)"
+                        />
+                        <XAxis
+                            dataKey="date"
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(str) => format(new Date(str), "dd MMM", { locale: ptBR })}
+                            tick={{ fontSize: 10, fontWeight: 600, fill: "hsl(var(--muted-foreground))" }}
+                            dy={10}
+                        />
+                        <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 10, fontWeight: 600, fill: "hsl(var(--muted-foreground))" }}
+                        />
+                        <Tooltip
+                            contentStyle={{
+                                backgroundColor: "var(--glass-bg)",
+                                borderRadius: "16px",
+                                border: "1px solid var(--border)",
+                                backdropFilter: "blur(16px)",
+                                padding: "12px",
+                                boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)"
+                            }}
+                            labelStyle={{ color: "hsl(var(--foreground))", fontWeight: "bold", marginBottom: "4px" }}
+                            itemStyle={{ color: "var(--color-primary)", fontSize: "12px", fontWeight: "600" }}
+                            labelFormatter={(label) => format(new Date(label), "dd 'de' MMMM", { locale: ptBR })}
+                        />
+                        <Area
+                            type="monotone"
+                            dataKey="count"
+                            stroke="var(--color-primary)"
+                            strokeWidth={3}
+                            fillOpacity={1}
+                            fill="url(#colorViews)"
+                            animationDuration={2000}
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+        </motion.div>
     )
 }

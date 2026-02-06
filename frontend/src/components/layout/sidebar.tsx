@@ -3,9 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/axios"
 import { TenantModule } from "@/types"
+import { useModules } from "@/hooks/use-modules"
 import {
   LayoutDashboard,
   MessageSquare,
@@ -14,8 +13,11 @@ import {
   ShieldCheck,
   CreditCard,
   Box,
-  ChevronRight
+  ChevronRight,
+  TrendingUp
 } from "lucide-react"
+import { SlideUp } from "@/components/ui/motion"
+import { motion } from "framer-motion"
 
 interface SidebarItem {
   title: string
@@ -29,6 +31,11 @@ const sidebarItems: SidebarItem[] = [
     title: "Painel Admin",
     href: "/admin",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Insights",
+    href: "/insights",
+    icon: TrendingUp,
   },
   {
     title: "Mensagens",
@@ -49,6 +56,16 @@ const sidebarItems: SidebarItem[] = [
     module: "articles",
   },
   {
+    title: "Membros",
+    href: "/admin/users",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Papéis de Acesso",
+    href: "/admin/roles",
+    icon: ShieldCheck,
+  },
+  {
     title: "Gestão de Módulos",
     href: "/admin/modules",
     icon: Box,
@@ -60,47 +77,17 @@ const sidebarItems: SidebarItem[] = [
   },
 ]
 
-import { SlideUp } from "@/components/ui/motion"
-import { motion } from "framer-motion"
-
 export function Sidebar() {
   const pathname = usePathname()
-
-  const { data: tenantModules } = useQuery({
-    queryKey: ['my-modules'],
-    queryFn: async () => {
-      const res = await api.get<TenantModule[]>('/api/modules/my-modules/')
-      return res.data
-    },
-    retry: 1,
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  })
-
-  const { data: allModules } = useQuery({
-    queryKey: ['modules'],
-    queryFn: async () => {
-      const res = await api.get<any[]>('/api/modules/available/')
-      return res.data
-    },
-    retry: 1,
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  })
+  const { isModuleActive } = useModules()
 
   return (
     <aside className="hidden md:flex w-64 glass-morphism h-[calc(100vh-5rem)] sticky top-20 flex-col p-4 shrink-0 border-r-0 shadow-lg z-40 transition-all duration-500 overflow-y-auto">
       <nav className="flex-1 space-y-2">
         {sidebarItems.map((item, index) => {
           // Visibility Logic
-          if (item.module) {
-            const moduleList = Array.isArray(allModules) ? allModules : (allModules as any)?.results || []
-            const activeList = Array.isArray(tenantModules) ? tenantModules : (tenantModules as any)?.results || []
-
-            const mod = moduleList.find((m: any) => m.code === item.module)
-            if (!mod) return null
-            const isActive = activeList.some((tm: any) => tm.module === mod.id && tm.is_active)
-            if (!isActive) return null
+          if (item.module && !isModuleActive(item.module)) {
+            return null
           }
 
           const Icon = item.icon

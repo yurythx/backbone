@@ -7,10 +7,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Mail, Send, CheckCircle2, AlertCircle } from "lucide-react"
+import { Loader2, Mail, Send, CheckCircle2, AlertCircle, ShieldCheck, Lock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
+import { motion } from "framer-motion"
+import { Separator } from "@/components/ui/separator"
 
-export function SmtpSettings() {
+interface SmtpSettingsProps {
+    isOnboarding?: boolean
+}
+
+export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
     const { toast } = useToast()
     const [isLoading, setIsLoading] = useState(false)
     const [isTesting, setIsTesting] = useState(false)
@@ -88,115 +95,151 @@ export function SmtpSettings() {
 
     if (isLoading && !config.smtp_host) {
         return (
-            <div className="flex items-center justify-center p-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center p-24">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         )
     }
 
     return (
-        <div className="space-y-8">
-            <div className="flex items-start justify-between gap-4">
+        <div className="space-y-10 pb-6">
+            <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-start justify-between gap-6"
+            >
                 <div className="space-y-1">
-                    <H3>Configurações de E-mail (SMTP)</H3>
-                    <P className="text-muted-foreground">
-                        Configure seu próprio servidor de e-mail para que as notificações do sistema (boas-vindas, alertas, etc.) saiam com o seu domínio.
+                    <div className="flex items-center gap-2 mb-1">
+                        <Mail className="h-5 w-5 text-primary" />
+                        <H3>Comunicação Enterprise (SMTP)</H3>
+                    </div>
+                    <P className="text-muted-foreground text-sm max-w-2xl">
+                        Ative seu próprio servidor de e-mail para que notificações de boas-vindas e alertas sejam enviados com sua identidade oficial.
                     </P>
                 </div>
-                <div className="flex items-center space-x-2 pt-2">
+                <div className="glass-morphism px-4 py-3 rounded-2xl border flex items-center gap-3 shadow-sm bg-primary/5">
                     <Switch
                         id="use-custom"
                         checked={config.use_custom_smtp}
                         onCheckedChange={(val) => setConfig({ ...config, use_custom_smtp: val })}
+                        className="data-[state=checked]:bg-primary"
                     />
-                    <Label htmlFor="use-custom">Ativar SMTP Próprio</Label>
+                    <Label htmlFor="use-custom" className="font-bold text-xs uppercase cursor-pointer">
+                        SMTP Próprio
+                    </Label>
                 </div>
-            </div>
+            </motion.div>
 
-            <div className={cn("grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity", !config.use_custom_smtp && "opacity-50 pointer-events-none")}>
+            <div className={cn(
+                "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 transition-all duration-500",
+                !config.use_custom_smtp && "opacity-30 blur-[2px] pointer-events-none grayscale"
+            )}>
                 <div className="space-y-2">
-                    <Label>Host SMTP</Label>
+                    <Label className="font-bold text-xs uppercase flex items-center gap-2">
+                        <Globe className="h-3 w-3" /> Host do Servidor
+                    </Label>
                     <Input
-                        placeholder="smtp.example.com"
+                        placeholder="smtp.exemplo.com"
                         value={config.smtp_host || ""}
                         onChange={(e) => setConfig({ ...config, smtp_host: e.target.value })}
+                        className="rounded-xl h-12"
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label>Porta</Label>
+                    <Label className="font-bold text-xs uppercase">Porta</Label>
                     <Input
                         type="number"
                         placeholder="587"
                         value={config.smtp_port}
                         onChange={(e) => setConfig({ ...config, smtp_port: parseInt(e.target.value) })}
+                        className="rounded-xl h-12"
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label>Usuário / E-mail</Label>
+                    <Label className="font-bold text-xs uppercase flex items-center gap-2">
+                        <Mail className="h-3 w-3" /> Usuário de Autenticação
+                    </Label>
                     <Input
                         placeholder="contato@empresa.com"
                         value={config.smtp_user || ""}
                         onChange={(e) => setConfig({ ...config, smtp_user: e.target.value })}
+                        className="rounded-xl h-12"
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label>Senha</Label>
+                    <Label className="font-bold text-xs uppercase flex items-center gap-2">
+                        <Lock className="h-3 w-3" /> Senha / Token API
+                    </Label>
                     <Input
                         type="password"
-                        placeholder="••••••••"
+                        placeholder="••••••••••••"
                         value={config.smtp_password || ""}
                         onChange={(e) => setConfig({ ...config, smtp_password: e.target.value })}
+                        className="rounded-xl h-12"
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label>E-mail Remetente (From)</Label>
+                    <Label className="font-bold text-xs uppercase">E-mail de Envio (From)</Label>
                     <Input
-                        placeholder="noreply@empresa.com"
+                        placeholder="suporte@empresa.com"
                         value={config.from_email || ""}
                         onChange={(e) => setConfig({ ...config, from_email: e.target.value })}
+                        className="rounded-xl h-12"
                     />
-                    <Muted className="text-[10px]">Deve ser um e-mail autorizado no seu servidor SMTP.</Muted>
+                    <Muted className="text-[10px] italic">Deve ser um endereço autorizado no seu provedor.</Muted>
                 </div>
-                <div className="flex items-center space-x-2 h-full pt-8">
-                    <Switch
-                        id="use-tls"
-                        checked={config.smtp_use_tls}
-                        onCheckedChange={(val) => setConfig({ ...config, smtp_use_tls: val })}
-                    />
-                    <Label htmlFor="use-tls">Usar TLS / SSL</Label>
-                </div>
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-4 justify-between pt-6 border-t">
-                <div className="flex gap-3">
-                    <Button
-                        variant="outline"
-                        onClick={handleTest}
-                        disabled={isTesting || !config.use_custom_smtp || !config.smtp_host}
-                        className="gap-2"
-                    >
-                        {isTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        Enviar E-mail de Teste
-                    </Button>
-                </div>
-                <div className="flex gap-3">
-                    <Button onClick={handleSave} disabled={isLoading} className="min-w-[120px]">
-                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Salvar Configurações
-                    </Button>
+                <div className="flex items-center space-x-3 h-full pt-6">
+                    <div className="glass-morphism px-4 py-3 rounded-2xl border flex items-center gap-3">
+                        <Switch
+                            id="use-tls"
+                            checked={config.smtp_use_tls}
+                            onCheckedChange={(val) => setConfig({ ...config, smtp_use_tls: val })}
+                        />
+                        <Label htmlFor="use-tls" className="font-bold text-xs uppercase cursor-pointer">Usar TLS / SSL</Label>
+                    </div>
                 </div>
             </div>
 
             {!config.use_custom_smtp && (
-                <div className="bg-muted p-4 rounded-lg flex gap-3 items-center text-sm text-muted-foreground">
-                    <AlertCircle className="h-5 w-5" />
-                    <span>O sistema está utilizando o servidor de e-mail padrão do Backbone.</span>
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="bg-primary/5 border border-primary/20 p-6 rounded-3xl flex gap-4 items-center"
+                >
+                    <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+                        <ShieldCheck className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                        <h4 className="font-bold text-sm text-foreground">Distribuição Padrão Ativa</h4>
+                        <p className="text-xs text-muted-foreground italic">
+                            O sistema está utilizando o túnel de mensagens seguro do Backbone. Ative o SMTP próprio para usar seu domínio customizado.
+                        </p>
+                    </div>
+                </motion.div>
+            )}
+
+            {!isOnboarding && (
+                <div className="flex flex-col md:flex-row gap-4 justify-between pt-10 border-t sticky bottom-0 bg-background/80 backdrop-blur-sm -mx-6 px-6 py-4 mt-4">
+                    <Button
+                        variant="ghost"
+                        onClick={handleTest}
+                        disabled={isTesting || !config.use_custom_smtp || !config.smtp_host}
+                        className="rounded-xl font-bold"
+                    >
+                        {isTesting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                        Enviar Teste de Conexão
+                    </Button>
+                    <div className="flex gap-3">
+                        <Button size="lg" onClick={handleSave} disabled={isLoading} className="rounded-xl font-bold px-10 shadow-lg shadow-primary/20">
+                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                            Aplicar Configurações
+                        </Button>
+                    </div>
                 </div>
             )}
         </div>
     )
 }
 
-function cn(...inputs: any[]) {
-    return inputs.filter(Boolean).join(" ")
-}
+import { Globe } from "lucide-react"
+

@@ -8,9 +8,7 @@ import { Menu, X, LayoutDashboard, MessageSquare, FileText, Settings, ShieldChec
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/axios"
-import { TenantModule } from "@/types"
+import { useModules } from "@/hooks/use-modules"
 
 interface SidebarItem {
     title: string
@@ -31,14 +29,7 @@ const navItems: SidebarItem[] = [
 export function MobileNav() {
     const [isOpen, setIsOpen] = React.useState(false)
     const pathname = usePathname()
-
-    const { data: tenantModules } = useQuery({
-        queryKey: ['my-modules'],
-        queryFn: async () => {
-            const res = await api.get<TenantModule[]>('/api/modules/my-modules/')
-            return res.data
-        },
-    })
+    const { isModuleActive } = useModules()
 
     // Close menu when route changes
     React.useEffect(() => {
@@ -100,10 +91,8 @@ export function MobileNav() {
 
                             <nav className="flex-1 space-y-2">
                                 {navItems.map((item) => {
-                                    if (item.module) {
-                                        const activeList = Array.isArray(tenantModules) ? tenantModules : (tenantModules as any)?.results || []
-                                        const isActiveModule = activeList.some((tm: any) => tm.module_code === item.module && tm.is_active)
-                                        if (!isActiveModule) return null
+                                    if (item.module && !isModuleActive(item.module)) {
+                                        return null
                                     }
 
                                     const Icon = item.icon

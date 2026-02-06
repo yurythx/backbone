@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useInfiniteQuery, useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
-import { Send, Loader2, Paperclip, FileIcon, Download, X, ImageIcon } from "lucide-react"
+import { Send, Loader2, Paperclip, FileIcon, Download, X, ImageIcon, Check } from "lucide-react"
 import { api } from "@/lib/axios"
 import { Contact, Message, Conversation, MessageReaction } from "@/types"
 import { useChat } from "@/hooks/use-chat"
@@ -51,7 +51,7 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
     enabled: !!contact.id
   })
 
-  // 2. Fetch Messages with Infinite Query
+  // 2. Fetch Messages with Infinite Query (Timestamp-based)
   const {
     data: infiniteMessages,
     isLoading: isLoadingMessages,
@@ -65,13 +65,18 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
 
       let url = `/api/messenger/conversations/${conversation.id}/messages/`
       if (pageParam) {
-        url = (pageParam as string).startsWith('http') ? (pageParam as string) : `${url}?page=${pageParam}`
+        url = `${url}?before=${encodeURIComponent(pageParam as string)}`
       }
 
       const res = await api.get<{ results: Message[], next: string | null }>(url)
       return res.data
     },
-    getNextPageParam: (lastPage) => lastPage.next || undefined,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.results || lastPage.results.length === 0) return undefined
+      // The results are returned in chronological order, so the first one is the oldest in this page
+      const oldest = lastPage.results[0]
+      return lastPage.next ? oldest.created_at : undefined
+    },
     initialPageParam: null as string | null,
     enabled: !!conversation?.id,
   })
@@ -265,6 +270,24 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
             return (
               <div
                 key={msg.id}
+                ref={(el) => {
+                  if (el && !msg.is_read && msg.sender !== currentUser?.id) {
+                    const observer = new IntersectionObserver(
+                      (entries) => {
+                        if (entries[0].isIntersecting) {
+                          api.post(`/api/messenger/messages/${msg.id}/mark_read/`)
+                            .then(() => {
+                              msg.is_read = true;  // Optimistic update
+                            })
+                            .catch(() => { })
+                          observer.disconnect()
+                        }
+                      },
+                      { threshold: 0.5 }
+                    )
+                    observer.observe(el)
+                  }
+                }}
                 className={cn(
                   "flex flex-col gap-1 w-full",
                   isMe ? "items-end" : "items-start"
@@ -324,12 +347,27 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
 
                   {msg.content && <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>}
 
-                  <span className={cn(
-                    "text-[10px] font-medium mt-0.5 self-end opacity-60",
-                    isMe ? "text-primary-foreground" : "text-muted-foreground"
-                  )}>
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  <div className="flex items-center justify-between gap-4 mt-0.5">
+                    <span className={cn(
+                      "text-[10px] font-medium opacity-60",
+                      isMe ? "text-primary-foreground" : "text-muted-foreground"
+                    )}>
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+
+                    {isMe && (
+                      <div className="flex items-center -mr-1 scale-90">
+                        {msg.is_read ? (
+                          <div className="flex -space-x-1">
+                            <Check className="h-3 w-3 text-sky-300" />
+                            <Check className="h-3 w-3 text-sky-300" />
+                          </div>
+                        ) : (
+                          <Check className="h-3 w-3 text-primary-foreground/40" />
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Reactions Display */}
                   {msg.reactions && msg.reactions.length > 0 && (
@@ -404,13 +442,27 @@ export function ChatWindow({ contact, currentUser }: ChatWindowProps) {
         <div className="max-w-4xl mx-auto space-y-4">
           {/* File Preview */}
           {selectedFile && (
-            <div className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg border border-primary/20 animate-in slide-in-from-bottom-2">
-              <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center">
-                {selectedFile.type.startsWith('image/') ? <ImageIcon className="h-4 w-4 text-primary" /> : <Paperclip className="h-4 w-4 text-primary" />}
+            <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-2xl border border-primary/20 animate-in slide-in-from-bottom-2 shadow-sm">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                {selectedFile.type.startsWith('image/') ? (
+                  <ImageIcon className="h-5 w-5 text-primary" />
+                ) : (
+                  <Paperclip className="h-5 w-5 text-primary" />
+                )}
               </div>
-              <span className="text-xs font-medium truncate flex-1">{selectedFile.name}</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedFile(null)}>
-                <X className="h-3 w-3" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold truncate">{selectedFile.name}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB • Pronto para enviar
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
+                onClick={() => setSelectedFile(null)}
+              >
+                <X className="h-4 w-4" />
               </Button>
             </div>
           )}

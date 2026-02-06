@@ -13,5 +13,9 @@ fi
 echo "Running migrations..."
 python manage.py migrate --noinput
 
+# Collect static files (needed because volume mount overwrites build-time staticfiles)
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
+
 # Exec the container's main process
 exec "$@"

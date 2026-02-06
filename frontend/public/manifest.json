@@ -1,0 +1,21 @@
+{
+    "name": "Backbone SaaS",
+    "short_name": "Backbone",
+    "description": "Plataforma de Gestão e Engajamento Backbone",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#0F172A",
+    "icons": [
+        {
+            "src": "/logo.svg",
+            "sizes": "192x192",
+            "type": "image/svg+xml"
+        },
+        {
+            "src": "/logo.svg",
+            "sizes": "1000x1000",
+            "type": "image/svg+xml"
+        }
+    ]
+}

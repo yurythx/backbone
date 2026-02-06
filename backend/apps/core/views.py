@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions, status, generics
+from rest_framework import viewsets, permissions, status, generics, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
@@ -149,12 +149,16 @@ class DashboardStatsView(generics.GenericAPIView):
             .order_by('date')
         )
 
-        # 2. Contadores e Crescimento (Simulado ou Real baseado em datas se possível)
+        # 2. Contadores e Crescimento
         total_users = User.objects.filter(company=company).count()
         new_users_month = User.objects.filter(company=company, date_joined__gte=thirty_days_ago).count()
         
         total_articles = Article.objects.filter(company=company).count()
         new_articles_month = Article.objects.filter(company=company, created_at__gte=thirty_days_ago).count()
+
+        from apps.messenger.models import Message
+        total_messages = Message.objects.filter(company=company).count()
+        new_messages_month = Message.objects.filter(company=company, created_at__gte=thirty_days_ago).count()
 
         # 3. Distribuição por Categoria
         categories_popularity = (
@@ -183,16 +187,17 @@ class DashboardStatsView(generics.GenericAPIView):
                 "users": {
                     "total": total_users,
                     "new_this_month": new_users_month,
-                    "growth": round((new_users_month / total_users * 100) if total_users > 0 else 0, 1)
+                    "growth": round((new_users_month / (total_users - new_users_month) * 100) if (total_users - new_users_month) > 0 else 100, 1)
                 },
                 "articles": {
                     "total": total_articles,
                     "published": Article.objects.filter(company=company, is_published=True).count(),
-                    "growth": round((new_articles_month / total_articles * 100) if total_articles > 0 else 0, 1)
+                    "growth": round((new_articles_month / (total_articles - new_articles_month) * 100) if (total_articles - new_articles_month) > 0 else 100, 1)
                 },
                 "messages": {
-                    "total": 0, # TODO: Integrar com app messenger
-                    "trend": "up"
+                    "total": total_messages,
+                    "new_this_month": new_messages_month,
+                    "growth": round((new_messages_month / (total_messages - new_messages_month) * 100) if (total_messages - new_messages_month) > 0 else 100, 1)
                 }
             },
             "charts": {
@@ -208,3 +213,56 @@ class DashboardStatsView(generics.GenericAPIView):
         }
 
         return Response(stats)
+
+class SitemapView(generics.GenericAPIView):
+    """
+    Endpoint para SEO que retorna URLs públicas de artigos e páginas.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(tags=['Core'], responses={200: serializers.DictField()})
+    def get(self, request):
+        company = request.company
+        if not company:
+            return Response({"error": "Tenant context required"}, status=400)
+
+        # Usar URLs amigáveis base (configurável no futuro)
+        base_url = f"https://{company.slug}.backbone.com"
+        
+        pages = []
+        # Artigos Publicados
+        from apps.articles.models import Article
+        articles_qs = Article.objects.filter(company=company, status='published')
+        for art in articles_qs:
+            pages.append({
+                "url": f"{base_url}/artigos/{art.slug}",
+                "lastmod": art.updated_at.isoformat(),
+                "priority": 0.8
+            })
+
+        # Páginas do CMS
+        from apps.pages.models import Page
+        pages_qs = Page.objects.filter(company=company)
+        for p in pages_qs:
+            pages.append({
+                "url": f"{base_url}/{p.slug}",
+                "lastmod": p.updated_at.isoformat(),
+                "priority": 0.5
+            })
+
+from django.http import HttpResponse
+
+class RobotsView(generics.GenericAPIView):
+    """
+    Endpoint para robots.txt.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        company = request.company
+        if not company:
+            return HttpResponse("User-agent: *\nDisallow: /", content_type="text/plain")
+
+        base_url = f"https://{company.slug}.backbone.com"
+        content = f"User-agent: *\nAllow: /\nSitemap: {base_url}/api/core/sitemap/"
+        return HttpResponse(content, content_type="text/plain")

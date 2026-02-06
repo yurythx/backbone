@@ -1,0 +1,47 @@
+"use client"
+
+import { InsightsDashboard } from "@/features/dashboard/insights-dashboard"
+import { useQuery } from "@tanstack/react-query"
+import { api } from "@/lib/axios"
+import { Loader2, TrendingUp } from "lucide-react"
+
+export default function InsightsPage() {
+    const { data: licenseData, isLoading } = useQuery({
+        queryKey: ['licensing-usage'],
+        queryFn: async () => {
+            const res = await api.get('/api/licensing/licenses/usage/')
+            return res.data
+        }
+    })
+
+    // Simula verificação de feature 'advanced_analytics'
+    // No mundo real, verificaríamos se 'advanced_analytics' está nos presets do plano
+    const isPremium = licenseData?.limits?.advanced_analytics === 'true' ||
+        licenseData?.limits?.advanced_analytics === 'unlimited' ||
+        licenseData?.plan === 'Enterprise' ||
+        licenseData?.plan === 'Premium'
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-[60vh]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        )
+    }
+
+    return (
+        <div className="container mx-auto px-6 py-8 space-y-10">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
+                        <TrendingUp className="h-8 w-8 text-primary" />
+                        Insights de Engajamento
+                    </h1>
+                    <p className="text-muted-foreground mt-1">Análise profunda da performance do seu ecossistema.</p>
+                </div>
+            </div>
+
+            <InsightsDashboard isPremium={isPremium} />
+        </div>
+    )
+}

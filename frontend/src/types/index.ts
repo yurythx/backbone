@@ -1,3 +1,11 @@
+export interface Role {
+  id: number;
+  name: string;
+  description?: string;
+  permissions: string[];
+  is_system_role: boolean;
+}
+
 export interface User {
   id: number;
   username: string;
@@ -5,7 +13,10 @@ export interface User {
   firstName?: string;
   lastName?: string;
   groups: string[];
+  role?: number;
+  role_details?: Role;
   is_superuser?: boolean;
+  avatar?: string | null;
 }
 
 export interface Contact {
@@ -36,6 +47,7 @@ export interface Message {
   file_type?: string;
   file_size?: number;
   reactions?: MessageReaction[];
+  is_read?: boolean;
 }
 
 export interface Conversation {
@@ -55,7 +67,12 @@ export interface TenantBranding {
   icon: string | null;
   icon_url: string | null;
   primary_color: string;
+  secondary_color: string;
+  background_color: string;
+  font_family: string;
   theme_palette: string;
+  custom_css: string;
+  custom_js: string;
   footer_text: string | null;
   facebook_url: string | null;
   instagram_url: string | null;
@@ -164,6 +181,8 @@ export interface Module {
 export interface TenantModule {
   id: number;
   module: number; // ID
+  module_code: string; // From serializer
+  module_name: string; // From serializer
   module_details?: Module; // If expanded
   is_active: boolean;
   config: any;
