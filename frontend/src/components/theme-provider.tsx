@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ThemeProvider as NextThemesProvider } from "next-themes"
+import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from "next-themes"
 import { useThemeConfig } from "@/hooks/use-theme-config"
 
 interface ThemeContextType {
@@ -38,33 +38,58 @@ export function useTheme() {
   return context
 }
 
-export function ThemeProvider({
-  children,
-  ...props
-}: React.ComponentProps<typeof NextThemesProvider>) {
-  const themeConfig = useThemeConfig()
+import { getContrastColor, hexToRgb } from "@/lib/utils"
 
-  // Inject palette and custom colors as CSS variables
+// ✅ NOVO: Componente interno para lidar com efeitos que dependem do contexto
+function ThemeEffects({ themeConfig }: { themeConfig: any }) {
+  const { resolvedTheme } = useNextTheme() // Agora funciona pois está dentro do Provider
+
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const root = document.documentElement;
       root.setAttribute("data-palette", themeConfig.currentPalette)
 
-      // Inject HEX colors as CSS Variables
-      if (themeConfig.tenantTheme?.primary_color) {
-        root.style.setProperty('--primary', themeConfig.tenantTheme.primary_color);
+      const shouldUseTenantColor = themeConfig.userTheme?.use_tenant_theme !== false;
+
+      // Lógica de Cores Primárias
+      if (shouldUseTenantColor && themeConfig.tenantTheme?.primary_color) {
+        if (resolvedTheme !== 'dark') {
+          const primaryHex = themeConfig.tenantTheme.primary_color
+          root.style.setProperty('--primary', primaryHex);
+          const foregroundHex = getContrastColor(primaryHex);
+          root.style.setProperty('--primary-foreground', foregroundHex);
+        } else {
+          root.style.removeProperty('--primary');
+          root.style.removeProperty('--primary-foreground');
+        }
+      } else {
+        root.style.removeProperty('--primary');
+        root.style.removeProperty('--primary-foreground');
       }
+
+      // Lógica de Cores Secundárias
       if (themeConfig.secondaryColor) {
-        root.style.setProperty('--secondary', themeConfig.secondaryColor);
+        const secondaryHex = themeConfig.secondaryColor
+        root.style.setProperty('--secondary', secondaryHex);
+        const foregroundHex = getContrastColor(secondaryHex);
+        root.style.setProperty('--secondary-foreground', foregroundHex);
+      } else {
+        root.style.removeProperty('--secondary');
+        root.style.removeProperty('--secondary-foreground');
       }
-      if (themeConfig.backgroundColor) {
+      
+      // ✅ CORREÇÃO: Agora resolvedTheme tem o valor correto ('dark' ou 'light')
+      if (themeConfig.backgroundColor && resolvedTheme !== 'dark') {
         root.style.setProperty('--background', themeConfig.backgroundColor);
+      } else {
+        root.style.removeProperty('--background');
       }
+
       if (themeConfig.fontFamily) {
         root.style.setProperty('--font-family', `"${themeConfig.fontFamily}", sans-serif`);
       }
     }
-  }, [themeConfig.currentPalette, themeConfig.tenantTheme, themeConfig.secondaryColor, themeConfig.backgroundColor, themeConfig.fontFamily])
+  }, [themeConfig, resolvedTheme])
 
   // Google Fonts Injection
   React.useEffect(() => {
@@ -82,7 +107,7 @@ export function ThemeProvider({
     }
   }, [themeConfig.fontFamily])
 
-  // Optional: Update Favicon dynamically
+  // Favicon Injection
   React.useEffect(() => {
     if (typeof window !== "undefined" && themeConfig.icon) {
       let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']")
@@ -94,6 +119,15 @@ export function ThemeProvider({
       link.href = themeConfig.icon
     }
   }, [themeConfig.icon])
+
+  return null
+}
+
+export function ThemeProvider({
+  children,
+  ...props
+}: React.ComponentProps<typeof NextThemesProvider>) {
+  const themeConfig = useThemeConfig()
 
   return (
     <ThemeConfigContext.Provider value={{
@@ -115,6 +149,8 @@ export function ThemeProvider({
       resetToTenantTheme: themeConfig.resetToTenantTheme,
     }}>
       <NextThemesProvider {...props}>
+        {/* Renderiza o componente de efeitos DENTRO do provider */}
+        <ThemeEffects themeConfig={themeConfig} />
         {children}
       </NextThemesProvider>
     </ThemeConfigContext.Provider>

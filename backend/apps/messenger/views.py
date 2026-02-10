@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
@@ -66,11 +66,41 @@ class ConversationViewSet(viewsets.ModelViewSet):
             is_group=request.data.get('is_group', False)
         )
         serializer = self.get_serializer(conversation)
+        
+        # If created, return 201. If it was an existing one (handled by service), 
+        # technically 200 is better but 201 is fine for now.
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         # Retorna apenas conversas onde o usuário é participante
         return Conversation.objects.filter(participants=self.request.user).order_by('-created_at')
+
+    @action(detail=False, methods=['get'])
+    def find_by_participant(self, request):
+        target_username = request.query_params.get('username')
+        if not target_username:
+            return Response({"error": "username param required"}, status=400)
+            
+        try:
+            target_user = User.objects.get(username=target_username, company=request.company)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+            
+        # Find private conversation with these two participants
+        # This is a simple implementation assuming private chats are unique pairs
+        qs = Conversation.objects.filter(
+            participants=request.user, 
+            is_group=False
+        ).filter(
+            participants=target_user
+        )
+        
+        conversation = qs.first()
+        if conversation:
+            serializer = self.get_serializer(conversation)
+            return Response(serializer.data)
+        else:
+            return Response(status=404)
 
     @action(detail=True, methods=['post'])
     def add_participant(self, request, pk=None):
@@ -129,6 +159,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         content = request.data.get('content')
         file_obj = request.FILES.get('file')
+        reply_to_id = request.data.get('reply_to_id')
         
         if not content and not file_obj:
             return Response({"error": "Content or file is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -139,7 +170,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
             conversation=conversation,
             content=content,
             file_obj=file_obj,
-            request=request
+            request=request,
+            reply_to_id=reply_to_id
         )
         
         serializer = MessageSerializer(message, context={'request': request})
@@ -188,11 +220,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer = MessageSerializer(messages_list, many=True, context={'request': request})
         return Response(serializer.data)
 
+from django.utils import timezone
+
 @extend_schema_view(
     reaction=extend_schema(tags=['Messenger'], summary="Add or remove emoji reaction"),
     mark_read=extend_schema(tags=['Messenger'], summary="Mark message as read by recipient"),
+    destroy=extend_schema(tags=['Messenger'], summary="Delete message (only sender)"),
+    partial_update=extend_schema(tags=['Messenger'], summary="Edit message (only sender)"),
 )
-class MessageViewSet(viewsets.GenericViewSet):
+class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
@@ -202,6 +238,62 @@ class MessageViewSet(viewsets.GenericViewSet):
     def get_queryset(self):
         # Users can only interact with messages in conversations they are part of
         return Message.objects.filter(conversation__participants=self.request.user)
+
+    def perform_destroy(self, instance):
+        if instance.sender != self.request.user:
+            raise permissions.PermissionDenied("You can only delete your own messages.")
+        
+        # Capture context before deletion for broadcast
+        company = self.request.company
+        conversation = instance.conversation
+        message_id = instance.id
+        
+        instance.delete()
+        
+        MessengerService.broadcast_delete(company, conversation, message_id)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        if instance.sender != self.request.user:
+            raise permissions.PermissionDenied("You can only edit your own messages.")
+            
+        # Only allow updating content
+        if 'content' not in serializer.validated_data:
+             return
+
+        instance.edited_at = timezone.now()
+        instance.save()
+        
+        # Broadcast edit
+        MessengerService.broadcast_edit(self.request.company, instance.conversation, instance)
+
+    @action(detail=False, methods=['get'])
+    def link_preview(self, request):
+        url = request.query_params.get('url')
+        if not url:
+            return Response({'error': 'URL is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+            response = requests.get(url, headers=headers, timeout=5)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            title = soup.find('meta', property='og:title')
+            description = soup.find('meta', property='og:description')
+            image = soup.find('meta', property='og:image')
+            
+            data = {
+                'title': title['content'] if title else soup.title.string if soup.title else '',
+                'description': description['content'] if description else '',
+                'image': image['content'] if image else '',
+                'url': url
+            }
+            return Response(data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
         request=OpenApiTypes.OBJECT,

@@ -42,8 +42,8 @@ export function UserForm({ initialData, onSuccess, onCancel }: UserFormProps) {
     defaultValues: {
       username: initialData?.username || "",
       email: initialData?.email || "",
-      first_name: initialData?.firstName || "",
-      last_name: initialData?.lastName || "",
+      first_name: initialData?.first_name || "",
+      last_name: initialData?.last_name || "",
       password: "",
     },
   })
@@ -54,7 +54,7 @@ export function UserForm({ initialData, onSuccess, onCancel }: UserFormProps) {
         // Remove password if empty on edit
         const payload = { ...values }
         if (!payload.password) delete payload.password
-        
+
         await api.put(`/api/accounts/users/${initialData.id}/`, payload)
       } else {
         await api.post('/api/accounts/users/', values)
@@ -65,9 +65,14 @@ export function UserForm({ initialData, onSuccess, onCancel }: UserFormProps) {
       toast.success(initialData ? "User updated" : "User created")
       onSuccess()
     },
-    onError: (error) => {
-        toast.error("Failed to save user")
-        console.error(error)
+    onError: (error: any) => {
+      const message = error.response?.data
+        ? Object.entries(error.response.data)
+          .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
+          .join(' | ')
+        : "Failed to save user"
+      toast.error(message)
+      console.error("User mutation error:", error.response?.data || error)
     }
   })
 
@@ -156,8 +161,8 @@ export function UserForm({ initialData, onSuccess, onCancel }: UserFormProps) {
                   <Input type="password" {...field} />
                 </FormControl>
                 <FormDescription>
-                  {initialData 
-                    ? "Leave blank to keep current password." 
+                  {initialData
+                    ? "Leave blank to keep current password."
                     : "Temporary password for the new user."}
                 </FormDescription>
                 <FormMessage />

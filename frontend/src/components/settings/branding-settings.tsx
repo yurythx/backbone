@@ -301,7 +301,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
             </div>
 
             {!isOnboarding && (
-                <div className="flex justify-end pt-8 sticky bottom-0 bg-background/80 backdrop-blur-sm border-t mt-4 -mx-6 px-6 py-4">
+                <div className="flex justify-end pt-8 sticky bottom-0 bg-background border-t mt-4 -mx-6 px-6 py-4">
                     <Button variant="ghost" className="mr-4 rounded-xl font-bold" onClick={() => refreshConfig()}>
                         Restaurar Originais
                     </Button>

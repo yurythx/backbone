@@ -219,7 +219,7 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
             )}
 
             {!isOnboarding && (
-                <div className="flex flex-col md:flex-row gap-4 justify-between pt-10 border-t sticky bottom-0 bg-background/80 backdrop-blur-sm -mx-6 px-6 py-4 mt-4">
+                <div className="flex flex-col md:flex-row gap-4 justify-between pt-10 border-t sticky bottom-0 bg-background -mx-6 px-6 py-4 mt-4">
                     <Button
                         variant="ghost"
                         onClick={handleTest}

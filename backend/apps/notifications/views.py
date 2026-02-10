@@ -7,6 +7,7 @@ from .serializers import NotificationSerializer, PushSubscriptionSerializer
 class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         return Notification.objects.filter(recipient=self.request.user).order_by('-created_at')
@@ -26,6 +27,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
 class PushSubscriptionViewSet(viewsets.ModelViewSet):
     serializer_class = PushSubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         return PushSubscription.objects.filter(user=self.request.user)

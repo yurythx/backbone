@@ -31,7 +31,7 @@ class MessengerService:
         return conversation
 
     @staticmethod
-    def send_message(user, company, conversation, content=None, file_obj=None, request=None):
+    def send_message(user, company, conversation, content=None, file_obj=None, request=None, reply_to_id=None):
         """
         Sends a message to a conversation and signals via WebSockets.
         """
@@ -48,6 +48,13 @@ class MessengerService:
             message_data['file_type'] = file_obj.content_type
             message_data['file_size'] = file_obj.size
 
+        if reply_to_id:
+            try:
+                reply_to = Message.objects.get(id=reply_to_id, conversation=conversation)
+                message_data['reply_to'] = reply_to
+            except Message.DoesNotExist:
+                pass
+
         message = Message.objects.create(**message_data)
         
         # Signaling
@@ -60,7 +67,7 @@ class MessengerService:
                 participant,
                 title=f"Nova mensagem de {user.username}",
                 message=content[:100] if content else "Enviou um arquivo.",
-                link=f"/messenger/conversas/{conversation.id}"
+                link=f"/messenger?conversation={conversation.id}"
             )
 
         return message
@@ -92,7 +99,8 @@ class MessengerService:
                 'file_url': serialized_message.get('file_url'),
                 'file_name': serialized_message.get('file_name'),
                 'file_type': serialized_message.get('file_type'),
-                'file_size': serialized_message.get('file_size')
+                'file_size': serialized_message.get('file_size'),
+                'reply_to': serialized_message.get('reply_to')
             }
         )
 
@@ -161,5 +169,39 @@ class MessengerService:
                 'message_id': message_id,
                 'user_id': user_id,
                 'is_read': True
+            }
+        )
+
+    @staticmethod
+    def broadcast_delete(company, conversation, message_id):
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+            
+        group_name = f'chat_{company.slug}_{conversation.id}'
+        
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'delete_message',
+                'message_id': message_id
+            }
+        )
+
+    @staticmethod
+    def broadcast_edit(company, conversation, message):
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+            
+        group_name = f'chat_{company.slug}_{conversation.id}'
+        
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'edit_message',
+                'message_id': message.id,
+                'content': message.content,
+                'edited_at': message.edited_at.isoformat() if message.edited_at else None
             }
         )

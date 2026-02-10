@@ -88,7 +88,7 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='upload-logo')
     def upload_logo(self, request):
         """Upload de logo da empresa"""
         if not request.user.is_staff:
@@ -124,7 +124,7 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(branding)
         return Response(serializer.data)
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='upload-icon')
     def upload_icon(self, request):
         """Upload de ícone/favicon da empresa"""
         if not request.user.is_staff:

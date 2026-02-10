@@ -24,6 +24,64 @@ User = get_user_model()
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+@extend_schema(tags=['Accounts - Auth'], summary="Refresh access token")
+class CustomTokenRefreshView(generics.GenericAPIView):
+    """
+    Custom token refresh view that works with multi-tenancy.
+    Generates new access token with all custom claims from the user.
+    """
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []  # Disable authentication for this endpoint
+    
+    def post(self, request):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.exceptions import TokenError
+        from .serializers import CustomTokenObtainPairSerializer
+        
+        refresh_token = request.data.get('refresh')
+        
+        if not refresh_token:
+            return Response(
+                {"detail": "Refresh token is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Validate the refresh token
+            token = RefreshToken(refresh_token)
+            
+            # Get user_id from the refresh token
+            user_id = token.get('user_id')
+            
+            if not user_id:
+                return Response(
+                    {"detail": "Invalid refresh token - no user_id"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Get the user definitively (using global manager)
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response(
+                    {"detail": "User not found"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Generate new token pair with custom claims using the same serializer as login
+            new_token = CustomTokenObtainPairSerializer.get_token(user)
+            
+            return Response({
+                'access': str(new_token.access_token),
+                'refresh': str(token)  # Return the same refresh token
+            }, status=status.HTTP_200_OK)
+            
+        except TokenError as e:
+            return Response(
+                {"detail": "Invalid or expired refresh token"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
 @extend_schema(tags=['Accounts - Auth'], summary="Register a new user (admin level)")
 class UserRegistrationView(generics.CreateAPIView):
     serializer_class = UserRegistrationSerializer
@@ -80,8 +138,8 @@ class UserViewSet(viewsets.ModelViewSet):
     ordering_fields = ['username', 'email', 'first_name', 'last_name', 'date_joined']
 
     def get_queryset(self):
-        # TenantUserManager já filtra por company via get_current_company()
-        qs = User.objects.select_related('role').all().order_by('username')
+        # Usar o manager filtrado para listagem de usuários
+        qs = User.tenant_objects.select_related('role').all().order_by('username')
         role_id = self.request.query_params.get('role')
         q = self.request.query_params.get('q')
         if role_id:
@@ -90,14 +148,35 @@ class UserViewSet(viewsets.ModelViewSet):
             qs = qs.filter(username__icontains=q)
         return qs
 
+    def create(self, request, *args, **kwargs):
+        # Override to provide better validation feedback
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def perform_create(self, serializer):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        company = getattr(self.request, 'company', None)
+        if not company:
+            logger.error("USER CREATION FAILED: No company in request context")
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Empresa não identificada no contexto.")
+
         from shared_kernel.licensing import check_feature_limit
-        can_add, limit, current = check_feature_limit(self.request.company, 'max_users')
+        can_add, limit, current = check_feature_limit(company, 'max_users')
+        logger.info(f"Checking user limit for company {company.slug}: {current}/{limit} (Can add: {can_add})")
+        
         if not can_add:
+            logger.warning(f"USER CREATION FAILED: Limit reached for company {company.slug} ({current}/{limit})")
             from rest_framework.exceptions import ValidationError
             raise ValidationError(f"Limite de usuários atingido ({current}/{limit}). Faça um upgrade do seu plano.")
             
-        serializer.save(company=self.request.company)
+        serializer.save(company=company)
+        logger.info(f"USER CREATED SUCCESSFULLY for company {company.slug}")
 
     @action(detail=False, methods=['get', 'put', 'patch'])
     def me(self, request):
@@ -139,6 +218,7 @@ class UserViewSet(viewsets.ModelViewSet):
 class RoleViewSet(viewsets.ModelViewSet):
     serializer_class = RoleSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         return Role.objects.all().order_by('name')
@@ -155,6 +235,18 @@ class RoleViewSet(viewsets.ModelViewSet):
             )
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=False, methods=['get'])
+    def permissions(self, request):
+        """
+        Lista todas as permissões disponíveis no sistema.
+        """
+        from .permissions import AVAILABLE_PERMISSIONS
+        data = [
+            {'id': key, 'label': label, 'description': label} 
+            for key, label in AVAILABLE_PERMISSIONS.items()
+        ]
+        return Response(data)
+
 @extend_schema_view(
     list=extend_schema(tags=['Accounts - Invitations']),
     retrieve=extend_schema(tags=['Accounts - Invitations']),
@@ -167,6 +259,7 @@ class RoleViewSet(viewsets.ModelViewSet):
 class InvitationViewSet(viewsets.ModelViewSet):
     serializer_class = InvitationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         return Invitation.objects.select_related('role', 'company', 'invited_by').all().order_by('-created_at')

@@ -1,5 +1,7 @@
 "use client"
 
+
+
 import { ProfileForm } from "@/features/settings/profile-form"
 import { CompanyForm } from "@/features/settings/company-form"
 import { BrandingSettings } from "@/components/settings/branding-settings"
@@ -10,114 +12,108 @@ import { User, Building, Palette, Settings2, Mail, ShieldCheck } from "lucide-re
 import { PageHeader } from "@/components/ui/page-header"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { useState, useEffect, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 
-export default function SettingsPage() {
+function SettingsContent() {
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get("tab") || "profile"
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  useEffect(() => {
+    const tab = searchParams.get("tab")
+    if (tab) setActiveTab(tab)
+  }, [searchParams])
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-20">
       <PageHeader
-        title="Configurações do Ecossistema"
-        description="Gerencie sua identidade pessoal, preferências da empresa e infraestrutura enterprise."
+        title="Configurações"
+        description="Gerencie seu perfil, preferências e configurações da organização."
       />
 
-      <Tabs defaultValue="personalization" className="space-y-10">
-        <TabsList className="bg-muted/40 p-1.5 rounded-3xl border flex items-center gap-1 w-full overflow-x-auto no-scrollbar justify-start md:justify-center lg:w-fit lg:mx-auto shadow-sm">
-          <TabsTrigger value="profile" className="gap-2 px-6 py-2.5 rounded-2xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all">
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">Perfil Pessoal</span>
-          </TabsTrigger>
-          <TabsTrigger value="personalization" className="gap-2 px-6 py-2.5 rounded-2xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all">
-            <Palette className="h-4 w-4" />
-            <span className="hidden sm:inline">Tema & UI</span>
-          </TabsTrigger>
-          <TabsTrigger value="company" className="gap-2 px-6 py-2.5 rounded-2xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all">
-            <Building className="h-4 w-4" />
-            <span className="hidden sm:inline">Dados da Empresa</span>
-          </TabsTrigger>
-          <TabsTrigger value="branding" className="gap-2 px-6 py-2.5 rounded-2xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all">
-            <Settings2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Identidade (White-label)</span>
-          </TabsTrigger>
-          <TabsTrigger value="email" className="gap-2 px-6 py-2.5 rounded-2xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all" title="Segurança & E-mail">
-            <Mail className="h-4 w-4" />
-            <span className="hidden sm:inline">SMTP & Envios</span>
-          </TabsTrigger>
-        </TabsList>
-
-        <AnimatePresence mode="wait">
-          <TabsContent value="profile" className="outline-none focus-visible:ring-0">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="glass-morphism rounded-[2.5rem] p-10 border shadow-sm"
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+        <div className="glass rounded-2xl p-2 border shadow-sm">
+          <TabsList className="bg-transparent p-0 w-full flex flex-col md:flex-row h-auto gap-2">
+            <TabsTrigger 
+              value="profile" 
+              className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
             >
-              <ProfileForm />
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="personalization" className="outline-none focus-visible:ring-0">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="glass-morphism rounded-[2.5rem] p-10 border shadow-sm"
+              <User className="h-4 w-4" />
+              Perfil Pessoal
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="personalization" 
+              className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
             >
-              <div className="mb-8">
-                <H3 className="mb-2">Experiência Visual</H3>
-                <P className="text-muted-foreground text-sm">Escolha como você prefere visualizar o Backbone. Esta configuração é salva individualmente por usuário.</P>
+              <Palette className="h-4 w-4" />
+              Aparência
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="company" 
+              className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
+            >
+              <Building className="h-4 w-4" />
+              Empresa
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="branding" 
+              className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
+            >
+              <Settings2 className="h-4 w-4" />
+              Marca
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="email" 
+              className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
+            >
+              <Mail className="h-4 w-4" />
+              E-mail
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="glass rounded-3xl p-6 md:p-10 border shadow-sm outline-none"
+          >
+            {activeTab === "profile" && <ProfileForm />}
+            
+            {activeTab === "personalization" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold">Preferências Visuais</h3>
+                  <p className="text-sm text-muted-foreground">Personalize como você vê a plataforma.</p>
+                </div>
+                <UserThemeSelector />
               </div>
-              <UserThemeSelector />
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="company" className="outline-none focus-visible:ring-0">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="glass-morphism rounded-[2.5rem] p-10 border shadow-sm"
-            >
-              <CompanyForm />
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="branding" className="outline-none focus-visible:ring-0">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="glass-morphism rounded-[2.5rem] p-10 border shadow-sm"
-            >
-              <BrandingSettings isOnboarding={false} />
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="email" className="outline-none focus-visible:ring-0">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="glass-morphism rounded-[2.5rem] p-10 border shadow-sm"
-            >
-              <SmtpSettings isOnboarding={false} />
-            </motion.div>
-          </TabsContent>
+            )}
+            
+            {activeTab === "company" && <CompanyForm />}
+            
+            {activeTab === "branding" && <BrandingSettings isOnboarding={false} />}
+            
+            {activeTab === "email" && <SmtpSettings isOnboarding={false} />}
+          </motion.div>
         </AnimatePresence>
       </Tabs>
-
-      {/* Visual Footer hint */}
-      <div className="flex items-center justify-center gap-2 py-8 opacity-40 grayscale group hover:opacity-100 hover:grayscale-0 transition-all cursor-default">
-        <ShieldCheck className="h-4 w-4" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.3em]">Backbone Cloud Governance</span>
-      </div>
     </div>
   )
 }
 
-function H3({ children, className }: { children: React.ReactNode, className?: string }) {
-  return <h3 className={cn("text-xl font-bold tracking-tight", className)}>{children}</h3>
-}
-
-function P({ children, className }: { children: React.ReactNode, className?: string }) {
-  return <p className={cn("text-base", className)}>{children}</p>
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div>Carregando...</div>}>
+      <SettingsContent />
+    </Suspense>
+  )
 }

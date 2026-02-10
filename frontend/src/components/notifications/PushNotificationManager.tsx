@@ -8,18 +8,23 @@ import { api } from '@/lib/axios';
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BBA-PLACEHOLDER-FOR-VAPID-PUBLIC-KEY-MUST-BE-65-CHARS-LONG-BASE64';
 
 function urlBase64ToUint8Array(base64String: string) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-        .replace(/\-/g, '+')
-        .replace(/_/g, '/');
+    try {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding)
+            .replace(/\-/g, '+')
+            .replace(/_/g, '/');
 
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
 
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    } catch (error) {
+        console.error('Invalid VAPID public key format:', error);
+        throw new Error('VAPID_PUBLIC_KEY contains invalid characters');
     }
-    return outputArray;
 }
 
 export function PushNotificationManager() {
@@ -41,6 +46,13 @@ export function PushNotificationManager() {
 
     async function subscribe() {
         try {
+            // Validate VAPID key before attempting subscription
+            if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.includes('PLACEHOLDER')) {
+                toast.error('Push notifications não estão configuradas no servidor.');
+                console.error('VAPID_PUBLIC_KEY is not configured properly');
+                return;
+            }
+
             const registration = await navigator.serviceWorker.ready;
             const sub = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
@@ -67,7 +79,13 @@ export function PushNotificationManager() {
         }
     }
 
-    if (!isSupported || subscription) return null;
+    if (!isSupported) return null; // Don't show if not supported
+    if (subscription) return null; // Don't show if already subscribed
+    
+    // Check if VAPID key is configured, otherwise don't show the prompt
+    if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.includes('PLACEHOLDER')) {
+        return null; 
+    }
 
     return (
         <div className="fixed bottom-4 right-4 z-50 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 max-w-sm animate-in fade-in slide-in-from-bottom-4">

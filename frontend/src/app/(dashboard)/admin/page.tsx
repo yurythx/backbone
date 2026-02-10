@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { UserList } from "@/features/admin/user-list"
 import { UserForm } from "@/features/admin/user-form"
@@ -19,15 +20,34 @@ import {
 } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
+import dynamic from "next/dynamic"
 
-export default function AdminPage() {
+const AnalyticsChart = dynamic(() =>
+  import("../../../components/dashboard/analytics-chart").then(mod => mod.AnalyticsChart),
+  { ssr: false }
+)
+
+const ActivityTimeline = dynamic(() =>
+  import("../../../components/dashboard/activity-timeline").then(mod => mod.ActivityTimeline),
+  { ssr: false }
+)
+
+function AdminPageContent() {
   const [view, setView] = useState<'list' | 'create' | 'edit'>('list')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setView('create')
+      setSelectedUser(null)
+    }
+  }, [searchParams])
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
-      const res = await api.get('/api/core/dashboard-stats/')
+      const res = await api.get('/api/core/dashboard/stats/')
       return res.data
     },
     refetchInterval: 30000 // Refresh every 30s
@@ -115,7 +135,7 @@ export default function AdminPage() {
             </TabsList>
 
             <TabsContent value="management" className="mt-0">
-              <div className="glass-morphism rounded-3xl p-6 border shadow-sm">
+              <div className="glass rounded-3xl p-6 border shadow-sm">
                 {view === 'list' ? (
                   <UserList onCreate={handleCreate} onEdit={handleEdit} />
                 ) : (
@@ -149,5 +169,13 @@ export default function AdminPage() {
         </aside>
       </div>
     </div>
+  )
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminPageContent />
+    </Suspense>
   )
 }

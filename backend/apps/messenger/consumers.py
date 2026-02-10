@@ -109,34 +109,32 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     # Receive message from WebSocket
     async def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        event_type = text_data_json.get('type', 'message')
-        
-        if event_type == 'typing':
-            is_typing = text_data_json.get('is_typing', False)
-            if hasattr(self, 'room_group_name'):
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'typing_status',
-                        'user_id': self.user.id,
-                        'username': self.user.username,
-                        'is_typing': is_typing
-                    }
-                )
-            return
+        data = json.loads(text_data)
+        message_type = data.get('type')
 
-        message = text_data_json.get('message', '')
-        
-        # NOTE: Real messages are usually created via REST API to handle persistence/files,
-        # and then signaled to group. This receive 'message' is for simple text-only cases
-        # or legacy support. Our frontend uses the send_message REST action.
-        if message:
-            await self.send(text_data=json.dumps({
-                'type': 'message',
-                'message': message,
-                'sender': self.user.username
-            }))
+        if message_type == 'chat_message':
+            content = data.get('message')
+            conversation_id = data.get('conversation_id')
+            
+            # Broadcast message to room group
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'chat_message',
+                    'message': content,
+                    'conversation_id': conversation_id
+                }
+            )
+        elif message_type == 'typing_status':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'typing_status',
+                    'user_id': self.scope['user'].id,
+                    'username': self.scope['user'].username,
+                    'is_typing': data.get('is_typing', False)
+                }
+            )
 
     # Receive message from room group
     async def chat_message(self, event):
@@ -180,6 +178,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'message_id': event['message_id'],
             'user_id': event['user_id'],
             'is_read': event['is_read']
+        }))
+
+    async def delete_message(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'delete_message',
+            'message_id': event['message_id']
+        }))
+
+    async def edit_message(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'edit_message',
+            'message_id': event['message_id'],
+            'content': event['content'],
+            'edited_at': event['edited_at']
         }))
 
     @database_sync_to_async

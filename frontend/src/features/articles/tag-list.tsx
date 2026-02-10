@@ -20,7 +20,7 @@ export function TagList() {
         queryKey: ['tags'],
         queryFn: async () => {
             const res = await api.get<any>('/api/articles/tags/')
-            return Array.isArray(res.data) ? res.data : res.data.results || []
+            return res.data
         }
     })
 
@@ -28,7 +28,7 @@ export function TagList() {
         queryKey: ['categories'],
         queryFn: async () => {
             const res = await api.get<any>('/api/articles/categories/')
-            return Array.isArray(res.data) ? res.data : res.data.results || []
+            return res.data
         }
     })
 
@@ -77,7 +77,7 @@ export function TagList() {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Tags Section */}
-            <Card className="border-none shadow-xl bg-card/50 backdrop-blur-sm">
+            <Card className="border-none shadow-xl bg-card">
                 <CardHeader>
                     <div className="flex items-center gap-2 mb-2">
                         <div className="p-2 rounded-lg bg-primary/10 text-primary">
@@ -132,7 +132,7 @@ export function TagList() {
             </Card>
 
             {/* Categories Section */}
-            <Card className="border-none shadow-xl bg-card/50 backdrop-blur-sm">
+            <Card className="border-none shadow-xl bg-card">
                 <CardHeader>
                     <div className="flex items-center gap-2 mb-2">
                         <div className="p-2 rounded-lg bg-primary/10 text-primary">

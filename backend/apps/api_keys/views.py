@@ -8,6 +8,7 @@ class APIKeyViewSet(viewsets.ModelViewSet):
     serializer_class = APIKeySerializer
     permission_classes = [permissions.IsAuthenticated, HasRolePermission]
     required_permission = 'settings.api_keys_manage'
+    pagination_class = None
     
     def get_queryset(self):
         return APIKey.objects.filter(company=self.request.company)

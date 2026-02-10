@@ -1,150 +1,255 @@
-import * as React from "react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { cn } from "@/lib/utils"
+import { useState } from "react"
 import { Contact } from "@/types"
-import { api } from "@/lib/axios"
-import { useQuery } from "@tanstack/react-query"
-import { usePresence } from "@/hooks/use-presence"
-import { Search, Loader2 } from "lucide-react"
+import { Search, MessageSquare, Plus, Users, X, Loader2 } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { api } from "@/lib/axios"
+import { usePresence } from "@/hooks/use-presence"
+import { cn } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { toast } from "sonner"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
-export function ContactList({
-  onSelectContact,
-  selectedContactId
-}: {
-  onSelectContact: (contact: Contact) => void
-  selectedContactId?: number
-}) {
+interface ContactListProps {
+  onSelectContact: (contact: Contact) => void;
+  selectedContactId?: number;
+}
+
+export function ContactList({ onSelectContact, selectedContactId }: ContactListProps) {
+  const [search, setSearch] = useState("")
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false)
+  const [groupName, setGroupName] = useState("")
+  const [selectedContactsForGroup, setSelectedContactsForGroup] = useState<number[]>([])
+  
   const { onlineUsers } = usePresence()
-  const [search, setSearch] = React.useState("")
+  const queryClient = useQueryClient()
 
-  const { data: contacts, isLoading } = useQuery({
+  const { data: contacts, isLoading } = useQuery<Contact[]>({
     queryKey: ['contacts'],
     queryFn: async () => {
-      const res = await api.get<Contact[]>('/api/messenger/contacts/')
-      return res.data
+      const res = await api.get('/api/messenger/contacts/')
+      if (Array.isArray(res.data)) {
+        return res.data
+      }
+      if (res.data && Array.isArray((res.data as any).results)) {
+        return (res.data as any).results
+      }
+      return []
     }
   })
 
-  // Merge API data with Real-time Presence and Group them
-  const groupedContacts = React.useMemo(() => {
-    const contactList = Array.isArray(contacts) ? contacts : (contacts as any)?.results || []
-    const groups: Record<string, Contact[]> = {}
+  const createGroupMutation = useMutation({
+    mutationFn: async () => {
+        if (!groupName.trim()) throw new Error("Nome do grupo é obrigatório")
+        if (selectedContactsForGroup.length === 0) throw new Error("Selecione pelo menos um participante")
+        
+        // This assumes backend supports a specific format or we iterate
+        // Ideally backend should have a 'create_group' endpoint.
+        // Falling back to standard conversation creation with 'is_group=true'
+        // We need to send IDs.
+        
+        await api.post('/api/messenger/conversations/', {
+            title: groupName,
+            participants: selectedContactsForGroup,
+            is_group: true
+        })
+    },
+    onSuccess: () => {
+        toast.success("Grupo criado com sucesso!")
+        setIsGroupDialogOpen(false)
+        setGroupName("")
+        setSelectedContactsForGroup([])
+        queryClient.invalidateQueries({ queryKey: ['contacts'] }) 
+    },
+    onError: (err) => {
+        toast.error("Erro ao criar grupo. Tente novamente.")
+    }
+  })
 
-    contactList.forEach((c: Contact) => {
-      const contact = {
-        ...c,
-        is_online: onlineUsers instanceof Set ? onlineUsers.has(c.id) : false
-      }
+  const contactList = Array.isArray(contacts) ? contacts : []
 
-      const userGroups = contact.group_names && contact.group_names.length > 0
-        ? contact.group_names
-        : ["Sem Grupo"]
+  const filteredContacts = contactList.filter(contact => {
+    if (!contact) return false;
+    const searchLower = search.toLowerCase();
+    const username = contact.username ? contact.username.toLowerCase() : '';
+    const firstName = contact.first_name ? contact.first_name.toLowerCase() : '';
+    const lastName = contact.last_name ? contact.last_name.toLowerCase() : '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    return username.includes(searchLower) || fullName.includes(searchLower);
+  })
 
-      userGroups.forEach(group => {
-        if (!groups[group]) groups[group] = []
-        groups[group].push(contact)
-      })
-    })
-
-    // Sort groups (optional: staff/admins first or alphabetical)
-    return Object.keys(groups).sort().reduce((obj: any, key) => {
-      obj[key] = groups[key].sort((a, b) => a.username.localeCompare(b.username))
-      return obj
-    }, {})
-  }, [contacts, onlineUsers])
+  const toggleContactSelection = (contactId: number) => {
+      setSelectedContactsForGroup(prev => 
+        prev.includes(contactId) 
+            ? prev.filter(id => id !== contactId)
+            : [...prev, contactId]
+      )
+  }
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full border-r bg-muted/10 w-80 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="w-full h-full border-r border-border/50 bg-muted/10 flex flex-col">
+        <div className="p-4 border-b border-border/50 space-y-4">
+          <Skeleton className="h-8 w-full rounded-md" />
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Skeleton className="h-9 w-full rounded-md" />
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center gap-3">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full border-r bg-muted/10 w-80">
-      <div className="p-4 border-b bg-card">
-        <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-          Mensagens
-          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium italic">Beta</span>
-        </h2>
+    <div className="w-full h-full border-r border-border/50 bg-muted/10 flex flex-col">
+      <div className="p-4 border-b border-border/50 space-y-4 bg-background/50 backdrop-blur-sm">
+        <div className="flex items-center justify-between">
+           <h2 className="font-bold text-lg tracking-tight">Mensagens</h2>
+           
+           <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
+             <DialogTrigger asChild>
+                 <Button variant="ghost" size="icon" className="h-8 w-8">
+                     <Plus className="h-5 w-5" />
+                 </Button>
+             </DialogTrigger>
+             <DialogContent className="sm:max-w-[425px]">
+                 <DialogHeader>
+                     <DialogTitle>Criar Novo Grupo</DialogTitle>
+                     <DialogDescription>
+                         Dê um nome ao grupo e selecione os participantes.
+                     </DialogDescription>
+                 </DialogHeader>
+                 <div className="grid gap-4 py-4">
+                     <div className="grid gap-2">
+                         <label htmlFor="name" className="text-sm font-medium">Nome do Grupo</label>
+                         <Input 
+                            id="name" 
+                            value={groupName} 
+                            onChange={(e) => setGroupName(e.target.value)}
+                            placeholder="Ex: Projeto Backbone" 
+                         />
+                     </div>
+                     <div className="grid gap-2">
+                         <label className="text-sm font-medium">Participantes</label>
+                         <ScrollArea className="h-[200px] border rounded-md p-2">
+                             {contactList.map(contact => (
+                                 <div key={contact.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
+                                     <Checkbox 
+                                        id={`contact-${contact.id}`} 
+                                        checked={selectedContactsForGroup.includes(contact.id)}
+                                        onCheckedChange={() => toggleContactSelection(contact.id)}
+                                     />
+                                     <label 
+                                        htmlFor={`contact-${contact.id}`}
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer w-full"
+                                     >
+                                         <Avatar className="h-6 w-6">
+                                            <AvatarImage src={contact.avatar || undefined} />
+                                            <AvatarFallback>{contact.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                         </Avatar>
+                                         {contact.first_name ? `${contact.first_name} ${contact.last_name}` : contact.username}
+                                     </label>
+                                 </div>
+                             ))}
+                         </ScrollArea>
+                     </div>
+                 </div>
+                 <DialogFooter>
+                     <Button variant="outline" onClick={() => setIsGroupDialogOpen(false)}>Cancelar</Button>
+                     <Button onClick={() => createGroupMutation.mutate()} disabled={createGroupMutation.isPending}>
+                         {createGroupMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                         Criar Grupo
+                     </Button>
+                 </DialogFooter>
+             </DialogContent>
+           </Dialog>
+        </div>
         <div className="relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar contatos..."
-            className="pl-8 bg-muted/50 border-none focus-visible:ring-1"
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input 
+            placeholder="Buscar contatos..." 
+            className="pl-9 bg-background/50 border-border/50 focus:bg-background transition-colors"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>
+      
       <ScrollArea className="flex-1">
-        <div className="p-2 space-y-6">
-          {Object.entries(groupedContacts).map(([groupName, groupUsers]: [string, any]) => {
-            const filteredGroupUsers = groupUsers.filter((u: any) =>
-              u.username.toLowerCase().includes(search.toLowerCase()) ||
-              u.email.toLowerCase().includes(search.toLowerCase())
-            )
-
-            if (filteredGroupUsers.length === 0) return null
-
+        <div className="flex flex-col p-2 gap-1">
+          {filteredContacts?.map((contact) => {
+            const isOnline = onlineUsers.has(contact.id)
             return (
-              <div key={groupName} className="space-y-1">
-                <div className="px-3 py-1 flex items-center justify-between sticky top-0 bg-background/95 backdrop-blur-sm z-10">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                    {groupName}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground/40 font-mono">
-                    {filteredGroupUsers.length}
+              <Button
+                key={contact.id}
+                variant={selectedContactId === contact.id ? "secondary" : "ghost"}
+                className={cn(
+                  "justify-start h-auto py-3 px-3 relative group transition-all",
+                  selectedContactId === contact.id ? "bg-primary/10 hover:bg-primary/15" : "hover:bg-muted/50"
+                )}
+                onClick={() => onSelectContact(contact)}
+              >
+                <div className="relative">
+                  <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                    <AvatarImage src={contact.avatar || undefined} />
+                    <AvatarFallback className="font-bold text-xs bg-primary/10 text-primary">
+                      {contact.username.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  {isOnline && (
+                    <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-background shadow-sm animate-in zoom-in duration-300" />
+                  )}
+                </div>
+                
+                <div className="flex flex-col items-start ml-3 flex-1 min-w-0">
+                  <div className="flex justify-between items-center w-full">
+                    <span className="font-semibold text-sm truncate">
+                      {contact.first_name ? `${contact.first_name} ${contact.last_name}` : contact.username}
+                    </span>
+                    {/* Placeholder for last message time */}
+                    {/* <span className="text-[10px] text-muted-foreground">12:30</span> */}
+                  </div>
+                  <span className="text-xs text-muted-foreground truncate w-full text-left">
+                    {isOnline ? (
+                      <span className="text-green-600 font-medium flex items-center gap-1">
+                        Online
+                      </span>
+                    ) : (
+                      "Clique para iniciar conversa"
+                    )}
                   </span>
                 </div>
-                {filteredGroupUsers.map((contact: Contact) => (
-                  <button
-                    key={`${groupName}-${contact.id}`}
-                    onClick={() => onSelectContact(contact)}
-                    className={cn(
-                      "group w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all hover:bg-accent/50",
-                      selectedContactId === contact.id && "bg-accent shadow-sm"
-                    )}
-                  >
-                    <div className="relative shrink-0">
-                      <Avatar className="h-10 w-10 border-2 border-background">
-                        <AvatarImage src={`https://avatar.vercel.sh/${contact.username}`} />
-                        <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
-                          {contact.username[0].toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      {contact.is_online && (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-background rounded-full" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 pr-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-sm truncate group-hover:text-primary transition-colors">
-                          {contact.username}
-                        </span>
-                        {contact.is_staff && (
-                          <span className="text-[9px] bg-amber-500/10 text-amber-600 px-1 rounded font-black uppercase tracking-tighter">
-                            Adm
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground truncate opacity-70">
-                        {contact.email}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              </Button>
             )
           })}
-
-          {Object.keys(groupedContacts).length === 0 && (
-            <div className="p-8 text-center space-y-2">
-              <div className="text-sm font-medium text-muted-foreground">Nenhum contato disponível</div>
-              <p className="text-xs text-muted-foreground/60">Contate o administrador para ser adicionado a um grupo.</p>
+          
+          {filteredContacts?.length === 0 && (
+            <div className="p-8 text-center text-muted-foreground text-sm">
+              Nenhum contato encontrado
             </div>
           )}
         </div>

@@ -17,6 +17,7 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["http://localhost:3005"])
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -60,6 +61,7 @@ MIDDLEWARE = [
     "shared_kernel.middleware.LicensingMiddleware",
     "shared_kernel.logging_middleware.StructuredLoggingMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "shared_kernel.middleware.TenantSecurityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

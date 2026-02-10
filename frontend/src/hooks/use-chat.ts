@@ -1,190 +1,205 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import useWebSocket, { ReadyState } from 'react-use-websocket';
 import { Message } from '@/types';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 export function useChat(conversationId: number | null) {
   const [realtimeMessages, setRealtimeMessages] = useState<Message[]>([]);
   const [typingUsers, setTypingUsers] = useState<Record<number, string | null>>({});
-  const socketRef = useRef<WebSocket | null>(null);
   const queryClient = useQueryClient();
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectAttemptsRef = useRef<number>(0);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isClosingRef = useRef<boolean>(false);
-  const MAX_RECONNECT_ATTEMPTS = 6;
-  const BASE_DELAY_MS = 1000;
 
-  useEffect(() => {
-    // Reset state when conversation changes
-    setRealtimeMessages([]);
-    setTypingUsers({});
+  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'localhost:8005' : (typeof window !== 'undefined' ? window.location.host : '');
+  
+  const socketUrl = conversationId && token 
+    ? `${protocol}//${host}/ws/chat/${conversationId}/?token=${token}`
+    : null;
 
-    if (!conversationId) return;
+  const { sendMessage, lastJsonMessage, readyState } = useWebSocket(socketUrl, {
+    shouldReconnect: () => true,
+    reconnectAttempts: 10,
+    reconnectInterval: 3000,
+    onOpen: () => {
+      // toast.success('Conectado ao chat'); // Opcional, pode ser chato
+    },
+    onClose: () => {
+      // toast.error('Conexão perdida. Tentando reconectar...'); // Opcional
+    },
+    onError: (event) => {
+      console.error("WebSocket error:", event);
+      toast.error("Erro na conexão do chat. Verifique sua internet.");
+    },
+    onMessage: (event) => {
+      try {
+        const data = JSON.parse(event.data);
 
-    const token = localStorage.getItem('accessToken');
-    if (!token) return;
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname === 'localhost' ? 'localhost:8005' : window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/chat/${conversationId}/?token=${token}`;
-
-    const connect = () => {
-      const ws = new WebSocket(wsUrl);
-      socketRef.current = ws;
-      isClosingRef.current = false;
-
-      ws.onopen = () => {
-        reconnectAttemptsRef.current = 0;
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.type === 'typing') {
-            setTypingUsers((prev) => {
-              const next = { ...prev };
-              if (data.is_typing) {
-                next[data.user_id] = data.username;
-              } else {
-                delete next[data.user_id];
-              }
-              return next;
-            });
-            return;
-          }
-
-          if (data.type === 'message' || data.message) {
-            const newMessage: Message = {
-              id: data.message_id || Date.now(),
-              content: data.message,
-              sender: data.sender_id,
-              conversation: conversationId,
-              created_at: data.created_at || new Date().toISOString(),
-              file_url: data.file_url,
-              file_name: data.file_name,
-              file_type: data.file_type,
-              file_size: data.file_size
-            };
-
-            setRealtimeMessages((prev) => [...prev, newMessage]);
-            queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-
-            // If the sender just messaged, they are definitely not typing anymore
-            setTypingUsers((prev) => {
-              const next = { ...prev };
-              delete next[data.sender_id];
-              return next;
-            });
-          }
-
-          if (data.type === 'reaction') {
-            queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-            setRealtimeMessages((prev) => prev.map(msg => {
-              if (msg.id === data.message_id) {
-                const currentReactions = msg.reactions || [];
-                if (data.action === 'add') {
-                  // Check if already exists to avoid duplicates (though minimal risk with unique ID)
-                  if (currentReactions.some(r => r.user === data.user_id && r.emoji === data.emoji)) return msg;
-
-                  return {
-                    ...msg,
-                    reactions: [...currentReactions, {
-                      id: Date.now(), // Temporary ID until refresh
-                      user: data.user_id,
-                      user_username: data.username,
-                      emoji: data.emoji,
-                      created_at: new Date().toISOString()
-                    }]
-                  };
-                } else if (data.action === 'remove') {
-                  return {
-                    ...msg,
-                    reactions: currentReactions.filter(r => !(r.user === data.user_id && r.emoji === data.emoji))
-                  };
-                }
-              }
-              return msg;
-            }));
-          }
-          if (data.type === 'read_receipt') {
-            setRealtimeMessages((prev) => prev.map(msg => {
-              if (msg.id === data.message_id) {
-                return { ...msg, is_read: true };
-              }
-              return msg;
-            }));
-            return;
-          }
-        } catch (err) {
-          console.error('Chat WebSocket message error:', err);
+        if (data.type === 'typing') {
+          setTypingUsers((prev) => {
+            const next = { ...prev };
+            if (data.is_typing) {
+              next[data.user_id] = data.username;
+            } else {
+              delete next[data.user_id];
+            }
+            return next;
+          });
+          return;
         }
-      };
 
-      const scheduleReconnect = () => {
-        if (isClosingRef.current) return;
-        if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) return;
-        const attempt = reconnectAttemptsRef.current + 1;
-        reconnectAttemptsRef.current = attempt;
-        const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt - 1), 15000);
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
-        }, delay);
-      };
+        if (data.type === 'message' || data.message) {
+          const newMessage: Message = {
+            id: data.message_id || Date.now(),
+            content: data.message,
+            sender: data.sender_id,
+            conversation: conversationId!,
+            created_at: data.created_at || new Date().toISOString(),
+            file_url: data.file_url,
+            file_name: data.file_name,
+            file_type: data.file_type,
+            file_size: data.file_size,
+            reply_to: data.reply_to
+          };
 
-      ws.onclose = () => {
-        scheduleReconnect();
-      };
+          setRealtimeMessages((prev) => [...prev, newMessage]);
+          queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
 
-      ws.onerror = () => {
-        scheduleReconnect();
-      };
-    };
+          setTypingUsers((prev) => {
+            const next = { ...prev };
+            delete next[data.sender_id];
+            return next;
+          });
+        }
 
-    connect();
+        if (data.type === 'reaction') {
+          queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+          setRealtimeMessages((prev) => prev.map(msg => {
+            if (msg.id === data.message_id) {
+              const currentReactions = msg.reactions || [];
+              if (data.action === 'add') {
+                if (currentReactions.some(r => r.user === data.user_id && r.emoji === data.emoji)) return msg;
+                return {
+                  ...msg,
+                  reactions: [...currentReactions, {
+                    id: Date.now(),
+                    user: data.user_id,
+                    user_username: data.username,
+                    emoji: data.emoji,
+                    created_at: new Date().toISOString()
+                  }]
+                };
+              } else if (data.action === 'remove') {
+                return {
+                  ...msg,
+                  reactions: currentReactions.filter(r => !(r.user === data.user_id && r.emoji === data.emoji))
+                };
+              }
+            }
+            return msg;
+          }));
+        }
 
-    return () => {
-      isClosingRef.current = true;
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
+        if (data.type === 'read_receipt') {
+          // 1. Update realtime messages
+          setRealtimeMessages((prev) => prev.map(msg => {
+            if (msg.id === data.message_id) {
+              return { ...msg, is_read: true };
+            }
+            return msg;
+          }));
+
+          // 2. Update history messages in React Query cache
+          queryClient.setQueryData(['messages', conversationId], (oldData: any) => {
+            if (!oldData) return oldData;
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page: any) => ({
+                ...page,
+                results: page.results.map((msg: Message) => {
+                  if (msg.id === data.message_id) {
+                    return { ...msg, is_read: true };
+                  }
+                  return msg;
+                })
+              }))
+            };
+          });
+        }
+
+        if (data.type === 'delete_message') {
+          // 1. Remove from realtime messages
+          setRealtimeMessages((prev) => prev.filter(msg => msg.id !== data.message_id));
+
+          // 2. Remove from history messages in React Query cache
+          queryClient.setQueryData(['messages', conversationId], (oldData: any) => {
+            if (!oldData) return oldData;
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page: any) => ({
+                ...page,
+                results: page.results.filter((msg: Message) => msg.id !== data.message_id)
+              }))
+            };
+          });
+        }
+
+        if (data.type === 'edit_message') {
+          // 1. Update realtime messages
+          setRealtimeMessages((prev) => prev.map(msg => {
+            if (msg.id === data.message_id) {
+              return { ...msg, content: data.content, edited_at: data.edited_at };
+            }
+            return msg;
+          }));
+
+          // 2. Update history messages
+          queryClient.setQueryData(['messages', conversationId], (oldData: any) => {
+            if (!oldData) return oldData;
+            return {
+              ...oldData,
+              pages: oldData.pages.map((page: any) => ({
+                ...page,
+                results: page.results.map((msg: Message) => {
+                  if (msg.id === data.message_id) {
+                    return { ...msg, content: data.content, edited_at: data.edited_at };
+                  }
+                  return msg;
+                })
+              }))
+            };
+          });
+        }
+      } catch (err) {
+        console.error('Chat WebSocket message error:', err);
       }
-      if (socketRef.current?.readyState === WebSocket.OPEN) {
-        socketRef.current.close();
-      }
-    };
-  }, [conversationId, queryClient]);
+    }
+  });
 
   const sendTypingStatus = useCallback((isTyping: boolean) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({
+    if (readyState === ReadyState.OPEN) {
+      sendMessage(JSON.stringify({
         type: 'typing',
         is_typing: isTyping
       }));
     }
-  }, []);
+  }, [readyState, sendMessage]);
 
   const handleTyping = useCallback(() => {
-    // Send typing start
     sendTypingStatus(true);
-
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    // Set timeout to send typing stop
-    typingTimeoutRef.current = setTimeout(() => {
-      sendTypingStatus(false);
-      typingTimeoutRef.current = null;
+    // Debounce logic for stopping typing would go here or be handled by useEffect cleanup
+    const timeout = setTimeout(() => {
+        sendTypingStatus(false);
     }, 3000);
+    return () => clearTimeout(timeout);
   }, [sendTypingStatus]);
 
   return {
     realtimeMessages,
     typingUsers,
     handleTyping,
-    sendTypingStatus
+    sendTypingStatus,
+    readyState,
+    lastMessage: lastJsonMessage
   };
 }

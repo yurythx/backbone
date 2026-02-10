@@ -25,6 +25,7 @@ class PageViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
     required_permission = 'cms.page_manage'
     module_code = 'pages'
+    pagination_class = None
 
     def get_queryset(self):
         return Page.objects.filter(company=self.request.company).order_by('title')

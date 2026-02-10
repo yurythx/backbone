@@ -35,7 +35,8 @@ export function UserList() {
         queryKey: ['users'],
         queryFn: async () => {
             const res = await api.get('/api/accounts/users/')
-            return res.data.results || res.data
+            const data = res.data.results || res.data
+            return Array.isArray(data) ? data : []
         }
     })
 
@@ -43,7 +44,8 @@ export function UserList() {
         queryKey: ['invites'],
         queryFn: async () => {
             const res = await api.get('/api/accounts/invitations/')
-            return res.data.results || res.data
+            const data = res.data.results || res.data
+            return Array.isArray(data) ? data : []
         }
     })
 
@@ -51,9 +53,14 @@ export function UserList() {
         queryKey: ['roles'],
         queryFn: async () => {
             const res = await api.get('/api/accounts/roles/')
-            return res.data.results || res.data
+            const data = res.data.results || res.data
+            return Array.isArray(data) ? data : []
         }
     })
+
+    const safeUsers = Array.isArray(users) ? users : []
+    const safeInvites = Array.isArray(invites) ? invites : []
+    const safeRoles = Array.isArray(roles) ? roles : []
 
     const cancelInviteMutation = useMutation({
         mutationFn: async (id: number) => {
@@ -64,6 +71,21 @@ export function UserList() {
             notify.success("Convite cancelado")
         }
     })
+
+    const deleteUserMutation = useMutation({
+        mutationFn: async (id: number) => {
+            await api.delete(`/api/accounts/users/${id}/`)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['users'] })
+            notify.success("Usuário removido com sucesso")
+        },
+        onError: (error) => {
+            notify.error("Erro ao remover usuário", error)
+        }
+    })
+
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
 
     return (
         <div className="space-y-6">
@@ -85,10 +107,10 @@ export function UserList() {
             <Tabs defaultValue="active" className="w-full">
                 <TabsList className="bg-muted/50 p-1 rounded-xl mb-4">
                     <TabsTrigger value="active" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-6">
-                        Membros Ativos ({users?.length || 0})
+                        Membros Ativos ({safeUsers.length})
                     </TabsTrigger>
                     <TabsTrigger value="pending" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-6">
-                        Convites Pendentes ({invites?.filter((i: any) => i.status === 'pending').length || 0})
+                        Convites Pendentes ({safeInvites.filter((i: any) => i && i.status === 'pending').length})
                     </TabsTrigger>
                 </TabsList>
 
@@ -104,7 +126,7 @@ export function UserList() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {users && users.length > 0 ? users.map((user: any) => (
+                                {safeUsers.length > 0 ? safeUsers.map((user: any) => (
                                     <TableRow key={user.id} className="group hover:bg-muted/30 transition-colors">
                                         <TableCell className="py-4">
                                             <div className="flex items-center gap-3">
@@ -139,6 +161,18 @@ export function UserList() {
                                                     <DropdownMenuItem onClick={() => { setEditingUser(user); setIsUserFormOpen(true); }} className="cursor-pointer">
                                                         <Edit className="mr-2 h-4 w-4 text-muted-foreground" /> Editar
                                                     </DropdownMenuItem>
+                                                    {user.id !== currentUser.id && (
+                                                        <DropdownMenuItem 
+                                                            onClick={() => {
+                                                                if (confirm("Tem certeza que deseja remover este usuário? Esta ação não pode ser desfeita.")) {
+                                                                    deleteUserMutation.mutate(user.id)
+                                                                }
+                                                            }} 
+                                                            className="text-destructive focus:text-destructive cursor-pointer"
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" /> Remover
+                                                        </DropdownMenuItem>
+                                                    )}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
@@ -167,7 +201,7 @@ export function UserList() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {invites?.map((invite: any) => (
+                                {safeInvites.map((invite: any) => (
                                     <TableRow key={invite.id} className="group hover:bg-muted/30 transition-colors">
                                         <TableCell className="py-4 font-medium">{invite.email}</TableCell>
                                         <TableCell>
@@ -196,7 +230,7 @@ export function UserList() {
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {invites?.length === 0 && (
+                                {safeInvites.length === 0 && (
                                     <TableRow>
                                         <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
                                             Nenhum convite pendente.
@@ -212,7 +246,7 @@ export function UserList() {
             {isUserFormOpen && (
                 <UserForm
                     initialData={editingUser}
-                    roles={roles}
+                    roles={safeRoles}
                     onSuccess={() => {
                         setIsUserFormOpen(false)
                         queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -223,7 +257,7 @@ export function UserList() {
 
             {isInviteFormOpen && (
                 <InviteForm
-                    roles={roles}
+                    roles={safeRoles}
                     onSuccess={() => {
                         setIsInviteFormOpen(false)
                         queryClient.invalidateQueries({ queryKey: ['invites'] })

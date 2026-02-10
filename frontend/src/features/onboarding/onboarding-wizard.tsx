@@ -120,7 +120,7 @@ export function OnboardingWizard() {
                             title="Identidade Visual (White-label)"
                             description="Personalize cores e logos para que a plataforma tenha a cara do seu negócio."
                         />
-                        <div className="border rounded-3xl p-6 bg-background/50">
+                        <div className="glass-morphism rounded-3xl p-6">
                             <BrandingSettings isOnboarding />
                         </div>
                     </motion.div>
@@ -137,7 +137,7 @@ export function OnboardingWizard() {
                             title="Comunicação Corporativa"
                             description="Configure seu SMTP para que os e-mails do sistema usem seu próprio domínio."
                         />
-                        <div className="border rounded-3xl p-6 bg-background/50">
+                        <div className="glass-morphism rounded-3xl p-6">
                             <SmtpSettings isOnboarding />
                         </div>
                     </motion.div>
@@ -190,8 +190,8 @@ export function OnboardingWizard() {
     }
 
     return (
-        <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-3xl flex items-center justify-center p-4">
-            <Card className="w-full max-w-5xl shadow-2xl border-primary/20 overflow-hidden bg-card/40 border-t-4 border-t-primary">
+        <div className="fixed inset-0 z-[100] bg-background/85 backdrop-blur-3xl flex items-center justify-center p-4">
+            <Card className="w-full max-w-5xl shadow-2xl overflow-hidden glass-morphism border-t-4 border-t-primary">
                 {step > 0 && (
                     <div className="h-1 bg-muted">
                         <motion.div
@@ -245,7 +245,7 @@ export function OnboardingWizard() {
 function WelcomeFeature({ icon: Icon, label }: { icon: any, label: string }) {
     return (
         <div className="flex flex-col items-center gap-2">
-            <div className="h-12 w-12 rounded-2xl bg-muted/50 border flex items-center justify-center">
+            <div className="h-12 w-12 rounded-2xl glass-morphism border-0 flex items-center justify-center shadow-sm">
                 <Icon className="h-5 w-5 text-muted-foreground" />
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
@@ -256,7 +256,7 @@ function WelcomeFeature({ icon: Icon, label }: { icon: any, label: string }) {
 function StepHeader({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
     return (
         <div className="flex items-center gap-5 pb-2">
-            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <div className="h-14 w-14 rounded-2xl glass-morphism border-0 flex items-center justify-center shrink-0 shadow-md">
                 <Icon className="h-7 w-7 text-primary" />
             </div>
             <div>

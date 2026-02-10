@@ -24,6 +24,8 @@ export default function LicensingPage() {
     }
   })
 
+  const safePlans = Array.isArray(plans) ? plans : []
+
   // Fetch Current License
   const { data: license, isLoading: isLoadingLicense } = useQuery({
     queryKey: ['my-license'],
@@ -76,7 +78,7 @@ export default function LicensingPage() {
         </header>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end pb-12">
-          {plans?.map((plan, index) => (
+          {safePlans.map((plan, index) => (
             <SlideUp key={plan.id} delay={0.2 + index * 0.1}>
               <PlanCard
                 plan={plan}

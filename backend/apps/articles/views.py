@@ -28,6 +28,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     required_permission = 'articles.category_manage'
     module_code = 'articles'
     lookup_field = 'slug'
+    pagination_class = None
     
 
     def get_queryset(self):
@@ -65,6 +66,7 @@ class TagViewSet(viewsets.ModelViewSet):
     required_permission = 'articles.article_manage'
     module_code = 'articles'
     lookup_field = 'slug'
+    pagination_class = None
     
 
     def get_queryset(self):

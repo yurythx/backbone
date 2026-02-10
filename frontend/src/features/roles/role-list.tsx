@@ -22,6 +22,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 
 export function RoleList() {
     const [isFormOpen, setIsFormOpen] = useState(false)
@@ -32,7 +33,7 @@ export function RoleList() {
         queryKey: ['roles'],
         queryFn: async () => {
             const res = await api.get('/api/accounts/roles/')
-            return res.data.results || res.data
+            return res.data
         }
     })
 
@@ -148,16 +149,19 @@ export function RoleList() {
                 </Table>
             </div>
 
-            {isFormOpen && (
-                <RoleForm
-                    initialData={editingRole}
-                    onSuccess={() => {
-                        setIsFormOpen(false)
-                        queryClient.invalidateQueries({ queryKey: ['roles'] })
-                    }}
-                    onCancel={() => setIsFormOpen(false)}
-                />
-            )}
+            <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-3xl p-0 border-none shadow-2xl">
+                    <RoleForm
+                        key={editingRole ? `edit-${editingRole.id}` : 'create-new'}
+                        initialData={editingRole}
+                        onSuccess={() => {
+                            setIsFormOpen(false)
+                            queryClient.invalidateQueries({ queryKey: ['roles'] })
+                        }}
+                        onCancel={() => setIsFormOpen(false)}
+                    />
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

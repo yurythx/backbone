@@ -13,8 +13,9 @@ export default function PublicArtigosPage() {
         queryFn: async () => {
             // Usamos o endpoint público ou filtramos no cliente? 
             // Por enquanto, assumimos que o backend filtra por tenant e is_published
-            const res = await api.get<Article[]>('/api/articles/articles/')
-            return res.data.filter(a => a.is_published)
+            const res = await api.get('/api/articles/articles/')
+            const data = res.data?.results ?? res.data
+            return Array.isArray(data) ? data.filter((a: Article) => a.is_published) : []
         }
     })
 

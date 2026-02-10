@@ -54,7 +54,7 @@ export default function UsagePage() {
     const { data, isLoading, error } = useQuery({
         queryKey: ['usage-metrics'],
         queryFn: async () => {
-            const res = await api.get<UsageData>('/api/licensing/licenses/usage/')
+            const res = await api.get<UsageData>('/api/licensing/my-license/')
             return res.data
         },
         retry: false

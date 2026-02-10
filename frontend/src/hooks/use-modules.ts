@@ -3,25 +3,32 @@ import { api } from '@/lib/axios'
 import { TenantModule } from '@/types'
 
 export function useModules() {
-    const { data: modules = [], isLoading, error } = useQuery<TenantModule[]>({
+    const { data: rawData, isLoading, error } = useQuery<any>({
         queryKey: ['my-modules'],
         queryFn: async () => {
-            const res = await api.get<TenantModule[]>('/api/modules/my-modules/')
+            const res = await api.get<any>('/api/modules/my-modules/')
             return res.data
         },
-        // Cache for a good amount of time since module config rarely changes per session
         staleTime: 5 * 60 * 1000,
         retry: 1
     })
 
-    // Helper to check if a module is active by its code
+    // Extract modules array safely
+    const modules: TenantModule[] = Array.isArray(rawData)
+        ? rawData
+        : (rawData && typeof rawData === 'object' && Array.isArray(rawData.results))
+            ? rawData.results
+            : []
+
+    /**
+     * Helper to check if a module is active by its code
+     */
     const isModuleActive = (moduleCode: string): boolean => {
         if (!modules || modules.length === 0) return false
 
-        return modules.some(tm => {
-            if (!tm.is_active) return false
-            // Check typed module_code directly
-            return tm.module_code === moduleCode
+        return modules.some((tm: any) => {
+            if (!tm || typeof tm !== 'object') return false
+            return tm.is_active === true && tm.module_code === moduleCode
         })
     }
 

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { ArticleList } from "@/features/articles/article-list"
@@ -11,14 +12,23 @@ import { Article } from "@/types"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PublicArticleCard } from "@/components/public/article-card"
 
-export default function ArtigosPage() {
+function ArtigosPageContent() {
     const [view, setView] = useState<'list' | 'blog' | 'create' | 'edit'>('list')
     const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
+    const searchParams = useSearchParams()
+
+    useEffect(() => {
+        if (searchParams.get('action') === 'create') {
+            setView('create')
+            setSelectedArticle(null)
+        }
+    }, [searchParams])
     const { data: publishedArticles } = useQuery({
         queryKey: ['articles-published'],
         queryFn: async () => {
-            const res = await api.get<Article[]>('/api/articles/articles/')
-            return res.data.filter(a => a.is_published)
+            const res = await api.get('/api/articles/articles/')
+            const data = res.data.results || res.data
+            return Array.isArray(data) ? data.filter((a: Article) => a.is_published) : []
         }
     })
 
@@ -80,7 +90,7 @@ export default function ArtigosPage() {
                     )}
                     {view === 'blog' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {(publishedArticles || []).map((article) => (
+                            {(Array.isArray(publishedArticles) ? publishedArticles : []).map((article) => (
                                 <PublicArticleCard key={article.id} article={article} />
                             ))}
                         </div>
@@ -103,5 +113,13 @@ export default function ArtigosPage() {
                 </TabsContent>
             </Tabs>
         </div>
+    )
+}
+
+export default function ArtigosPage() {
+    return (
+        <Suspense fallback={null}>
+            <ArtigosPageContent />
+        </Suspense>
     )
 }

@@ -13,6 +13,9 @@ self.addEventListener('push', function (event) {
             self.registration.showNotification(data.title, options)
         );
     }
+self.addEventListener('fetch', function(event) {
+  // Pass-through: não intercepta nada, apenas permite que a requisição siga
+  return; 
 });
 
 self.addEventListener('notificationclick', function (event) {

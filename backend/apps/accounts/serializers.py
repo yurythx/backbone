@@ -72,11 +72,35 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     role_details = RoleSerializer(source='role', read_only=True)
+    password = serializers.CharField(write_only=True, required=False, min_length=6)
+    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_details', 'is_superuser', 'avatar']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_details', 'is_superuser', 'avatar', 'avatar_url', 'password']
         read_only_fields = ['id']
+
+    def get_avatar_url(self, obj):
+        if obj.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            return obj.avatar.url
+        return None
+
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        # Ensure company is handled if passed via save()
+        user = User.objects.create_user(password=password, **validated_data)
+        return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        user = super().update(instance, validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+        return user
 
 
 class UserThemePreferenceSerializer(serializers.ModelSerializer):

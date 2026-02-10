@@ -49,6 +49,38 @@ class TenantMiddleware:
         response = self.get_response(request)
         return response
 
+class TenantSecurityMiddleware:
+    """
+    Ensures that the authenticated user belongs to the requested tenant (company).
+    Must be placed AFTER AuthenticationMiddleware and TenantMiddleware.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.http import JsonResponse
+        
+        # Skip for unauthenticated users or if no company context
+        if not request.user.is_authenticated or not hasattr(request, 'company') or not request.company:
+            return self.get_response(request)
+            
+        # Superusers and Staff can access any tenant (for support/admin purposes)
+        if request.user.is_superuser or request.user.is_staff:
+            return self.get_response(request)
+            
+        # Check if user's company matches the request context company
+        # We compare IDs to avoid object instance issues
+        if request.user.company_id != request.company.id:
+            return JsonResponse(
+                {
+                    "error": "Cross-Tenant Access Denied",
+                    "message": f"You belong to '{request.user.company.slug}' but are trying to access '{request.company.slug}'."
+                },
+                status=403
+            )
+            
+        return self.get_response(request)
+
 class LicensingMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -83,3 +115,4 @@ class LicensingMiddleware:
                     )
         
         return self.get_response(request)
+

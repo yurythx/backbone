@@ -19,6 +19,7 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
     """
     serializer_class = TenantModuleSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     @tenant_cached(timeout=3600, key_prefix='modules')
     def list(self, request, *args, **kwargs):

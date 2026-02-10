@@ -1,13 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { PageList } from "@/features/pages/page-list"
 import { PageForm } from "@/features/pages/page-form"
 import { Page } from "@/types"
 
-export default function CMSPage() {
+function CMSPageContent() {
   const [view, setView] = useState<'list' | 'create' | 'edit'>('list')
   const [selectedPage, setSelectedPage] = useState<Page | null>(null)
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setView('create')
+      setSelectedPage(null)
+    }
+  }, [searchParams])
 
   const handleCreate = () => {
     setSelectedPage(null)
@@ -47,5 +56,13 @@ export default function CMSPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function CMSPage() {
+  return (
+    <Suspense fallback={null}>
+      <CMSPageContent />
+    </Suspense>
   )
 }

@@ -17,6 +17,7 @@ export interface User {
   role_details?: Role;
   is_superuser?: boolean;
   avatar?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface Contact {
@@ -26,6 +27,7 @@ export interface Contact {
   is_online: boolean;
   group_names: string[];
   is_staff: boolean;
+  avatar_url?: string | null;
 }
 
 export interface MessageReaction {
@@ -48,6 +50,16 @@ export interface Message {
   file_size?: number;
   reactions?: MessageReaction[];
   is_read?: boolean;
+  edited_at?: string | null;
+  reply_to?: {
+    id: number;
+    content: string;
+    sender: number;
+    sender_username: string;
+    created_at: string;
+    file_name?: string;
+    file_type?: string;
+  } | null;
 }
 
 export interface Conversation {

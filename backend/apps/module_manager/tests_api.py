@@ -9,7 +9,7 @@ User = get_user_model()
 class ModuleManagerAPITest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Test Corp", slug="test-corp")
-        self.user = User.all_objects.create_user(
+        self.user = User.objects.create_user(
             username="tester",
             email="tester@test.corp",
             password="pass",
@@ -29,6 +29,8 @@ class ModuleManagerAPITest(APITestCase):
     def test_available_modules(self):
         res = self.client.get('/api/modules/available/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # available endpoint still has pagination (ReadOnlyModelViewSet default)
+        # but my-modules (TenantModuleViewSet) has pagination_class = None
         codes = [m['code'] for m in res.data['results']]
         self.assertIn('pages', codes)
         self.assertIn('articles', codes)

@@ -55,7 +55,6 @@ export function RichEditor({ content, onChange, placeholder, className }: RichEd
                     levels: [1, 2, 3],
                 },
             }),
-            Underline,
             Image.configure({
                 HTMLAttributes: {
                     class: 'rounded-lg border border-border shadow-sm max-w-full h-auto my-4',
@@ -63,12 +62,6 @@ export function RichEditor({ content, onChange, placeholder, className }: RichEd
             }),
             TextAlign.configure({
                 types: ['heading', 'paragraph'],
-            }),
-            Link.configure({
-                openOnClick: false,
-                HTMLAttributes: {
-                    class: 'text-primary underline font-medium decoration-primary/30 underline-offset-4 hover:decoration-primary transition-all',
-                },
             }),
             Placeholder.configure({
                 placeholder: placeholder || 'Comece a escrever a magia...',

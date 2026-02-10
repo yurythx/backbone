@@ -98,7 +98,7 @@ export function InviteForm({ roles, onSuccess, onCancel }: InviteFormProps) {
                                     <FormItem>
                                         <FormLabel className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Endereço de Email</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="pessoa@exemplo.com" className="h-12 rounded-xl border-muted-foreground/20" {...field} />
+                                            <Input placeholder="pessoa@exemplo.com" className="h-11 rounded-xl" {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -113,7 +113,7 @@ export function InviteForm({ roles, onSuccess, onCancel }: InviteFormProps) {
                                         <FormLabel className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Papel de Acesso</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl>
-                                                <SelectTrigger className="h-12 rounded-xl bg-muted/20 border-none">
+                                                <SelectTrigger className="h-11 rounded-xl bg-muted/20 border-none focus:ring-2 focus:ring-primary/20">
                                                     <SelectValue placeholder="Escolha um nível de acesso..." />
                                                 </SelectTrigger>
                                             </FormControl>

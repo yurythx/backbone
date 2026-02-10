@@ -39,6 +39,11 @@ const formSchema = z.object({
     first_name: z.string().min(1, "Primeiro nome é obrigatório."),
     last_name: z.string().min(1, "Último nome é obrigatório."),
     role: z.string().optional(),
+    password: z.string().optional(),
+}).refine((data) => {
+    // A validação da senha será feita no contexto do formulário (submit)
+    // pois não temos acesso ao initialData aqui dentro de forma limpa sem criar factories.
+    return true
 })
 
 interface UserFormProps {
@@ -57,21 +62,34 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
             first_name: initialData?.first_name || "",
             last_name: initialData?.last_name || "",
             role: initialData?.role ? String(initialData.role) : undefined,
+            password: "",
         },
     })
 
     const mutation = useMutation({
         mutationFn: async (values: z.infer<typeof formSchema>) => {
-            const payload = {
+            // Validação manual de senha para criação
+            if (!initialData && (!values.password || values.password.length < 8)) {
+                form.setError("password", { 
+                    type: "manual", 
+                    message: "A senha é obrigatória e deve ter no mínimo 8 caracteres para novos usuários." 
+                })
+                throw new Error("Senha inválida")
+            }
+
+            const payload: any = {
                 ...values,
                 role: values.role ? parseInt(values.role) : null,
+            }
+
+            // Remove password validation/field if empty (for edits)
+            if (!values.password) {
+                delete payload.password
             }
 
             if (initialData) {
                 await api.patch(`/api/accounts/users/${initialData.id}/`, payload)
             } else {
-                // Para novos usuários criados pelo admin, precisaríamos de uma lógica de senha temporária ou convite
-                // Por enquanto, vamos assumir que apenas editamos ou criamos básico.
                 await api.post('/api/accounts/users/', payload)
             }
         },
@@ -79,8 +97,10 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
             notify.success(initialData ? "Usuário atualizado" : "Membro adicionado")
             onSuccess()
         },
-        onError: (error) => {
-            notify.error("Erro ao salvar usuário", error)
+        onError: (error: any) => {
+            if (error.message !== "Senha inválida") {
+                notify.error("Erro ao salvar usuário", error)
+            }
         }
     })
 
@@ -144,6 +164,35 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
                                         <FormControl>
                                             <Input placeholder="john@example.com" className="h-11 rounded-xl" {...field} />
                                         </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="password"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
+                                            {initialData ? "Nova Senha (Opcional)" : "Senha Provisória"}
+                                        </FormLabel>
+                                        <FormControl>
+                                            <div className="relative">
+                                                <Key className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                                                <Input 
+                                                    type="password" 
+                                                    placeholder={initialData ? "Deixe em branco para manter" : "Defina uma senha segura"} 
+                                                    className="h-11 rounded-xl pl-10" 
+                                                    {...field} 
+                                                />
+                                            </div>
+                                        </FormControl>
+                                        <FormDescription className="text-[10px]">
+                                            {initialData 
+                                                ? "Preencha apenas se desejar alterar a senha do usuário." 
+                                                : "O usuário poderá alterar esta senha no primeiro acesso."}
+                                        </FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}

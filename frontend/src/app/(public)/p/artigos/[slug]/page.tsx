@@ -17,7 +17,8 @@ async function getArticle(slug: string) {
     try {
         // In Server Components, we fetch directly. 
         // Note: Using the internal API URL if in Docker, but here we assume NEX_PUBLIC_API_URL is reachable.
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/articles/articles/?slug=${slug}`, {
+        const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005';
+        const res = await fetch(`${apiUrl}/api/articles/articles/?slug=${slug}`, {
             next: { revalidate: 3600 } // Cache for 1 hour
         })
         if (!res.ok) return null
@@ -40,7 +41,8 @@ export async function generateMetadata(
     // Fetch company branding for icons
     let icon = '/favicon.ico'
     try {
-        const brandingRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/core/branding/public_current/`, {
+        const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005';
+        const brandingRes = await fetch(`${apiUrl}/api/core/branding/public_current/`, {
             headers: { 'x-company-slug': article.company_slug || '' },
             next: { revalidate: 3600 }
         })

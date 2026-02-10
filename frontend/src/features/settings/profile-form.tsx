@@ -60,7 +60,7 @@ export function ProfileForm() {
       email: user.email || "",
       firstName: user.firstName || "",
       lastName: user.lastName || "",
-      avatar: user.avatar || null,
+      avatar: user.avatar_url || user.avatar || null,
     } : undefined
   })
 
@@ -120,109 +120,115 @@ export function ProfileForm() {
   }
 
   return (
-    <Card className="border-none shadow-none bg-transparent">
-      <CardHeader className="px-0">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <UserCheck className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <CardTitle className="text-2xl">Dados Pessoais</CardTitle>
-            <CardDescription>Gerencie suas informações de acesso e exibição.</CardDescription>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4 border-b pb-6">
+        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+          <UserCheck className="h-6 w-6 text-primary" />
         </div>
-      </CardHeader>
-      <CardContent className="px-0 pt-4">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-2xl">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Dados Pessoais</h2>
+          <p className="text-sm text-muted-foreground">Gerencie suas informações de acesso e exibição.</p>
+        </div>
+      </div>
 
-            {/* Avatar Section */}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-3xl">
+
+          {/* Avatar Section */}
+          <div className="bg-muted/30 p-6 rounded-2xl border border-border/50">
+             <FormField
+               control={form.control}
+               name="avatar"
+               render={({ field }) => (
+                 <FormItem className="flex flex-col sm:flex-row items-center gap-6 space-y-0">
+                   <FormControl>
+                     <AvatarUpload
+                       value={field.value}
+                       onChange={field.onChange}
+                       initials={user?.username?.substring(0, 2).toUpperCase()}
+                     />
+                   </FormControl>
+                   <div className="text-center sm:text-left space-y-1">
+                      <FormLabel className="text-base font-semibold">Sua Foto</FormLabel>
+                      <FormDescription>
+                        Isso será exibido no seu perfil e em comentários.
+                      </FormDescription>
+                      <FormMessage />
+                   </div>
+                 </FormItem>
+               )}
+             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}
-              name="avatar"
+              name="username"
               render={({ field }) => (
                 <FormItem>
+                  <FormLabel className="font-semibold">Nome de Usuário</FormLabel>
                   <FormControl>
-                    <AvatarUpload
-                      value={field.value}
-                      onChange={field.onChange}
-                      initials={user?.username?.substring(0, 2).toUpperCase()}
-                    />
+                    <div className="relative group">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <Input placeholder="seu.usuario" className="pl-10 h-11 bg-background/50" {...field} />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome de Usuário</FormLabel>
-                    <FormControl>
-                      <div className="relative group">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                        <Input placeholder="seu.usuario" className="pl-10 h-11" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormDescription>Seu nome de identificação no sistema.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="font-semibold">E-mail</FormLabel>
+                  <FormControl>
+                    <div className="relative group opacity-80">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="seu@email.com" className="pl-10 h-11 bg-muted/50" {...field} disabled />
+                    </div>
+                  </FormControl>
+                  <FormDescription className="text-xs">Para alterar seu e-mail, contate o suporte.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>E-mail</FormLabel>
-                    <FormControl>
-                      <div className="relative group">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                        <Input placeholder="seu@email.com" className="pl-10 h-11" {...field} disabled />
-                      </div>
-                    </FormControl>
-                    <FormDescription>O e-mail não pode ser alterado diretamente.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              control={form.control}
+              name="firstName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="font-semibold">Primeiro Nome</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: João" className="h-11 bg-background/50" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="firstName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Primeiro Nome</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: João" className="h-11" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="lastName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="font-semibold">Sobrenome</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: Silva" className="h-11 bg-background/50" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
-              <FormField
-                control={form.control}
-                name="lastName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Sobrenome</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Silva" className="h-11" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <Button type="submit" size="lg" className="px-8 shadow-lg shadow-primary/20" disabled={mutation.isPending}>
+          <div className="pt-4 border-t">
+            <Button type="submit" size="lg" className="rounded-xl px-8 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all" disabled={mutation.isPending}>
               {mutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -230,9 +236,9 @@ export function ProfileForm() {
               )}
               Salvar Alterações
             </Button>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+          </div>
+        </form>
+      </Form>
+    </div>
   )
 }

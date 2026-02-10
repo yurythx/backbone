@@ -140,7 +140,7 @@ export function ArticleAnalytics() {
                     </CardContent>
                 </Card>
 
-                <Card className="glass-morphism lg:col-span-1">
+                <Card className="glass-morphism lg:col-span-1 min-h-[400px]">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <TrendingUp className="h-5 w-5 text-green-500" />
@@ -151,7 +151,7 @@ export function ArticleAnalytics() {
                     <CardContent>
                         <div className="space-y-6 mt-4">
                             {most_viewed.map((article: any, index: number) => (
-                                <div key={article.id} className="flex items-center justify-between group">
+                                <div key={article.id || `article-${index}`} className="flex items-center justify-between group">
                                     <div className="flex items-center gap-4">
                                         <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center text-xs font-bold group-hover:bg-primary/20 transition-colors">
                                             {index + 1}

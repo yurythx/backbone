@@ -9,7 +9,7 @@ export default function InsightsPage() {
     const { data: licenseData, isLoading } = useQuery({
         queryKey: ['licensing-usage'],
         queryFn: async () => {
-            const res = await api.get('/api/licensing/licenses/usage/')
+            const res = await api.get('/api/licensing/my-license/')
             return res.data
         }
     })

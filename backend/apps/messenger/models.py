@@ -42,6 +42,16 @@ class Message(BaseTenantModel):
     
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    # Reply reference
+    reply_to = models.ForeignKey(
+        'self', 
+        null=True, 
+        blank=True, 
+        on_delete=models.SET_NULL, 
+        related_name='replies'
+    )
 
     def __str__(self):
         return f"Message {self.id} from {self.sender}"

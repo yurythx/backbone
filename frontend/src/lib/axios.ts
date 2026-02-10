@@ -111,11 +111,16 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (err) {
         processQueue(err, null);
-        // Logout on refresh fail
+
+        // Logout on refresh fail - Only if it's REALLY a 401/403 (invalid refresh token)
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          window.location.href = '/login';
+          const isAuthError = axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403);
+
+          if (isAuthError) {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(err);
       } finally {

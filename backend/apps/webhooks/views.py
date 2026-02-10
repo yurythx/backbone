@@ -8,6 +8,7 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     serializer_class = WebhookSubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated, HasRolePermission]
     required_permission = 'settings.webhooks_manage'
+    pagination_class = None
     
     def get_queryset(self):
         return WebhookSubscription.objects.filter(company=self.request.company)

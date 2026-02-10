@@ -9,10 +9,11 @@ class ContactSerializer(serializers.ModelSerializer):
     is_online = serializers.SerializerMethodField()
     group_names = serializers.SerializerMethodField()
     is_staff = serializers.BooleanField(read_only=True)
+    avatar_url = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_online', 'group_names', 'is_staff']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_online', 'group_names', 'is_staff', 'avatar_url']
         
     def get_is_online(self, obj):
         key = f"user_presence:{obj.id}"
@@ -20,6 +21,14 @@ class ContactSerializer(serializers.ModelSerializer):
 
     def get_group_names(self, obj):
         return [g.name for g in obj.groups.all()]
+
+    def get_avatar_url(self, obj):
+        if obj.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            return obj.avatar.url
+        return None
 
 
 class MessageReactionSerializer(serializers.ModelSerializer):
@@ -29,10 +38,18 @@ class MessageReactionSerializer(serializers.ModelSerializer):
         model = MessageReaction
         fields = ['id', 'user', 'user_username', 'emoji', 'created_at']
 
+class SimpleMessageSerializer(serializers.ModelSerializer):
+    sender_username = serializers.CharField(source='sender.username', read_only=True)
+    
+    class Meta:
+        model = Message
+        fields = ['id', 'content', 'sender', 'sender_username', 'created_at', 'file_name', 'file_type']
+
 class MessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source='sender.username', read_only=True)
     file_url = serializers.SerializerMethodField()
     reactions = MessageReactionSerializer(many=True, read_only=True)
+    reply_to = SimpleMessageSerializer(read_only=True)
 
     class Meta:
         model = Message
@@ -40,9 +57,9 @@ class MessageSerializer(serializers.ModelSerializer):
             'id', 'conversation', 'sender', 'sender_username', 
             'content', 'file', 'file_url', 'file_name', 
             'file_type', 'file_size', 'created_at', 'is_read',
-            'reactions'
+            'reactions', 'reply_to', 'edited_at'
         ]
-        read_only_fields = ['sender', 'conversation']
+        read_only_fields = ['sender', 'conversation', 'reply_to', 'edited_at']
 
     def get_file_url(self, obj):
         if obj.file:

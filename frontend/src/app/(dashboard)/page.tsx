@@ -101,7 +101,7 @@ export default function DashboardPage() {
           </FadeIn>
           <div className="space-y-6">
             <SlideUp delay={0.5}>
-              <div className="p-6 rounded-2xl glass-morphism border-primary/10 shadow-sm bg-primary/5">
+              <div className="p-6 rounded-2xl border bg-card shadow-sm">
                 <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4">Módulos Ativos</h3>
                 <div className="space-y-3">
                   <ActiveModule title="CMS" status="Active" icon={Layout} />
@@ -130,7 +130,7 @@ export default function DashboardPage() {
                 <Link href="/admin/audit">Ver todas</Link>
               </Button>
             </div>
-            <div className="rounded-2xl border bg-card/50 backdrop-blur-sm overflow-hidden shadow-sm">
+            <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
               <div className="divide-y divide-border/50">
                 {(stats?.recent_activity || []).map((log: any, idx: number) => (
                   <div key={idx} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-all group">
@@ -184,7 +184,7 @@ export default function DashboardPage() {
 
 function StatItem({ title, value, growth, icon: Icon, isStatus, label }: any) {
   return (
-    <Card className="relative overflow-hidden group hover:shadow-lg transition-all duration-500 border-border/50">
+    <Card className="glass-card relative overflow-hidden group hover:shadow-lg transition-all duration-500 border-border/50">
       <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
         <Icon size={80} />
       </div>

@@ -54,13 +54,19 @@ export function UserList({ onEdit, onCreate }: UserListProps) {
     {
       accessorKey: "groups",
       header: "Groups",
-      cell: ({ row }) => (
-        <div className="flex gap-1 flex-wrap">
-          {(row.getValue("groups") as string[]).map(group => (
-            <Badge key={group} variant="outline">{group}</Badge>
-          ))}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const groups = row.getValue("groups") as string[] | undefined
+        if (!groups || groups.length === 0) {
+          return <span className="text-xs text-muted-foreground">Nenhum grupo</span>
+        }
+        return (
+          <div className="flex gap-1 flex-wrap">
+            {groups.map(group => (
+              <Badge key={group} variant="outline">{group}</Badge>
+            ))}
+          </div>
+        )
+      },
     },
     {
       id: "actions",

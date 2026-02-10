@@ -1,7 +1,7 @@
 "use client"
 
 import { Bell, Check, MessageSquare, Info, AlertTriangle, ExternalLink, ChevronRight } from "lucide-react"
-import { useNotifications, Notification } from "@/hooks/use-notifications"
+import { useNotifications, Notification } from "@/hooks/use-notifications-v2"
 import { Button } from "@/components/ui/button"
 import {
     Popover,
@@ -64,7 +64,7 @@ export function NotificationBell() {
                     </AnimatePresence>
                 </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 p-0 rounded-2xl overflow-hidden glass-morphism border-0 shadow-2xl mt-2">
+            <PopoverContent align="end" className="w-80 p-0 rounded-2xl overflow-hidden bg-popover border shadow-2xl mt-2">
                 <div className="p-4 border-b border-border/50 bg-muted/30 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <span className="font-black text-sm uppercase tracking-tighter">Notificações</span>
@@ -87,7 +87,7 @@ export function NotificationBell() {
                 <ScrollArea className="h-[350px]">
                     <div className="flex flex-col">
                         <AnimatePresence initial={false}>
-                            {notifications.length === 0 ? (
+                            {(!Array.isArray(notifications) || notifications.length === 0) ? (
                                 <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                                     <div className="h-12 w-12 rounded-full bg-muted/20 flex items-center justify-center mb-4">
                                         <Bell className="h-6 w-6 text-muted-foreground/30" />

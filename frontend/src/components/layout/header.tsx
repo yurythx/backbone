@@ -67,7 +67,7 @@ export function Header() {
 
 
   return (
-    <header className="h-20 sticky top-0 z-50 px-8 flex items-center justify-between border-b border-border/40 backdrop-blur-xl bg-background/95 shadow-sm transition-all duration-500">
+    <header className="h-20 sticky top-0 z-50 px-8 flex items-center justify-between border-b glass shadow-sm transition-all duration-500">
       <div className="flex items-center gap-12">
         <SlideUp className="flex items-center gap-12">
           {/* Logo Section */}
@@ -134,12 +134,12 @@ export function Header() {
               Ação Rápida
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 mt-2 glass-morphism shadow-xl border-0 p-1.5 translate-y-2">
+          <DropdownMenuContent align="end" className="w-56 mt-2 bg-popover shadow-xl border p-1.5 translate-y-2">
             <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2">
               Atalhos de Criação
             </DropdownMenuLabel>
             <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
-              <Link href="/artigos/novo" className="flex items-center gap-3">
+              <Link href="/artigos?action=create" className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
                   <FileText className="h-4 w-4 text-orange-500" />
                 </div>
@@ -147,7 +147,7 @@ export function Header() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
-              <Link href="/cms/novo" className="flex items-center gap-3">
+              <Link href="/cms?action=create" className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
                   <ShieldCheck className="h-4 w-4 text-blue-500" />
                 </div>
@@ -155,7 +155,7 @@ export function Header() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
-              <Link href="/admin" className="flex items-center gap-3">
+              <Link href="/admin?action=create" className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                   <UserPlus className="h-4 w-4 text-emerald-500" />
                 </div>
@@ -178,7 +178,7 @@ export function Header() {
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 mt-2 glass-morphism shadow-xl border-0 p-1">
+          <DropdownMenuContent align="end" className="w-56 mt-2 bg-popover shadow-xl border p-1">
             <DropdownMenuLabel className="font-normal px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm group">
               <Link href="/settings/profile" className="flex flex-col space-y-1">
                 <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{me?.first_name || me?.username || 'Usuário'}</span>
@@ -195,9 +195,9 @@ export function Header() {
                   Trocar Empresa
                 </DropdownMenuLabel>
                 <div className="max-h-40 overflow-y-auto px-1 space-y-0.5">
-                  {(companies || []).map((c: any) => (
+                  {(companies || []).map((c: any, idx: number) => (
                     <button
-                      key={c.slug}
+                      key={c.slug || `company-${idx}`}
                       onClick={() => {
                         localStorage.setItem('companySlug', c.slug)
                         window.dispatchEvent(new Event('app-company-changed'))

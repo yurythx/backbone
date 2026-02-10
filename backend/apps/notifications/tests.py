@@ -13,12 +13,11 @@ User = get_user_model()
 @override_settings(CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}})
 class NotificationTests(APITestCase):
     def setUp(self):
-        import apps.notifications.signals # Force signal registration
         self.company = Company.objects.create(name="Notify Corp", slug="notify-corp")
-        self.user1 = User.all_objects.create_user(
+        self.user1 = User.objects.create_user(
             username="user1", email="u1@corp.com", password="pass", company=self.company
         )
-        self.user2 = User.all_objects.create_user(
+        self.user2 = User.objects.create_user(
             username="user2", email="u2@corp.com", password="pass", company=self.company
         )
         self.client.force_authenticate(user=self.user1)
@@ -31,18 +30,19 @@ class NotificationTests(APITestCase):
             title="Test",
             message="Test Msg"
         )
-        res = self.client.get('/api/notifications/')
+        res = self.client.get('/api/notifications/notifications/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data['results']), 1)
+        # res.data is now a list
+        self.assertEqual(len(res.data), 1)
 
     def test_mark_as_read(self):
-        notif = Notification.objects.create(
+        notif = Notification.all_objects.create(
             recipient=self.user1,
             company=self.company,
             title="Read Me",
             message="Msg"
         )
-        res = self.client.post(f'/api/notifications/{notif.id}/mark_as_read/')
+        res = self.client.post(f'/api/notifications/notifications/{notif.id}/mark_as_read/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         notif.refresh_from_db()
         self.assertTrue(notif.is_read)

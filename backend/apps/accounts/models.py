@@ -11,7 +11,9 @@ class TenantUserManager(UserManager):
         qs = super().get_queryset()
         if company:
             return qs.filter(company=company)
-        return qs.none()
+        # Fallback para autenticação e rotas administrativas: 
+        # retorna tudo se não houver contexto, deixando a filtragem para o middleware/permissions
+        return qs
 
 class Role(BaseTenantModel):
     """
@@ -42,19 +44,17 @@ class User(AbstractUser, BaseTenantModel):
         related_name='users'
     )
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True, help_text="Foto de perfil do usuário")
+    last_seen = models.DateTimeField(null=True, blank=True, help_text="Última vez visto online")
 
     # Managers
-    objects = TenantUserManager()
-    all_objects = UserManager()
+    objects = UserManager() # Global manager for Auth (Important for DRF!)
+    tenant_objects = TenantUserManager() # Filtered manager for views
 
     class Meta:
         verbose_name = "User"
         verbose_name_plural = "Users"
-        # Usar o manager global para autenticação (authenticate() usa _default_manager)
-        # Isso permite login sem contexto de tenant pré-definido, se o username for único globalmente.
-        # Se username for único apenas por tenant, a estratégia de login muda.
-        # Assumimos username unique global por enquanto (padrão AbstractUser).
-        default_manager_name = 'all_objects'
+        # Usar o manager global por padrão para compatibilidade
+        default_manager_name = 'objects'
 
 
 class UserThemePreference(models.Model):

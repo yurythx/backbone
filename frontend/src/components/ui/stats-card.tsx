@@ -30,7 +30,7 @@ export function StatsCard({
 }: StatsCardProps) {
     if (isLoading) {
         return (
-            <div className={cn("glass-morphism p-6 rounded-3xl border h-full flex flex-col justify-between", className)}>
+            <div className={cn("glass p-6 rounded-3xl border h-full flex flex-col justify-between", className)}>
                 <div className="flex justify-between items-center mb-4">
                     <Skeleton className="h-12 w-12 rounded-2xl" />
                     <Skeleton className="h-6 w-16 rounded-full" />
@@ -47,7 +47,7 @@ export function StatsCard({
         <motion.div
             whileHover={{ y: -4 }}
             className={cn(
-                "glass-morphism p-6 rounded-3xl shadow-sm border h-full flex flex-col justify-between transition-all hover:shadow-xl hover:shadow-primary/5 group",
+                "glass-card p-6 rounded-3xl shadow-sm border h-full flex flex-col justify-between transition-all hover:shadow-xl hover:shadow-primary/5 group",
                 className
             )}
         >
@@ -60,7 +60,7 @@ export function StatsCard({
                         "flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full",
                         trend.isPositive ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
                     )}>
-                        {trend.isPositive ? <ArrowUpRight className="h-3.3 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                        {trend.isPositive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
                         {trend.value}%
                     </div>
                 )}

@@ -8,6 +8,7 @@ class MediaViewSet(viewsets.ModelViewSet):
     serializer_class = MediaSerializer
     parser_classes = (parsers.MultiPartParser, parsers.FormParser)
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         # The TenantMiddleware/BaseTenantModel usually handles this, 

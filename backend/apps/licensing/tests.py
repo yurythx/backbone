@@ -25,8 +25,9 @@ class LicensingTests(TestCase):
     def test_list_plans(self):
         response = self.client.get('/api/licensing/plans/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-        self.assertEqual(response.data['results'][0]['name'], "Pro Plan")
+        # non-paginated
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['name'], "Pro Plan")
 
     def test_assign_license(self):
         # Assign license to company

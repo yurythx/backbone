@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { useModules } from "@/hooks/use-modules"
+import { useTheme } from "@/components/theme-provider"
 
 interface SidebarItem {
     title: string
@@ -30,6 +31,7 @@ export function MobileNav() {
     const [isOpen, setIsOpen] = React.useState(false)
     const pathname = usePathname()
     const { isModuleActive } = useModules()
+    const { logo, companyName } = useTheme()
 
     // Close menu when route changes
     React.useEffect(() => {
@@ -66,7 +68,7 @@ export function MobileNav() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={() => setIsOpen(false)}
-                            className="fixed inset-0 bg-background/95 backdrop-blur-sm z-[100]"
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
                         />
 
                         {/* Content */}
@@ -75,14 +77,22 @@ export function MobileNav() {
                             animate={{ x: 0 }}
                             exit={{ x: "-100%" }}
                             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                            className="fixed inset-y-0 left-0 w-full bg-background border-r z-[101] shadow-2xl flex flex-col p-6"
+                            className="fixed inset-y-0 left-0 w-3/4 max-w-sm bg-background border-r z-[101] shadow-2xl flex flex-col p-6"
                         >
                             <div className="flex items-center justify-between mb-8">
-                                <div className="flex items-center gap-2">
-                                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">
-                                        B
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center">
+                                       {logo ? (
+                                         <img src={logo} alt={companyName || "Logo"} className="h-full w-full object-contain" />
+                                       ) : (
+                                         <div className="h-full w-full rounded-lg bg-primary/20 flex items-center justify-center">
+                                            <span className="text-xl">🦴</span>
+                                         </div>
+                                       )}
                                     </div>
-                                    <span className="text-xl font-bold tracking-tight">Backbone</span>
+                                    <span className="text-lg font-bold tracking-tight truncate max-w-[150px]">
+                                        {companyName || "Backbone"}
+                                    </span>
                                 </div>
                                 <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} aria-label="Fechar menu">
                                     <X className="h-5 w-5" />

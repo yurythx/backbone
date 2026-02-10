@@ -20,7 +20,7 @@ export function EmptyState({
     className,
 }: EmptyStateProps) {
     return (
-        <div className={cn("flex flex-col items-center justify-center py-16 px-4 text-center glass-morphism rounded-3xl border-dashed border-2", className)}>
+        <div className={cn("flex flex-col items-center justify-center py-16 px-4 text-center glass rounded-3xl border-dashed border-2", className)}>
             <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
