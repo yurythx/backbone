@@ -195,12 +195,38 @@ npm run test:e2e
 
 ## 📦 Deployment
 
-### Production (Cloudflare Tunnel)
-See [DEPLOY_CLOUDFLARE.md](DEPLOY_CLOUDFLARE.md) for detailed instructions.
+### Production (Automated Script)
+
+For a quick and automated deployment on a VPS (Ubuntu/Debian), use the included `deploy.sh` script.
+
+1. **Configure Environment**:
+   Copy the example config and fill in your details:
+   ```bash
+   cp .env.prod.example .env
+   nano .env
+   ```
+
+2. **Run Deployment**:
+   Give execution permissions and run the script:
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh
+   ```
+
+   This script will automatically:
+   - Backup the database (if running)
+   - Pull the latest code
+   - Rebuild containers
+   - Run migrations and collect static files
+   - Seed initial data
+
+### Production (Manual / Cloudflare Tunnel)
+See [DEPLOY_CLOUDFLARE.md](DEPLOY_CLOUDFLARE.md) for detailed instructions on manual deployment or using Cloudflare Tunnels.
 
 ```bash
 # Build production images
 docker-compose -f docker-compose.prod.yml build
+
 
 # Deploy
 docker-compose -f docker-compose.prod.yml up -d
