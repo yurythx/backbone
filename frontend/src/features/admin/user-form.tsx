@@ -42,8 +42,8 @@ export function UserForm({ initialData, onSuccess, onCancel }: UserFormProps) {
     defaultValues: {
       username: initialData?.username || "",
       email: initialData?.email || "",
-      first_name: initialData?.first_name || "",
-      last_name: initialData?.last_name || "",
+      first_name: initialData?.firstName || "",
+      last_name: initialData?.lastName || "",
       password: "",
     },
   })

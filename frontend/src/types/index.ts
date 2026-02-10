@@ -28,6 +28,7 @@ export interface Contact {
   group_names: string[];
   is_staff: boolean;
   avatar_url?: string | null;
+  last_seen?: string | null;
 }
 
 export interface MessageReaction {
@@ -42,6 +43,7 @@ export interface Message {
   id: number;
   content: string;
   sender: number;
+  sender_username?: string;
   conversation: number;
   created_at: string;
   file_url?: string;

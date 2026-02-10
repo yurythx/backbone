@@ -84,9 +84,8 @@ export function ContactList({ onSelectContact, selectedContactId }: ContactListP
     if (!contact) return false;
     const searchLower = search.toLowerCase();
     const username = contact.username ? contact.username.toLowerCase() : '';
-    const firstName = contact.first_name ? contact.first_name.toLowerCase() : '';
-    const lastName = contact.last_name ? contact.last_name.toLowerCase() : '';
-    const fullName = `${firstName} ${lastName}`.trim();
+    // Use username as fallback since Contact doesn't guarantee first_name/last_name
+    const fullName = contact.username.toLowerCase();
     
     return username.includes(searchLower) || fullName.includes(searchLower);
   })
@@ -168,10 +167,10 @@ export function ContactList({ onSelectContact, selectedContactId }: ContactListP
                                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer w-full"
                                      >
                                          <Avatar className="h-6 w-6">
-                                            <AvatarImage src={contact.avatar || undefined} />
+                                            <AvatarImage src={contact.avatar_url || undefined} />
                                             <AvatarFallback>{contact.username.substring(0, 2).toUpperCase()}</AvatarFallback>
                                          </Avatar>
-                                         {contact.first_name ? `${contact.first_name} ${contact.last_name}` : contact.username}
+                                         {contact.username}
                                      </label>
                                  </div>
                              ))}
@@ -215,7 +214,7 @@ export function ContactList({ onSelectContact, selectedContactId }: ContactListP
               >
                 <div className="relative">
                   <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
-                    <AvatarImage src={contact.avatar || undefined} />
+                    <AvatarImage src={contact.avatar_url || undefined} />
                     <AvatarFallback className="font-bold text-xs bg-primary/10 text-primary">
                       {contact.username.substring(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -228,7 +227,7 @@ export function ContactList({ onSelectContact, selectedContactId }: ContactListP
                 <div className="flex flex-col items-start ml-3 flex-1 min-w-0">
                   <div className="flex justify-between items-center w-full">
                     <span className="font-semibold text-sm truncate">
-                      {contact.first_name ? `${contact.first_name} ${contact.last_name}` : contact.username}
+                      {contact.username}
                     </span>
                     {/* Placeholder for last message time */}
                     {/* <span className="text-[10px] text-muted-foreground">12:30</span> */}

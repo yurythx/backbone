@@ -39,11 +39,11 @@ export default function MessengerPage() {
                  setSelectedContact({
                      id: otherParticipant.id,
                      username: otherParticipant.username,
-                     first_name: otherParticipant.first_name,
-                     last_name: otherParticipant.last_name,
                      email: otherParticipant.email,
-                     avatar: otherParticipant.avatar,
-                     is_online: false // Info de online viria de outro lugar
+                     avatar_url: otherParticipant.avatar,
+                     is_online: false, // Info de online viria de outro lugar
+                     group_names: [], // Adicionando propriedade obrigatória
+                     is_staff: false  // Adicionando propriedade obrigatória
                  })
              }
           }

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 
@@ -43,7 +43,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
   const topRef = React.useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const [sendError, setSendError] = React.useState<string | null>(null)
-  const lastPayloadRef = React.useRef<{ content: string; file?: File | null } | null>(null)
+  const lastPayloadRef = React.useRef<{ content: string; file?: File | null; replyToId?: number } | null>(null)
   const retryCountRef = React.useRef<number>(0)
   const BASE_RETRY_DELAY_MS = 1000
   const [isDragging, setIsDragging] = React.useState(false)
@@ -115,6 +115,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
 
   // Effect for sound notification
   React.useEffect(() => {
+      // @ts-ignore
       if (lastMessage && lastMessage.sender !== currentUser?.id) {
           playNotificationSound();
       }
@@ -424,7 +425,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <h3 className="font-semibold text-sm leading-none">{contact.first_name ? `${contact.first_name} ${contact.last_name}` : contact.username}</h3>
+            <h3 className="font-semibold text-sm leading-none">{contact.username}</h3>
             {contact.is_online ? (
                <span className="text-[10px] text-green-500 font-medium mt-1 flex items-center gap-1">
                  <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -868,7 +869,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0 border-none bg-transparent shadow-none" side="top" align="end">
-                        <EmojiPicker onEmojiClick={handleEmojiClick} lazyLoadEmojis={true} theme="auto" />
+                        <EmojiPicker onEmojiClick={handleEmojiClick} lazyLoadEmojis={true} theme={Theme.AUTO} />
                     </PopoverContent>
                 </Popover>
 
