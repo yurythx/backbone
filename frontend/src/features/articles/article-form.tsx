@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -22,13 +23,14 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, ArrowLeft, Image as ImageIcon, X, Globe, MessageSquareQuote, Layout, CheckCircle2, XCircle, Send, Sparkles } from "lucide-react"
+import { Loader2, ArrowLeft, Image as ImageIcon, X, Globe, MessageSquareQuote, Layout, CheckCircle2, XCircle, Send, Sparkles, Link as LinkIcon, Lock } from "lucide-react"
 import { RichEditor } from "@/components/ui/rich-editor"
 import { PreviewDialog } from "@/components/cms/preview-dialog"
 import { MediaDialog } from "@/features/media/media-dialog"
 import { notify } from "@/lib/notifications"
 import { ArticleHistory } from "@/features/articles/article-history"
 import { ArticleComments } from "@/features/articles/article-comments"
+import { slugify } from "@/lib/utils"
 
 const formSchema = z.object({
   title: z.string().min(5, "O título deve ter pelo menos 5 caracteres."),
@@ -69,6 +71,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
     }
   })
 
+  const [lockSlug, setLockSlug] = useState(!initialData)
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema) as any,
     defaultValues: {
@@ -85,6 +89,16 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       tags: initialData?.tags || [],
     },
   })
+
+  // Auto-generate slug from title
+  useEffect(() => {
+    if (lockSlug && !initialData) {
+      const title = form.watch("title")
+      if (title) {
+        form.setValue("slug", slugify(title))
+      }
+    }
+  }, [form.watch("title"), lockSlug, initialData, form])
 
   const reviewMutation = useMutation({
     mutationFn: async ({ action, id }: { action: 'submit' | 'publish' | 'reject', id: number }) => {
@@ -278,12 +292,39 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
               </div>
 
               <div className="grid grid-cols-1 gap-6 p-6 rounded-2xl bg-muted/30 border">
+                {/* Google Search Preview */}
+                <div className="p-4 bg-white dark:bg-black border rounded-lg shadow-sm">
+                  <p className="text-xs text-muted-foreground mb-2 font-medium">Pré-visualização no Google</p>
+                  <div className="font-sans">
+                    <div className="flex items-center gap-2 mb-1">
+                       <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] text-gray-500 overflow-hidden">
+                          {form.watch("image") ? <img src={form.watch("image")} className="h-full w-full object-cover" /> : <Globe className="h-4 w-4" />}
+                       </div>
+                       <div className="flex flex-col">
+                          <span className="text-sm text-gray-800 dark:text-gray-200 leading-tight">Seu Site</span>
+                          <span className="text-xs text-gray-500 leading-tight">{`https://seusite.com/blog/${form.watch("slug") || 'slug-do-artigo'}`}</span>
+                       </div>
+                    </div>
+                    <h3 className="text-xl text-[#1a0dab] dark:text-[#8ab4f8] hover:underline cursor-pointer truncate font-medium">
+                      {form.watch("meta_title") || form.watch("title") || "Título do Artigo"}
+                    </h3>
+                    <p className="text-sm text-[#4d5156] dark:text-[#bdc1c6] line-clamp-2 mt-1">
+                      {form.watch("meta_description") || form.watch("excerpt") || "A descrição do seu artigo aparecerá aqui nos resultados de busca..."}
+                    </p>
+                  </div>
+                </div>
+
                 <FormField
                   control={form.control}
                   name="meta_title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-semibold">Título SEO (Meta Title)</FormLabel>
+                      <div className="flex justify-between">
+                        <FormLabel className="font-semibold">Título SEO (Meta Title)</FormLabel>
+                        <span className={`text-xs ${field.value?.length > 60 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                          {field.value?.length || 0}/60
+                        </span>
+                      </div>
                       <FormControl>
                         <Input placeholder="Título como aparecerá no Google" className="bg-background h-11" {...field} />
                       </FormControl>
@@ -298,7 +339,12 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   name="meta_description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-semibold">Descrição SEO (Meta Description)</FormLabel>
+                      <div className="flex justify-between">
+                         <FormLabel className="font-semibold">Descrição SEO (Meta Description)</FormLabel>
+                         <span className={`text-xs ${field.value?.length > 160 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                            {field.value?.length || 0}/160
+                         </span>
+                      </div>
                       <FormControl>
                         <Textarea placeholder="Breve resumo para os resultados de busca..." className="bg-background h-24 resize-none" {...field} />
                       </FormControl>
@@ -369,10 +415,27 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   name="slug"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">URL Amigável (Slug)</FormLabel>
+                      <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                        <span>URL Amigável (Slug)</span>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 w-6 p-0" 
+                          onClick={() => setLockSlug(!lockSlug)}
+                          title={lockSlug ? "Desbloquear edição manual" : "Bloquear e gerar automaticamente"}
+                        >
+                           {lockSlug ? <Lock className="h-3 w-3" /> : <LinkIcon className="h-3 w-3" />}
+                        </Button>
+                      </FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Input placeholder="slug-do-artigo" className="h-11 bg-background font-mono text-sm" {...field} />
+                          <Input 
+                            placeholder="slug-do-artigo" 
+                            className={`h-11 bg-background font-mono text-sm ${lockSlug ? 'opacity-80' : ''}`} 
+                            {...field} 
+                            readOnly={lockSlug}
+                          />
                         </div>
                       </FormControl>
                       <FormMessage />
