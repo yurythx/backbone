@@ -23,30 +23,36 @@ class Command(BaseCommand):
                 cat_name = f'Categoria {i}'
                 cat_slug = slugify(cat_name)
                 
-                cat, created = Category.objects.get_or_create(
-                    company=company,
-                    slug=cat_slug,
-                    defaults={'name': cat_name}
-                )
-                if created:
-                    self.stdout.write(self.style.SUCCESS(f'  [+] Created Category: {cat_name}'))
-                else:
-                    self.stdout.write(f'  [.] Category {cat_name} already exists')
+                try:
+                    cat, created = Category.objects.get_or_create(
+                        company=company,
+                        slug=cat_slug,
+                        defaults={'name': cat_name}
+                    )
+                    if created:
+                        self.stdout.write(self.style.SUCCESS(f'  [+] Created Category: {cat_name}'))
+                    else:
+                        self.stdout.write(f'  [.] Category {cat_name} already exists')
+                except Exception as e:
+                    self.stdout.write(self.style.WARNING(f'  [!] Failed to process Category {cat_name}: {str(e)}'))
 
             # Create 3 Tags
             for i in range(1, 4):
                 tag_name = f'Tag {i}'
                 tag_slug = slugify(tag_name)
                 
-                tag, created = Tag.objects.get_or_create(
-                    company=company,
-                    slug=tag_slug,
-                    defaults={'name': tag_name}
-                )
-                if created:
-                    self.stdout.write(self.style.SUCCESS(f'  [+] Created Tag: {tag_name}'))
-                else:
-                     self.stdout.write(f'  [.] Tag {tag_name} already exists')
+                try:
+                    tag, created = Tag.objects.get_or_create(
+                        company=company,
+                        slug=tag_slug,
+                        defaults={'name': tag_name}
+                    )
+                    if created:
+                        self.stdout.write(self.style.SUCCESS(f'  [+] Created Tag: {tag_name}'))
+                    else:
+                         self.stdout.write(f'  [.] Tag {tag_name} already exists')
+                except Exception as e:
+                    self.stdout.write(self.style.WARNING(f'  [!] Failed to process Tag {tag_name}: {str(e)}'))
 
         self.stdout.write(self.style.SUCCESS('CMS seeding completed!'))
         

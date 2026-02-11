@@ -73,7 +73,7 @@ export default function LoginPage() {
             <H2 className="text-2xl border-none">{previewCompany ? previewCompany.name : "Login"}</H2>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 text-center">
             <h1 className="text-3xl font-bold tracking-tight">{previewCompany ? "Login Corporativo" : "Acesso ao Sistema"}</h1>
             <p className="text-muted-foreground">
               {previewCompany ? `Entre com suas credenciais do ${previewCompany.name}` : "Selecione sua empresa e insira suas credenciais"}
@@ -83,13 +83,6 @@ export default function LoginPage() {
           <div className="bg-card border rounded-2xl p-6 shadow-sm">
             <LoginForm onCompanyChange={(company) => setPreviewCompany(company)} />
           </div>
-
-          <p className="text-center text-sm text-muted-foreground">
-            Ainda não tem uma conta?{" "}
-            <Link href="/register" className="font-semibold text-primary hover:underline">
-              Cadastre sua empresa
-            </Link>
-          </p>
         </div>
       </div>
     </div>
