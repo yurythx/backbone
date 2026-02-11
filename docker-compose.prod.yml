@@ -146,6 +146,7 @@ services:
     container_name: backbone_frontend
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - API_URL_INTERNAL=${API_URL_INTERNAL}
       - NODE_ENV=production
     ports:
       - "3005:3005" # Exposto para Cloudflare Tunnel
