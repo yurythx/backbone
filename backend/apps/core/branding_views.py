@@ -38,10 +38,16 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     def _get_current_branding(self):
         company = get_current_company()
         if not company:
-            return Response(
-                {'error': 'No company context found'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # Fallback para branding do sistema (se não houver tenant identificado)
+            return Response({
+                'company_name': 'Backbone SaaS',
+                'primary_color': '#000000',
+                'secondary_color': '#ffffff',
+                'logo': None,
+                'icon': None,
+                'theme_palette': 'slate-gray',
+                'custom_css': ''
+            })
         
         branding, created = TenantBranding.objects.get_or_create(
             company=company,

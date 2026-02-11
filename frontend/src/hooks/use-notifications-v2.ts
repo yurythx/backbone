@@ -54,9 +54,11 @@ export function useNotifications() {
         const token = localStorage.getItem('accessToken')
         if (!token) return
 
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const host = (window as any).process?.env?.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') ||
-            (process.env.NEXT_PUBLIC_API_URL || 'localhost:8005').replace(/^https?:\/\//, '')
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005';
+        const isSecure = apiUrl.startsWith('https') || window.location.protocol === 'https:';
+        const protocol = isSecure ? 'wss:' : 'ws:';
+        const host = apiUrl.replace(/^https?:\/\//, '');
+        
         const wsUrl = `${protocol}//${host}/ws/notifications/?token=${token}`
 
         const ws = new WebSocket(wsUrl)
