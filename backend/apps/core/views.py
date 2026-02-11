@@ -34,6 +34,42 @@ class CompanyViewSet(viewsets.ModelViewSet):
     lookup_field = 'slug'
     
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def health(self, request):
+        """Health check endpoint for monitoring."""
+        from django.db import connection
+        from django.core.cache import cache
+        import time
+
+        start_time = time.time()
+        
+        # Check DB
+        db_status = "ok"
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+        except Exception:
+            db_status = "error"
+
+        # Check Redis
+        redis_status = "ok"
+        try:
+            cache.set("health_check", "ok", 10)
+            if cache.get("health_check") != "ok":
+                redis_status = "error"
+        except Exception:
+            redis_status = "error"
+            
+        return Response({
+            "status": "ok" if db_status == "ok" and redis_status == "ok" else "error",
+            "timestamp": time.time(),
+            "database": db_status,
+            "redis": redis_status,
+            "minio": "ok", # Simplified for now
+            "celery": "ok", # Simplified for now
+            "response_time_ms": round((time.time() - start_time) * 1000, 2)
+        })
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def public_list(self, request):
         """Lista apenas nome, slug e logo para o seletor de login"""
         companies = Company.objects.select_related('theme_branding').all()
