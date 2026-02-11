@@ -14,8 +14,6 @@ SECRET_KEY = env("SECRET_KEY", default="django-insecure-508()j_z$te^bm*y#kqjz&)q
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 
-CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["http://localhost:3005"])
-
 INSTALLED_APPS = [
     "daphne",
     "django.contrib.admin",
@@ -146,10 +144,28 @@ else:
     CORS_ALLOWED_ORIGINS = env.list(
         "CORS_ALLOWED_ORIGINS",
         default=[
-            "https://yourdomain.com",
-            "https://www.yourdomain.com",
+            "https://backbone.projetoravenna.cloud",
+            "http://192.168.1.121:3005",
+            "http://localhost:3005",
         ]
     )
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[
+    "https://backbone.projetoravenna.cloud",
+    "https://api.backbone.projetoravenna.cloud",
+    "http://192.168.1.121:3005",
+    "http://192.168.1.121:8005",
+    "http://localhost:3005",
+    "http://localhost:8005",
+])
+
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
+    "api.backbone.projetoravenna.cloud",
+    "backbone.projetoravenna.cloud",
+    "192.168.1.121",
+    "localhost",
+    "127.0.0.1"
+])
 
 CORS_ALLOW_HEADERS = [
     "accept",
@@ -176,10 +192,10 @@ if not DEBUG:
 USE_S3 = env.bool("USE_S3", default=False)
 
 if USE_S3:
-    AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
-    AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
-    AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
-    AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL")
+    AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="minioadmin")
+    AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="minioadmin")
+    AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="backbone-media")
+    AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default="http://minio:9000")
     AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
     AWS_S3_SIGNATURE_VERSION = "s3v4"
     
