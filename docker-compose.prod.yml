@@ -63,7 +63,11 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - USE_S3=${USE_S3:-True}
-      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-backbone-media}
+      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://minio:9000}
+      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
@@ -98,6 +102,12 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
+      - USE_S3=${USE_S3:-True}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-backbone-media}
+      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://minio:9000}
+      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
     depends_on:
       - db
       - redis
@@ -116,6 +126,12 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
+      - USE_S3=${USE_S3:-True}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-backbone-media}
+      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://minio:9000}
+      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
     depends_on:
       - db
       - redis
