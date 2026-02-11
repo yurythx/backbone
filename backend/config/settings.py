@@ -216,7 +216,13 @@ if USE_S3:
     AWS_MEDIA_LOCATION = 'media'
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     
-    MEDIA_URL = f'{AWS_S3_ENDPOINT_URL}/{AWS_STORAGE_BUCKET_NAME}/{AWS_MEDIA_LOCATION}/'
+    # Configuração para Proxy de Media (MinIO interno -> API externa)
+    # Gera URLs como: https://api.backbone.../media/caminho/arquivo.jpg
+    # O endpoint /media/ na API fará o proxy para o MinIO
+    AWS_S3_CUSTOM_DOMAIN = f'{ALLOWED_HOSTS[0]}/media' 
+    AWS_QUERYSTRING_AUTH = False # Não assinar URLs (o proxy autentica ou é público)
+    
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 else:
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
