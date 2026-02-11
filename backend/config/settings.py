@@ -164,6 +164,10 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[
     "http://localhost:8005",
 ])
 
+# Trust X-Forwarded-Host from Cloudflare/Proxy
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
     "api.backbone.projetoravenna.cloud",
     "backbone.projetoravenna.cloud",
