@@ -82,10 +82,11 @@ export default function DashboardPage() {
           <SlideUp delay={0.4}>
             <StatItem
               title="Status do Sistema"
-              value={stats?.system_status?.api_uptime || "100%"}
+              value={stats?.system_status?.api_uptime || "Online"}
               label="API Uptime"
               icon={Zap}
               isStatus
+              statusColor={stats?.system_status?.api_uptime ? "text-green-500" : "text-red-500"}
             />
           </SlideUp>
         </section>
@@ -182,7 +183,7 @@ export default function DashboardPage() {
   )
 }
 
-function StatItem({ title, value, growth, icon: Icon, isStatus, label }: any) {
+function StatItem({ title, value, growth, icon: Icon, isStatus, label, statusColor }: any) {
   return (
     <Card className="glass-card relative overflow-hidden group hover:shadow-lg transition-all duration-500 border-border/50">
       <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -190,11 +191,14 @@ function StatItem({ title, value, growth, icon: Icon, isStatus, label }: any) {
       </div>
       <CardHeader className="pb-2">
         <CardDescription className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground">{title}</CardDescription>
-        <CardTitle className="text-4xl font-black tracking-tight flex items-baseline gap-2">
+        <CardTitle className={cn("text-4xl font-black tracking-tight flex items-baseline gap-2", statusColor)}>
+            {isStatus && (
+                <span className={cn("inline-block w-4 h-4 rounded-full mr-2", value === "Online" || value === "100%" ? "bg-green-500 animate-pulse" : "bg-red-500")} />
+            )}
           {value}
           {growth !== undefined && (
             <span className={cn(
-              "text-xs font-bold px-1.5 py-0.5 rounded-md",
+              "text-xs font-bold px-1.5 py-0.5 rounded-md text-foreground",
               growth >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
             )}>
               {growth >= 0 ? '+' : ''}{growth}%
