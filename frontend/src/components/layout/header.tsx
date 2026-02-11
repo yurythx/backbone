@@ -180,7 +180,7 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 mt-2 bg-popover shadow-xl border p-1">
             <DropdownMenuLabel className="font-normal px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm group">
-              <Link href="/settings/profile" className="flex flex-col space-y-1">
+              <Link href="/settings?tab=profile" className="flex flex-col space-y-1">
                 <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{me?.first_name || me?.username || 'Usuário'}</span>
                 <span className="text-xs leading-none text-muted-foreground">{me?.email || ''}</span>
               </Link>
