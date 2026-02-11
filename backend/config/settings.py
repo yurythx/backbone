@@ -251,7 +251,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
-    "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}", engine='django.db.backends.postgresql')
+    "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
 }
 
 # Redis Channel Layer & Cache
