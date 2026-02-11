@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import CompanyViewSet, AuditLogViewSet, DashboardStatsView, SitemapView, RobotsView
 from .branding_views import TenantBrandingViewSet
-from .health import health_check
+from .health_view import health_check
 
 router = DefaultRouter()
 router.register(r'companies', CompanyViewSet)
