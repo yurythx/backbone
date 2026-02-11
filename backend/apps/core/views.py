@@ -36,6 +36,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def health(self, request):
         """Health check endpoint for monitoring."""
+        print("DEBUG: HEALTH CHECK V2 - SIMPLIFIED MINIO") # Debug log to verify code update
         from django.db import connection
         from django.core.cache import cache
         import time
