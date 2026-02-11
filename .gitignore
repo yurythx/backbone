@@ -21,7 +21,7 @@ staticfiles/
 *.log
 
 # Environments & secrets
-# .env  <-- Comentado temporariamente para deploy
+# .env  <-- TEMPORARY: Allow .env in git for easier deployment
 .env.*
 venv/
 .venv/
