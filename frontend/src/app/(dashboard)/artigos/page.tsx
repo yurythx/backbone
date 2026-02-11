@@ -59,22 +59,6 @@ function ArtigosPageContent() {
                     <h1 className="text-4xl font-extrabold tracking-tight">Centro de Conteúdo</h1>
                     <p className="text-muted-foreground text-lg">Gerencie artigos, notícias e organização temática.</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        className={`px-4 py-2 rounded-xl border ${view === 'list' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
-                        onClick={() => setView('list')}
-                        aria-label="Ver como tabela"
-                    >
-                        Tabela
-                    </button>
-                    <button
-                        className={`px-4 py-2 rounded-xl border ${view === 'blog' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
-                        onClick={() => setView('blog')}
-                        aria-label="Ver como blog"
-                    >
-                        Blog
-                    </button>
-                </div>
             </div>
 
             <Tabs defaultValue="articles" className="w-full">
@@ -85,16 +69,8 @@ function ArtigosPageContent() {
                 </TabsList>
 
                 <TabsContent value="articles" className="mt-6">
-                    {view === 'list' && (
-                        <ArticleList onCreate={handleCreate} onEdit={handleEdit} />
-                    )}
-                    {view === 'blog' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {(Array.isArray(publishedArticles) ? publishedArticles : []).map((article) => (
-                                <PublicArticleCard key={article.id} article={article} />
-                            ))}
-                        </div>
-                    )}
+                    <ArticleList onCreate={handleCreate} onEdit={handleEdit} />
+                    
                     {(view === 'create' || view === 'edit') && (
                         <ArticleForm
                             initialData={selectedArticle}
