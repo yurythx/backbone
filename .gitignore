@@ -21,7 +21,7 @@ staticfiles/
 *.log
 
 # Environments & secrets
-.env
+# .env  <-- Comentado temporariamente para deploy
 .env.*
 venv/
 .venv/
