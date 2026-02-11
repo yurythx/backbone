@@ -11,6 +11,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-508()j_z$te^bm*y#kqjz&)q4n-hz)&hln4d^5-)2-q+gy9$cg")
+
+# Ensure SECRET_KEY is not empty, falling back to a hardcoded default only if absolutely necessary for build
+if not SECRET_KEY:
+    SECRET_KEY = "django-insecure-fallback-key-for-build-process-only"
+
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 
