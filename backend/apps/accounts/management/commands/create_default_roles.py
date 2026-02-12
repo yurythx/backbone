@@ -18,23 +18,35 @@ class Command(BaseCommand):
         total_updated = 0
         
         with transaction.atomic():
-            for company in companies:
-                self.stdout.write(f'Processando empresa: {company.name} ({company.domain})')
-                
-                for role_name, role_data in DEFAULT_ROLES.items():
-                    role, created = Role.objects.update_or_create(
-                        company=company,
-                        name=role_name,
-                        defaults={
-                            'description': role_data['description'],
-                            'permissions': role_data['permissions'],
-                            # Papéis padrão podem ser marcados como sistema se quisermos impedir deleção
-                            # 'is_system_role': True 
-                        }
-                    )
-                    
-                    status = "Criado" if created else "Atualizado"
-                    self.stdout.write(f'  - Role {role_name}: {status}')
-                    total_updated += 1
+            pass # Just opening a transaction block but doing nothing inside to clear previous errors if any? No.
+        
+        # We need to handle each company/role atomically if one fails to avoid breaking the whole loop
+        for company in companies:
+            self.stdout.write(f'Processando empresa: {company.name} ({company.domain})')
+            
+            for role_name, role_data in DEFAULT_ROLES.items():
+                try:
+                    with transaction.atomic():
+                        # Use get_or_create to atomically handle existence check and creation
+                        role, created = Role.objects.get_or_create(
+                            company=company,
+                            name=role_name,
+                            defaults={
+                                'description': role_data['description'],
+                                'permissions': role_data['permissions']
+                            }
+                        )
+                        
+                        if not created:
+                            # Update existing role permissions if it already existed
+                            role.description = role_data['description']
+                            role.permissions = role_data['permissions']
+                            role.save()
+                        
+                        status = "Criado" if created else "Atualizado"
+                        self.stdout.write(f'  - Role {role_name}: {status}')
+                        total_updated += 1
+                except Exception as e:
+                     self.stdout.write(self.style.ERROR(f'  [!] Failed to process Role {role_name} for {company.name}: {e}'))
 
         self.stdout.write(self.style.SUCCESS(f'Concluído! Total de papéis processados: {total_updated}'))

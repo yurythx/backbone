@@ -9,11 +9,12 @@ AVAILABLE_PERMISSIONS = {
     'messenger.view': 'Acesso ao Chat',
     'admin.user_manage': 'Gerenciar Equipe',
     'admin.smtp_manage': 'Configurações de E-mail',
+    'admin.view_dashboard': 'Acessar Painel Administrativo',
 }
 
 DEFAULT_ROLES = {
     'Administrador': {
-        'description': 'Acesso total a todos os recursos do sistema.',
+        'description': 'Acesso total a todos os recursos da empresa.',
         'permissions': [
             'articles.article_manage',
             'articles.category_manage',
@@ -21,21 +22,24 @@ DEFAULT_ROLES = {
             'messenger.view',
             'admin.user_manage',
             'admin.smtp_manage',
+            'admin.view_dashboard', # Nova permissão para ver o painel
         ]
     },
     'Editor': {
-        'description': 'Pode criar e gerenciar conteúdo, mas sem acesso a configurações administrativas.',
+        'description': 'Pode criar e gerenciar conteúdo (Artigos e Páginas), mas sem acesso a configurações administrativas.',
         'permissions': [
             'articles.article_manage',
             'articles.category_manage',
             'cms.page_manage',
             'messenger.view',
+            'admin.view_dashboard', # Editor também precisa ver o dashboard para acessar as ferramentas de edição
         ]
     },
     'Membro': {
-        'description': 'Acesso básico para visualização e comunicação.',
+        'description': 'Acesso apenas ao Messenger e visualização de conteúdo.',
         'permissions': [
             'messenger.view',
+            # Não tem 'admin.view_dashboard', então o frontend deve bloquear o acesso ao painel
         ]
     }
 }

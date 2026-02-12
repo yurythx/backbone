@@ -1,6 +1,9 @@
 from rest_framework import viewsets, permissions, status, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import models
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from apps.module_manager.permissions import HasModuleAccess
 from apps.accounts.permissions import HasRolePermission
@@ -13,6 +16,47 @@ from .serializers import (
 )
 from .services import ArticleService
 from .filters import ArticleFilter
+
+@extend_schema_view(
+    list=extend_schema(tags=['Public Articles'], description='Lista artigos públicos sem necessidade de autenticação'),
+    retrieve=extend_schema(tags=['Public Articles'], description='Detalhe de artigo público'),
+)
+@method_decorator(cache_page(60 * 15), name='list')  # Cache de listagem por 15 minutos
+@method_decorator(cache_page(60 * 15), name='retrieve')  # Cache de detalhe por 15 minutos
+class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet público - sem autenticação requerida.
+    Retorna apenas artigos marcados como públicos (is_public=True) e publicados.
+    """
+    serializer_class = ArticleSerializer
+    permission_classes = [permissions.AllowAny]
+    lookup_field = 'slug'
+    filterset_fields = ['category', 'tags']
+    search_fields = ['title', 'content', 'excerpt']
+    ordering_fields = ['published_at', 'created_at']
+    ordering = ['-published_at']
+    
+    def get_queryset(self):
+        """
+        Retorna apenas artigos públicos e publicados.
+        Não requer autenticação ou filtro por tenant.
+        """
+        return Article.objects.filter(
+            is_public=True,
+            status=Article.STATUS_PUBLISHED,
+            published_at__isnull=False
+        ).select_related('category', 'author', 'company').prefetch_related('tags').order_by('-published_at')
+    
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Detalhe de artigo público com registro de visualização.
+        """
+        instance = self.get_object()
+        # Registrar visualização mesmo para usuários não autenticados
+        user = request.user if request.user.is_authenticated else None
+        ArticleService.record_view(user, instance, request.META.get('REMOTE_ADDR'))
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 @extend_schema_view(
     list=extend_schema(tags=['Articles']),
@@ -47,9 +91,9 @@ class CategoryViewSet(viewsets.ModelViewSet):
         instance.delete()
     
     def get_permissions(self):
-        base = [permissions.IsAuthenticatedOrReadOnly(), HasModuleAccess()]
         if self.request.method in permissions.SAFE_METHODS:
-            return base
+            return [permissions.AllowAny()]
+        base = [permissions.IsAuthenticated(), HasModuleAccess()]
         return base + [HasRolePermission()]
 
 @extend_schema_view(
@@ -85,9 +129,9 @@ class TagViewSet(viewsets.ModelViewSet):
         instance.delete()
     
     def get_permissions(self):
-        base = [permissions.IsAuthenticatedOrReadOnly(), HasModuleAccess()]
         if self.request.method in permissions.SAFE_METHODS:
-            return base
+            return [permissions.AllowAny()]
+        base = [permissions.IsAuthenticatedOrReadOnly(), HasModuleAccess()]
         return base + [HasRolePermission()]
 
 @extend_schema_view(
@@ -112,19 +156,43 @@ class ArticleViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'title']
 
-    def get_queryset(self):
-        return Article.objects.filter(
-            company=self.request.company
-        ).select_related('category', 'author').prefetch_related('tags').order_by('-created_at')
-
     def get_permissions(self):
         """
-        Permite leitura para todos, mas exige Role específica para escrita e ações admin.
+        Permite leitura para todos (incluindo não logados para endpoints públicos),
+        mas exige Role específica para escrita e ações admin.
         """
-        base = [permissions.IsAuthenticated(), HasModuleAccess()]
+        # Se for GET (list ou retrieve) e não for endpoint de analytics, permite qualquer um (AllowAny)
+        # desde que seja uma rota pública. Mas como o ViewSet é protegido por padrão,
+        # vamos usar AllowAny apenas para GET, mas a query vai filtrar por empresa/publicado.
+        
         if self.request.method in permissions.SAFE_METHODS:
-            return base
+            # Atenção: Se usarmos AllowAny, o request.user pode ser AnonymousUser.
+            # O get_queryset precisa lidar com isso se filtrar por company do user.
+            # No caso público, a company deve vir do header ou slug do artigo.
+            return [permissions.AllowAny()]
+            
+        base = [permissions.IsAuthenticated(), HasModuleAccess()]
         return base + [HasRolePermission()]
+
+    def get_queryset(self):
+        """
+        Retorna artigos baseado na autenticação:
+        - Usuário autenticado: artigos públicos de todos + artigos privados do seu tenant
+        - Usuário anônimo: apenas artigos públicos publicados
+        """
+        # Usuário autenticado: públicos + privados da empresa
+        if self.request.user.is_authenticated:
+            user_company = self.request.company
+            return Article.objects.filter(
+                models.Q(is_public=True) | models.Q(company=user_company)
+            ).select_related('category', 'author', 'company').prefetch_related('tags').order_by('-created_at')
+        
+        # Usuário anônimo: apenas públicos publicados
+        return Article.objects.filter(
+            is_public=True,
+            status=Article.STATUS_PUBLISHED,
+            published_at__isnull=False
+        ).select_related('category', 'author', 'company').prefetch_related('tags').order_by('-published_at')
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

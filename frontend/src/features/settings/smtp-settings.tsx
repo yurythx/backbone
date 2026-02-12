@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import axios from "axios"
 import { api } from "@/lib/axios"
 import { H3, P, Muted } from "@/components/ui/typography"
 import { Button } from "@/components/ui/button"
@@ -32,27 +33,40 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
     })
 
     useEffect(() => {
+        const controller = new AbortController()
+
         const fetchConfig = async () => {
             try {
                 setIsLoading(true)
-                const res = await api.get('/api/core/branding/email_config/')
-                const data = res.data
-                setConfig({
-                    use_custom_smtp: data.use_custom_smtp ?? false,
-                    smtp_host: data.smtp_host ?? "",
-                    smtp_port: data.smtp_port ?? 587,
-                    smtp_user: data.smtp_user ?? "",
-                    smtp_password: data.smtp_password ?? "",
-                    smtp_use_tls: data.smtp_use_tls ?? true,
-                    from_email: data.from_email ?? ""
+                const res = await api.get('/api/core/branding/email_config/', {
+                    signal: controller.signal
                 })
+                const data = res.data
+                if (!controller.signal.aborted) {
+                    setConfig({
+                        use_custom_smtp: data.use_custom_smtp ?? false,
+                        smtp_host: data.smtp_host ?? "",
+                        smtp_port: data.smtp_port ?? 587,
+                        smtp_user: data.smtp_user ?? "",
+                        smtp_password: data.smtp_password ?? "",
+                        smtp_use_tls: data.smtp_use_tls ?? true,
+                        from_email: data.from_email ?? ""
+                    })
+                }
             } catch (error) {
+                if (axios.isCancel(error)) return
                 console.error("Failed to fetch email config", error)
             } finally {
-                setIsLoading(false)
+                if (!controller.signal.aborted) {
+                    setIsLoading(false)
+                }
             }
         }
         fetchConfig()
+
+        return () => {
+            controller.abort()
+        }
     }, [])
 
     const handleSave = async () => {

@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useModules } from "@/hooks/use-modules"
 import { useTheme } from "@/components/theme-provider"
+import { useQuery } from "@tanstack/react-query"
+import { api } from "@/lib/axios"
 import {
   LayoutDashboard,
   MessageSquare,
@@ -17,7 +19,8 @@ import {
   ChevronRight,
   TrendingUp,
   Globe,
-  LogOut
+  LogOut,
+  KeyRound
 } from "lucide-react"
 import { SlideUp } from "@/components/ui/motion"
 import { motion, AnimatePresence } from "framer-motion"
@@ -89,6 +92,11 @@ const sidebarSections: SidebarSection[] = [
         icon: Users,
       },
       {
+        title: "LDAP",
+        href: "/admin/ldap",
+        icon: KeyRound,
+      },
+      {
         title: "Papéis e Permissões",
         href: "/admin/roles",
         icon: Shield,
@@ -112,6 +120,43 @@ export function Sidebar() {
   const { isModuleActive } = useModules()
   const { isSidebarCollapsed, toggleSidebar } = useUIStore()
   const { logo, companyName } = useTheme()
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: async () => (await api.get('/api/accounts/users/me/')).data })
+
+  const userPermissions = me?.role_details?.permissions || []
+  const isSuperuser = me?.is_superuser
+  const isStaff = me?.is_staff // Assuming staff can access basic admin tools or we use permissions strictly
+
+  const hasPermission = (permission: string) => {
+    if (isSuperuser) return true
+    return userPermissions.includes(permission)
+  }
+
+  // Filter sections based on permissions
+  const filteredSections = sidebarSections.map(section => {
+    const filteredItems = section.items.filter(item => {
+      // Module check
+      if (item.module && !isModuleActive(item.module)) return false
+
+      // Permission check for specific items
+      if (item.href.startsWith('/admin')) {
+        // Basic check: if it's an admin route, user needs at least view_dashboard
+        // More specific checks can be added if we map routes to permissions in the sidebar config
+
+        // Specific route checks:
+        if (item.href === '/admin/users' && !hasPermission('admin.user_manage')) return false
+        // Roles and Modules usually only for Super Admin or high level Admin
+        if (item.href === '/admin/roles' && !hasPermission('admin.user_manage')) return false
+        if (item.href === '/admin/modules' && !isSuperuser) return false // Only superuser manages modules globally usually
+
+        // Fallback for general admin access
+        return hasPermission('admin.view_dashboard')
+      }
+
+      return true
+    })
+
+    return { ...section, items: filteredItems }
+  }).filter(section => section.items.length > 0)
 
   return (
     <aside
@@ -122,32 +167,32 @@ export function Sidebar() {
     >
       {/* Header / Logo Area */}
       <div className={cn(
-          "h-16 flex items-center border-b border-border/50 transition-all duration-300",
-          isSidebarCollapsed ? "justify-center px-0" : "px-6"
+        "h-16 flex items-center border-b border-border/50 transition-all duration-300",
+        isSidebarCollapsed ? "justify-center px-0" : "px-6"
       )}>
-         <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap">
-            {/* Logo Wrapper */}
-            <div className={cn(
-                "flex-shrink-0 transition-all duration-300 flex items-center justify-center",
-                isSidebarCollapsed ? "h-10 w-10" : "h-8 w-8"
-            )}>
-               {logo ? (
-                 <img src={logo} alt={companyName || "Logo"} className="h-full w-full object-contain" />
-               ) : (
-                 <div className="h-full w-full rounded-lg bg-primary/20 flex items-center justify-center">
-                    <span className="text-lg">🦴</span>
-                 </div>
-               )}
-            </div>
-            
-            {/* Company Name (Hidden when collapsed) */}
-            <span className={cn(
-                "font-bold text-lg tracking-tight transition-all duration-300 opacity-100",
-                isSidebarCollapsed && "opacity-0 w-0 hidden"
-            )}>
-                {companyName || "Backbone"}
-            </span>
-         </div>
+        <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap">
+          {/* Logo Wrapper */}
+          <div className={cn(
+            "flex-shrink-0 transition-all duration-300 flex items-center justify-center",
+            isSidebarCollapsed ? "h-10 w-10" : "h-8 w-8"
+          )}>
+            {logo ? (
+              <img src={logo} alt={companyName || "Logo"} className="h-full w-full object-contain" />
+            ) : (
+              <div className="h-full w-full rounded-lg bg-primary/20 flex items-center justify-center">
+                <span className="text-lg">🦴</span>
+              </div>
+            )}
+          </div>
+
+          {/* Company Name (Hidden when collapsed) */}
+          <span className={cn(
+            "font-bold text-lg tracking-tight transition-all duration-300 opacity-100",
+            isSidebarCollapsed && "opacity-0 w-0 hidden"
+          )}>
+            {companyName || "Backbone"}
+          </span>
+        </div>
       </div>
 
       {/* Toggle Button */}
@@ -164,96 +209,87 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-6 scrollbar-thin scrollbar-thumb-muted-foreground/20">
         <TooltipProvider delayDuration={0}>
-          {sidebarSections.map((section, sectionIndex) => {
-            // Filter items based on active modules
-            const visibleItems = section.items.filter(
-              (item) => !item.module || isModuleActive(item.module)
-            )
+          {filteredSections.map((section, sectionIndex) => (
+            <div key={sectionIndex} className="space-y-2">
+              {!isSidebarCollapsed && section.title && (
+                <h4 className="px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground/70 mb-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                  {section.title}
+                </h4>
+              )}
 
-            if (visibleItems.length === 0) return null
+              <div className="space-y-1">
+                {section.items.map((item, itemIndex) => {
+                  const Icon = item.icon
+                  const isActive = item.exact
+                    ? pathname === item.href
+                    : pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
 
-            return (
-              <div key={sectionIndex} className="space-y-2">
-                {!isSidebarCollapsed && section.title && (
-                  <h4 className="px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground/70 mb-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                    {section.title}
-                  </h4>
-                )}
-                
-                <div className="space-y-1">
-                  {visibleItems.map((item, itemIndex) => {
-                    const Icon = item.icon
-                    const isActive = item.exact
-                      ? pathname === item.href
-                      : pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
+                  return (
+                    <Tooltip key={item.href}>
+                      <TooltipTrigger asChild>
+                        <Link
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative",
+                            isActive
+                              ? "text-primary bg-primary/10 shadow-sm"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                            isSidebarCollapsed && "justify-center px-2"
+                          )}
+                        >
+                          <Icon className={cn(
+                            "h-5 w-5 transition-transform duration-300 group-hover:scale-110",
+                            isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                          )} />
 
-                    return (
-                      <Tooltip key={item.href}>
-                        <TooltipTrigger asChild>
-                          <Link
-                            href={item.href}
-                            className={cn(
-                              "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative",
-                              isActive
-                                ? "text-primary bg-primary/10 shadow-sm"
-                                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                              isSidebarCollapsed && "justify-center px-2"
-                            )}
-                          >
-                            <Icon className={cn(
-                              "h-5 w-5 transition-transform duration-300 group-hover:scale-110",
-                              isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
-                            )} />
-                            
-                            {!isSidebarCollapsed && (
-                              <span className="relative z-10 transition-all duration-300">{item.title}</span>
-                            )}
+                          {!isSidebarCollapsed && (
+                            <span className="relative z-10 transition-all duration-300">{item.title}</span>
+                          )}
 
-                            {isActive && (
-                              <motion.div
-                                layoutId="sidebar-active"
-                                className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-primary rounded-full"
-                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                              />
-                            )}
-                          </Link>
-                        </TooltipTrigger>
-                        {isSidebarCollapsed && (
-                          <TooltipContent side="right" className="font-semibold glass border-none shadow-xl text-foreground">
-                            {item.title}
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    )
-                  })}
-                </div>
+                          {isActive && (
+                            <motion.div
+                              layoutId="sidebar-active"
+                              className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-primary rounded-full"
+                              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                            />
+                          )}
+                        </Link>
+                      </TooltipTrigger>
+                      {isSidebarCollapsed && (
+                        <TooltipContent side="right" className="font-semibold glass border-none shadow-xl text-foreground">
+                          {item.title}
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  )
+                })}
               </div>
-            )
-          })}
+            </div>
+          ))}
         </TooltipProvider>
       </nav>
 
       {/* Footer */}
       <div className="p-4 border-t border-border/50 bg-background/20">
-         {!isSidebarCollapsed ? (
-            <div className="bg-gradient-to-br from-primary/10 to-transparent rounded-2xl p-4 border border-primary/10 shadow-sm group hover:border-primary/20 transition-all cursor-default">
-              <div className="flex items-center gap-3 mb-2">
-                 <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                    BB
-                 </div>
-                 <div>
-                    <p className="text-xs font-bold text-foreground">Backbone SaaS</p>
-                    <p className="text-[10px] text-muted-foreground">v1.0.0 Stable</p>
-                 </div>
+        {!isSidebarCollapsed ? (
+          <div className="bg-gradient-to-br from-primary/10 to-transparent rounded-2xl p-4 border border-primary/10 shadow-sm group hover:border-primary/20 transition-all cursor-default">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                BB
+              </div>
+              <div>
+                <p className="text-xs font-bold text-foreground">Backbone SaaS</p>
+                <p className="text-[10px] text-muted-foreground">v1.0.0 Stable</p>
               </div>
             </div>
-         ) : (
-            <div className="flex justify-center">
-                <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary cursor-help" title="Backbone v1.0">
-                    v1
-                 </div>
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary cursor-help" title="Backbone v1.0">
+              v1
             </div>
-         )}
+          </div>
+        )}
       </div>
     </aside>
   )

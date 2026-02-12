@@ -38,9 +38,9 @@ export function CompanyForm() {
 
   const { data: company, isLoading } = useQuery({
     queryKey: ['company', slug],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!slug) return null
-      const res = await api.get<Company>(`/api/core/companies/${slug}/`)
+      const res = await api.get<Company>(`/api/core/companies/${slug}/`, { signal })
       return res.data
     },
     enabled: !!slug

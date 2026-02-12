@@ -15,8 +15,16 @@ export function useThemeConfig() {
             const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
 
             if (!token) {
-                const publicBrandingRes = await api.get('/api/core/branding/public_current/').catch(() => null)
+                // Se não tem token, busca o branding público da empresa selecionada (se houver)
+                const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
+                
+                // Configura o header manualmente para esta requisição pública específica
+                const config = companySlug ? { headers: { 'X-Company-Slug': companySlug } } : {}
+                
+                const publicBrandingRes = await api.get('/api/core/branding/public_current/', config).catch(() => null)
                 if (publicBrandingRes?.data) setTenantTheme(publicBrandingRes.data)
+                else setTenantTheme(null) // Reset se não encontrar
+                
                 setIsLoading(false)
                 return
             }

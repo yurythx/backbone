@@ -58,6 +58,14 @@ class Article(BaseTenantModel):
     # Deprecating is_published in favor of status, but keeping for compatibility for now
     is_published = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
+    
+    # Visibility control
+    is_public = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Público",
+        help_text="Se True, o artigo será visível para todos, independente de autenticação. Se False, apenas membros da empresa podem ver."
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     image = models.ImageField(
@@ -75,6 +83,14 @@ class Article(BaseTenantModel):
 
     class Meta:
         unique_together = ('company', 'slug')
+        indexes = [
+            # Otimização para listagem pública (artigos públicos ordenados por data)
+            models.Index(fields=['is_public', '-published_at'], name='article_public_pub_idx'),
+            # Otimização para busca pública por slug
+            models.Index(fields=['is_public', 'slug'], name='article_public_slug_idx'),
+            # Otimização para filtro por tenant + visibilidade
+            models.Index(fields=['company', 'is_public', '-published_at'], name='article_tenant_pub_idx'),
+        ]
 
     def __str__(self):
         return self.title

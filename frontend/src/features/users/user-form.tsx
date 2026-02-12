@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,7 +31,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { notify } from "@/lib/notifications"
-import { User, Shield, Key } from "lucide-react"
+import { User, Shield, Key, Building2 } from "lucide-react"
 
 const formSchema = z.object({
     username: z.string().min(3, "Username deve ter pelo menos 3 caracteres."),
@@ -39,6 +39,7 @@ const formSchema = z.object({
     first_name: z.string().min(1, "Primeiro nome é obrigatório."),
     last_name: z.string().min(1, "Último nome é obrigatório."),
     role: z.string().optional(),
+    company: z.string().optional(),
     password: z.string().optional(),
 }).refine((data) => {
     // A validação da senha será feita no contexto do formulário (submit)
@@ -54,6 +55,19 @@ interface UserFormProps {
 }
 
 export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormProps) {
+    const { data: me } = useQuery({ queryKey: ['me'], queryFn: async () => (await api.get('/api/accounts/users/me/')).data })
+    const isSuperuser = me?.is_superuser
+
+    const { data: companies } = useQuery({
+        queryKey: ['companies-list'],
+        queryFn: async () => {
+            if (!isSuperuser) return []
+            const res = await api.get('/api/core/companies/')
+            return res.data.results || res.data
+        },
+        enabled: !!isSuperuser
+    })
+
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -62,6 +76,7 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
             first_name: initialData?.first_name || "",
             last_name: initialData?.last_name || "",
             role: initialData?.role ? String(initialData.role) : undefined,
+            company: initialData?.company ? String(initialData.company) : (me?.company ? String(me.company) : undefined),
             password: "",
         },
     })
@@ -80,6 +95,7 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
             const payload: any = {
                 ...values,
                 role: values.role ? parseInt(values.role) : null,
+                company: values.company ? parseInt(values.company) : undefined,
             }
 
             // Remove password validation/field if empty (for edits)
@@ -110,7 +126,7 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
 
     return (
         <Dialog open onOpenChange={onCancel}>
-            <DialogContent className="sm:max-w-[500px] rounded-3xl p-0 border-none shadow-2xl">
+            <DialogContent className="sm:max-w-[600px] rounded-3xl p-0 border-none shadow-2xl overflow-y-auto max-h-[90vh]">
                 <div className="p-8 space-y-8">
                     <DialogHeader>
                         <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
@@ -120,12 +136,50 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
                             {initialData ? "Editar Membro" : "Novo Membro da Equipe"}
                         </DialogTitle>
                         <DialogDescription>
-                            Configure o perfil e o nível de acesso do usuário.
+                            Configure o perfil, empresa e nível de acesso do usuário.
                         </DialogDescription>
                     </DialogHeader>
 
                     <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                            
+                            {/* Superuser Company Selection */}
+                            {isSuperuser && (
+                                <div className="p-4 bg-muted/30 rounded-xl border border-muted space-y-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Building2 className="h-4 w-4 text-primary" />
+                                        <h4 className="text-sm font-bold uppercase tracking-widest text-primary">Empresa Vinculada</h4>
+                                    </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="company"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="sr-only">Empresa</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger className="bg-background">
+                                                            <SelectValue placeholder="Selecione a empresa..." />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {companies?.map((company: any) => (
+                                                            <SelectItem key={company.id} value={String(company.id)}>
+                                                                {company.name} ({company.slug})
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormDescription className="text-xs">
+                                                    Este usuário pertencerá exclusivamente a esta empresa.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <FormField
                                     control={form.control}
@@ -155,19 +209,34 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
                                 />
                             </div>
 
-                            <FormField
-                                control={form.control}
-                                name="email"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Email</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="john@example.com" className="h-11 rounded-xl" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="username"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Username</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="john.doe" className="h-11 rounded-xl" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="email"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Email</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="john@example.com" className="h-11 rounded-xl" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
 
                             <FormField
                                 control={form.control}
@@ -221,7 +290,10 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
                                                 <SelectContent className="rounded-xl">
                                                     {roles?.map((role) => (
                                                         <SelectItem key={role.id} value={String(role.id)} className="cursor-pointer">
-                                                            {role.name}
+                                                            <div className="flex flex-col items-start py-1">
+                                                                <span className="font-bold">{role.name}</span>
+                                                                <span className="text-xs text-muted-foreground">{role.description?.substring(0, 50)}...</span>
+                                                            </div>
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>

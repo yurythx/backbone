@@ -55,6 +55,11 @@ class User(AbstractUser, BaseTenantModel):
         verbose_name_plural = "Users"
         # Usar o manager global por padrão para compatibilidade
         default_manager_name = 'objects'
+        indexes = [
+            models.Index(fields=['company', 'last_seen'], name='user_company_last_seen_idx'),
+            models.Index(fields=['company', 'role'], name='user_company_role_idx'),
+            models.Index(fields=['last_seen'], name='user_last_seen_idx'),
+        ]
 
 
 class UserThemePreference(models.Model):

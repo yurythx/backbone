@@ -2,6 +2,7 @@ import environ
 import os
 from pathlib import Path
 from datetime import timedelta
+from django.core.exceptions import ImproperlyConfigured
 
 env = environ.Env(
     DEBUG=(bool, False)
@@ -10,11 +11,15 @@ env = environ.Env(
 BASE_DIR = Path(__file__).resolve().parent.parent
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
-SECRET_KEY = env("SECRET_KEY", default="django-insecure-508()j_z$te^bm*y#kqjz&)q4n-hz)&hln4d^5-)2-q+gy9$cg")
+# SECURITY: SECRET_KEY is required and must be set via environment variable
+# Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
+SECRET_KEY = env("SECRET_KEY")
 
-# Ensure SECRET_KEY is not empty, falling back to a hardcoded default only if absolutely necessary for build
 if not SECRET_KEY:
-    SECRET_KEY = "django-insecure-fallback-key-for-build-process-only"
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set in environment variables. "
+        "Generate one with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'"
+    )
 
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
@@ -67,6 +72,12 @@ MIDDLEWARE = [
     "shared_kernel.middleware.TenantSecurityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+# Authentication Backends (LDAP + Standard)
+AUTHENTICATION_BACKENDS = [
+    'apps.core.ldap_backend.TenantLDAPBackend',  # LDAP multi-tenant
+    'django.contrib.auth.backends.ModelBackend',  # Fallback padrão
 ]
 
 REST_FRAMEWORK = {
@@ -138,21 +149,21 @@ SPECTACULAR_SETTINGS = {
     'SECURITY': [{'jwtAuth': []}, {'ApiKeyAuth': []}],
 }
 
-# CORS Configuration - Conditional by environment
-# SECURITY WARNING: Allowing all origins is dangerous in production!
-if DEBUG:
-    # Development: Allow all origins for easier testing
-    CORS_ALLOW_ALL_ORIGINS = True
-else:
-    # Production: Only allow specific origins
-    CORS_ALLOW_ALL_ORIGINS = False
-    CORS_ALLOWED_ORIGINS = env.list(
-        "CORS_ALLOWED_ORIGINS",
-        default=[
-            "https://backbone.projetoravenna.cloud",
-            "http://192.168.1.121:3005",
-            "http://localhost:3005",
-        ]
+# CORS Configuration
+# SECURITY: Always use explicit whitelist, never allow all origins
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:3005",
+        "http://127.0.0.1:3005",
+    ] if DEBUG else []
+)
+
+if not DEBUG and not CORS_ALLOWED_ORIGINS:
+    raise ImproperlyConfigured(
+        "CORS_ALLOWED_ORIGINS must be set in production environment. "
+        "Set the CORS_ALLOWED_ORIGINS environment variable."
     )
 
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[
@@ -408,6 +419,10 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=DEBUG)
 CELERY_TASK_EAGER_PROPAGATES = env.bool("CELERY_TASK_EAGER_PROPAGATES", default=DEBUG)
 CELERY_TASK_IGNORE_RESULT = True
+
+# Field Encryption (for sensitive data like SMTP passwords)
+# Generate key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+FIELD_ENCRYPTION_KEY = env('FIELD_ENCRYPTION_KEY', default=None)
 
 # Content Security Policy (CSP)
 from .csp_config import *  # noqa

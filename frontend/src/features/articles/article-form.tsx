@@ -30,6 +30,7 @@ import { MediaDialog } from "@/features/media/media-dialog"
 import { notify } from "@/lib/notifications"
 import { ArticleHistory } from "@/features/articles/article-history"
 import { ArticleComments } from "@/features/articles/article-comments"
+import { VisibilityToggle } from "@/components/articles/visibility-toggle"
 import { slugify } from "@/lib/utils"
 
 const formSchema = z.object({
@@ -39,6 +40,7 @@ const formSchema = z.object({
   excerpt: z.string().optional(),
   category: z.string().optional(),
   is_published: z.boolean(),
+  is_public: z.boolean().default(false),
   image: z.string().optional(),
   meta_title: z.string().max(70, "O título SEO deve ter menos de 70 caracteres.").optional(),
   meta_description: z.string().max(160, "A descrição SEO deve ter menos de 160 caracteres.").optional(),
@@ -82,6 +84,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       excerpt: initialData?.excerpt || "",
       category: initialData?.category ? String(initialData.category) : undefined,
       is_published: initialData?.is_published || false,
+      is_public: (initialData as any)?.is_public || false,
       image: initialData?.image || "",
       meta_title: initialData?.meta_title || "",
       meta_description: initialData?.meta_description || "",
@@ -297,13 +300,13 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   <p className="text-xs text-muted-foreground mb-2 font-medium">Pré-visualização no Google</p>
                   <div className="font-sans">
                     <div className="flex items-center gap-2 mb-1">
-                       <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] text-gray-500 overflow-hidden">
-                          {form.watch("image") ? <img src={form.watch("image")} className="h-full w-full object-cover" /> : <Globe className="h-4 w-4" />}
-                       </div>
-                       <div className="flex flex-col">
-                          <span className="text-sm text-gray-800 dark:text-gray-200 leading-tight">Seu Site</span>
-                          <span className="text-xs text-gray-500 leading-tight">{`https://seusite.com/blog/${form.watch("slug") || 'slug-do-artigo'}`}</span>
-                       </div>
+                      <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] text-gray-500 overflow-hidden">
+                        {form.watch("image") ? <img src={form.watch("image")} className="h-full w-full object-cover" /> : <Globe className="h-4 w-4" />}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm text-gray-800 dark:text-gray-200 leading-tight">Seu Site</span>
+                        <span className="text-xs text-gray-500 leading-tight">{`https://seusite.com/blog/${form.watch("slug") || 'slug-do-artigo'}`}</span>
+                      </div>
                     </div>
                     <h3 className="text-xl text-[#1a0dab] dark:text-[#8ab4f8] hover:underline cursor-pointer truncate font-medium">
                       {form.watch("meta_title") || form.watch("title") || "Título do Artigo"}
@@ -321,7 +324,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                     <FormItem>
                       <div className="flex justify-between">
                         <FormLabel className="font-semibold">Título SEO (Meta Title)</FormLabel>
-                        <span className={`text-xs ${field.value?.length > 60 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                        <span className={`text-xs ${(field.value?.length || 0) > 60 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
                           {field.value?.length || 0}/60
                         </span>
                       </div>
@@ -340,10 +343,10 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   render={({ field }) => (
                     <FormItem>
                       <div className="flex justify-between">
-                         <FormLabel className="font-semibold">Descrição SEO (Meta Description)</FormLabel>
-                         <span className={`text-xs ${field.value?.length > 160 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
-                            {field.value?.length || 0}/160
-                         </span>
+                        <FormLabel className="font-semibold">Descrição SEO (Meta Description)</FormLabel>
+                        <span className={`text-xs ${(field.value?.length || 0) > 160 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                          {field.value?.length || 0}/160
+                        </span>
                       </div>
                       <FormControl>
                         <Textarea placeholder="Breve resumo para os resultados de busca..." className="bg-background h-24 resize-none" {...field} />
@@ -365,6 +368,23 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
               </div>
 
               <div className="p-6 rounded-2xl bg-primary/5 border border-primary/10 space-y-6">
+                {/* VisibilityToggle - Público/Privado */}
+                <FormField
+                  control={form.control}
+                  name="is_public"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <VisibilityToggle
+                          isPublic={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="is_published"
@@ -417,23 +437,23 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                     <FormItem>
                       <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                         <span>URL Amigável (Slug)</span>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-6 w-6 p-0" 
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
                           onClick={() => setLockSlug(!lockSlug)}
                           title={lockSlug ? "Desbloquear edição manual" : "Bloquear e gerar automaticamente"}
                         >
-                           {lockSlug ? <Lock className="h-3 w-3" /> : <LinkIcon className="h-3 w-3" />}
+                          {lockSlug ? <Lock className="h-3 w-3" /> : <LinkIcon className="h-3 w-3" />}
                         </Button>
                       </FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Input 
-                            placeholder="slug-do-artigo" 
-                            className={`h-11 bg-background font-mono text-sm ${lockSlug ? 'opacity-80' : ''}`} 
-                            {...field} 
+                          <Input
+                            placeholder="slug-do-artigo"
+                            className={`h-11 bg-background font-mono text-sm ${lockSlug ? 'opacity-80' : ''}`}
+                            {...field}
                             readOnly={lockSlug}
                           />
                         </div>

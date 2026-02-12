@@ -20,9 +20,12 @@ media/
 staticfiles/
 *.log
 
-# Environments & secrets
-# .env  <-- TEMPORARY: Allow .env in git for easier deployment
+# Environments & secrets - CRITICAL: NEVER COMMIT
+.env
 .env.*
+*.pem
+*.key
+*.crt
 venv/
 .venv/
 

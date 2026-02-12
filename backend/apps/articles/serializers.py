@@ -27,6 +27,7 @@ class ArticleSerializer(serializers.ModelSerializer):
         read_only_fields = ['company', 'created_at', 'updated_at', 'author']
 
     def validate(self, attrs):
+        # Sanitização de campos HTML e texto
         if 'content' in attrs and attrs['content']:
             attrs['content'] = sanitize_html(attrs['content'])
         if 'excerpt' in attrs and attrs['excerpt']:
@@ -42,6 +43,23 @@ class ArticleSerializer(serializers.ModelSerializer):
             attrs['meta_description'] = md
         if 'meta_keywords' in attrs and attrs['meta_keywords']:
             attrs['meta_keywords'] = sanitize_plain_text(attrs['meta_keywords'])
+        
+        # Validação específica para artigos públicos
+        if attrs.get('is_public', False):
+            # Artigos públicos devem ter conteúdo completo
+            if not attrs.get('title'):
+                raise serializers.ValidationError({
+                    'title': 'Artigos públicos devem ter título preenchido.'
+                })
+            if not attrs.get('content'):
+                raise serializers.ValidationError({
+                    'content': 'Artigos públicos devem ter conteúdo preenchido.'
+                })
+            if not attrs.get('excerpt'):
+                raise serializers.ValidationError({
+                    'excerpt': 'Artigos públicos devem ter resumo preenchido para melhor SEO.'
+                })
+        
         return attrs
 
 class CommentSerializer(serializers.ModelSerializer):

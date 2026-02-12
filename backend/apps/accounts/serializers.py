@@ -70,15 +70,23 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         )
         return user
 
+from apps.core.serializers import CompanySerializer # Ensure CompanySerializer is available
+
 class UserSerializer(serializers.ModelSerializer):
     role_details = RoleSerializer(source='role', read_only=True)
+    company_details = CompanySerializer(source='company', read_only=True)
     password = serializers.CharField(write_only=True, required=False, min_length=6)
     avatar_url = serializers.SerializerMethodField()
+    company = serializers.PrimaryKeyRelatedField(queryset=Company.objects.all(), required=False)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_details', 'is_superuser', 'avatar', 'avatar_url', 'password']
-        read_only_fields = ['id']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_details', 'company', 'company_details', 'is_superuser', 'is_staff', 'avatar', 'avatar_url', 'password']
+        read_only_fields = ['id', 'company_details']
+        extra_kwargs = {
+            'role': {'required': False},
+            'company': {'required': False}
+        }
 
     def get_avatar_url(self, obj):
         if obj.avatar:
@@ -91,6 +99,8 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         # Ensure company is handled if passed via save()
+        # If company is in validated_data (e.g. from superuser form), create_user handles it
+        # If not, it might be added in perform_create context, but create_user needs it explicitly if model is strict
         user = User.objects.create_user(password=password, **validated_data)
         return user
 

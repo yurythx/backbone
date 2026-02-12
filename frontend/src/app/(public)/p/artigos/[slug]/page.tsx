@@ -18,12 +18,36 @@ async function getArticle(slug: string) {
         // In Server Components, we fetch directly. 
         // Note: Using the internal API URL if in Docker, but here we assume NEX_PUBLIC_API_URL is reachable.
         const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005';
-        const res = await fetch(`${apiUrl}/api/articles/articles/?slug=${slug}`, {
-            next: { revalidate: 3600 } // Cache for 1 hour
+        
+        // Ensure slug is clean
+        const cleanSlug = encodeURIComponent(slug)
+        
+        // Log for debugging
+        console.log(`[PublicArticle] Fetching: ${apiUrl}/api/articles/articles/?slug=${cleanSlug}`)
+        
+        const res = await fetch(`${apiUrl}/api/articles/articles/?slug=${cleanSlug}`, {
+            next: { revalidate: 0 }, // Disable cache for debugging, or set low
+            headers: {
+                // If the endpoint is protected, we might need a public alternative or an API key.
+                // Assuming /api/articles/articles/ is public for GET if permissions allow 'AllowAny' or similar
+                // But wait, the standard ViewSet might be protected.
+                // Let's check if we need a specific public endpoint or if the main one filters by public.
+                'Content-Type': 'application/json'
+            }
         })
-        if (!res.ok) return null
-        const articles = await res.json() as Article[]
-        return articles[0] || null
+        
+        if (!res.ok) {
+            console.error(`[PublicArticle] Failed to fetch article: ${res.status} ${res.statusText}`)
+            return null
+        }
+        
+        const data = await res.json()
+        const articles = Array.isArray(data) ? data : (data.results || [])
+        
+        // Filter by slug client-side if API returns list (just to be safe)
+        const article = articles.find((a: any) => a.slug === slug) || articles[0]
+        
+        return article || null
     } catch (error) {
         console.error("Error fetching article for metadata:", error)
         return null
@@ -54,6 +78,8 @@ export async function generateMetadata(
         console.error("Error fetching branding for metadata:", e)
     }
 
+    const imageUrl = article.cover_image || article.image
+
     return {
         title: `${article.meta_title || article.title} | ${article.company_name || 'Backbone'}`,
         description: article.meta_description || article.excerpt,
@@ -65,7 +91,7 @@ export async function generateMetadata(
         openGraph: {
             title: article.meta_title || article.title,
             description: article.meta_description || article.excerpt,
-            images: article.image ? [{ url: article.image }] : [],
+            images: imageUrl ? [{ url: imageUrl }] : [],
             type: 'article',
             publishedTime: article.created_at,
             siteName: article.company_name || 'Backbone',
@@ -74,7 +100,7 @@ export async function generateMetadata(
             card: 'summary_large_image',
             title: article.meta_title || article.title,
             description: article.meta_description || article.excerpt,
-            images: article.image ? [article.image] : [],
+            images: imageUrl ? [imageUrl] : [],
         }
     }
 }
@@ -87,12 +113,14 @@ export default async function PublicArticleDetailPage({ params }: Props) {
         notFound()
     }
 
+    const imageUrl = article.cover_image || article.image
+
     const jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'BlogPosting',
         headline: article.title,
         description: article.meta_description || article.excerpt,
-        image: article.image ? [article.image] : [],
+        image: imageUrl ? [imageUrl] : [],
         datePublished: article.published_at || article.created_at,
         dateModified: article.updated_at,
         author: [{
@@ -163,10 +191,10 @@ export default async function PublicArticleDetailPage({ params }: Props) {
                 )}
             </header>
 
-            {article.image && (
+            {imageUrl && (
                 <div className="aspect-[21/9] relative rounded-[32px] overflow-hidden mb-16 shadow-2xl shadow-primary/5 border border-primary/5">
                     <img
-                        src={article.image}
+                        src={imageUrl}
                         alt={article.title}
                         className="object-cover w-full h-full hover:scale-105 transition-transform duration-700"
                     />

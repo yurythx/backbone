@@ -6,6 +6,10 @@ from django.db import connection
 from django.core.cache import cache
 import time
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def health_check(request):
@@ -13,8 +17,6 @@ def health_check(request):
     Dedicated Health Check Endpoint.
     Does not depend on ViewSets or complex logic.
     """
-    print("DEBUG: HEALTH CHECK V3 - DEDICATED FILE")
-    
     start_time = time.time()
     
     # Check DB
@@ -23,7 +25,7 @@ def health_check(request):
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
     except Exception as e:
-        print(f"DEBUG: DB Error: {e}")
+        logger.error(f"Health check DB error: {e}")
         db_status = "error"
 
     # Check Redis
@@ -33,7 +35,7 @@ def health_check(request):
         if cache.get("health_check_v3") != "ok":
             redis_status = "error"
     except Exception as e:
-        print(f"DEBUG: Redis Error: {e}")
+        logger.error(f"Health check Redis error: {e}")
         redis_status = "error"
         
     status_code = status.HTTP_200_OK

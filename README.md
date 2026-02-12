@@ -46,8 +46,11 @@ Admin: http://localhost:8005/admin
 
 ### 👥 User Management
 - **JWT Authentication**: Secure token-based auth
+- **LDAP Authentication**: Multi-tenant LDAP integration ([docs/ldap](docs/ldap))
 - **Role-Based Access Control (RBAC)**: Granular permissions
 - **User Invitations**: Team collaboration
+- **Onboarding System**: Guided setup for new tenants
+- **Profile Management**: Avatar, preferences, API keys
 - **Password Reset**: Email-based recovery
 
 ### 💳 Licensing & Monetization

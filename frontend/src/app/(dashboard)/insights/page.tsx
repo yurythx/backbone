@@ -8,8 +8,8 @@ import { Loader2, TrendingUp } from "lucide-react"
 export default function InsightsPage() {
     const { data: licenseData, isLoading } = useQuery({
         queryKey: ['licensing-usage'],
-        queryFn: async () => {
-            const res = await api.get('/api/licensing/my-license/')
+        queryFn: async ({ signal }) => {
+            const res = await api.get('/api/licensing/my-license/', { signal })
             return res.data
         }
     })

@@ -144,6 +144,7 @@ export interface Article {
   content: string;
   excerpt?: string;
   is_published: boolean;
+  is_public?: boolean; // Visibility control: public (true) or private (false)
   published_at?: string;
   status: 'draft' | 'pending' | 'published' | 'rejected';
   author: number; // ID
@@ -153,6 +154,7 @@ export interface Article {
   created_at: string;
   updated_at: string;
   image?: string | null;
+  cover_image?: string | null; // Alternative field name for image
   author_name?: string;
   category_name?: string;
   meta_title?: string;

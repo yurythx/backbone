@@ -2,7 +2,7 @@
 
 import { useTheme as useNextTheme } from "next-themes"
 import { useTheme } from "@/components/theme-provider"
-import { Moon, Sun, Menu, User, Settings, LogOut, Building2, Plus, FileText, ShieldCheck, UserPlus } from "lucide-react"
+import { Moon, Sun, Menu, User, Settings, LogOut, Plus, FileText, ShieldCheck, UserPlus, LogIn } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import React from "react"
@@ -32,19 +32,47 @@ const navItems = [
   { label: "Messenger", href: "/messenger" },
 ]
 
+const guestNavItems: { label: string; href: string }[] = [
+  { label: "Início", href: "/" },
+  { label: "Artigos", href: "/p/artigos" },
+]
+
 export function Header() {
   const config = useTheme() // Branding/Tenant configuration
   const { theme: nextTheme, setTheme: setNextTheme } = useNextTheme()
   const { logo, companyName } = config
   const pathname = usePathname()
   const router = useRouter()
+  const [isClient, setIsClient] = React.useState(false)
 
-  const { data: me } = useQuery({
+  React.useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  const { data: me, isLoading: isLoadingMe } = useQuery({
     queryKey: ['me'],
     queryFn: async () => {
-      const res = await api.get('/api/accounts/users/me/')
-      return res.data
-    }
+      // Se não tiver token, nem tenta buscar o usuário
+      if (typeof window === "undefined") return null
+      const token = localStorage.getItem('accessToken')
+      if (!token) return null
+
+      try {
+        const res = await api.get('/api/accounts/users/me/')
+        return res.data
+      } catch (error) {
+        // Se falhar (ex: 401 mesmo com token), limpa o storage para evitar loops futuros
+        // mas NÃO redireciona aqui (deixa o usuário como "guest")
+        if (typeof window !== "undefined") {
+          localStorage.removeItem('accessToken')
+          localStorage.removeItem('refreshToken')
+        }
+        return null
+      }
+    },
+    retry: false,
+    refetchOnWindowFocus: false,
+    enabled: isClient
   })
 
   const { data: companies } = useQuery({
@@ -62,7 +90,9 @@ export function Header() {
       localStorage.removeItem('companySlug')
     }
     toast.success("Você saiu da conta. Até logo!", { duration: 2000 })
-    router.replace('/login')
+
+    // Forçar reload completo para limpar estados
+    window.location.href = '/'
   }
 
 
@@ -72,26 +102,32 @@ export function Header() {
         <SlideUp className="flex items-center gap-12">
           {/* Logo Section */}
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="h-10 w-10 relative flex items-center justify-center overflow-hidden rounded-xl bg-primary/10 shadow-inner">
-              {logo ? (
-                <img
-                  src={logo}
-                  alt={companyName}
-                  className="object-contain h-7 w-7 transition-transform duration-500 group-hover:scale-110"
-                />
-              ) : (
+            {me ? (
+              <div className="h-10 w-10 relative flex items-center justify-center overflow-hidden rounded-xl bg-primary/10 shadow-inner">
+                {logo ? (
+                  <img
+                    src={logo}
+                    alt={companyName}
+                    className="object-contain h-7 w-7 transition-transform duration-500 group-hover:scale-110"
+                  />
+                ) : (
+                  <div className="h-6 w-6 bg-primary rounded-md shadow-lg" />
+                )}
+              </div>
+            ) : (
+              <div className="h-10 w-10 relative flex items-center justify-center overflow-hidden rounded-xl bg-primary/10 shadow-inner">
                 <div className="h-6 w-6 bg-primary rounded-md shadow-lg" />
-              )}
-            </div>
+              </div>
+            )}
             <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
-              {companyName}
+              {me ? companyName : "Backbone Services"}
             </span>
           </Link>
         </SlideUp>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1">
-          {navItems.map((item, index) => (
+          {(me ? navItems : guestNavItems).map((item, index) => (
             <SlideUp key={item.href} delay={0.1 + index * 0.05}>
               <Button
                 variant="ghost"
@@ -119,113 +155,100 @@ export function Header() {
 
       <FadeIn delay={0.4} className="flex items-center gap-4">
         {/* Mobile Navigation Trigger */}
-        <div className="md:hidden">
-          <MobileNav />
-        </div>
+        {me && (
+          <div className="md:hidden">
+            <MobileNav />
+          </div>
+        )}
 
         {/* Theme Toggle Premium */}
         <ThemeToggle />
 
         {/* Quick Action Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="hidden lg:flex rounded-xl font-bold bg-primary/5 hover:bg-primary/10 border-primary/20 transition-all gap-2 group h-10 px-4">
-              <Plus className="h-4 w-4 text-primary transition-transform group-hover:rotate-90" />
-              Ação Rápida
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 mt-2 bg-popover shadow-xl border p-1.5 translate-y-2">
-            <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2">
-              Atalhos de Criação
-            </DropdownMenuLabel>
-            <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
-              <Link href="/artigos?action=create" className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                  <FileText className="h-4 w-4 text-orange-500" />
-                </div>
-                <span>Novo Artigo</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
-              <Link href="/cms?action=create" className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <ShieldCheck className="h-4 w-4 text-blue-500" />
-                </div>
-                <span>Nova Página</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
-              <Link href="/admin?action=create" className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                  <UserPlus className="h-4 w-4 text-emerald-500" />
-                </div>
-                <span>Novo Usuário</span>
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {me && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="hidden lg:flex rounded-xl font-bold bg-primary/5 hover:bg-primary/10 border-primary/20 transition-all gap-2 group h-10 px-4">
+                <Plus className="h-4 w-4 text-primary transition-transform group-hover:rotate-90" />
+                Ação Rápida
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 mt-2 bg-popover shadow-xl border p-1.5 translate-y-2">
+              <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2">
+                Atalhos de Criação
+              </DropdownMenuLabel>
+              <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
+                <Link href="/artigos?action=create" className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                    <FileText className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <span>Novo Artigo</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
+                <Link href="/cms?action=create" className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <ShieldCheck className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <span>Nova Página</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
+                <Link href="/admin?action=create" className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                    <UserPlus className="h-4 w-4 text-emerald-500" />
+                  </div>
+                  <span>Novo Usuário</span>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* Global Notifications Bell */}
-        <NotificationBell />
+        {me && <NotificationBell />}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 border bg-muted/30 hover:bg-muted/50 transition-all shadow-sm p-0 overflow-hidden">
-              {me?.avatar ? (
-                <img src={me.avatar} alt="Avatar" className="h-full w-full object-cover" />
-              ) : (
-                <User className="h-5 w-5 text-muted-foreground" />
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 mt-2 bg-popover shadow-xl border p-1">
-            <DropdownMenuLabel className="font-normal px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm group">
-              <Link href="/settings?tab=profile" className="flex flex-col space-y-1">
-                <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{me?.first_name || me?.username || 'Usuário'}</span>
-                <span className="text-xs leading-none text-muted-foreground">{me?.email || ''}</span>
-              </Link>
-            </DropdownMenuLabel>
+        {me ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 border bg-muted/30 hover:bg-muted/50 transition-all shadow-sm p-0 overflow-hidden">
+                {me?.avatar ? (
+                  <img src={me.avatar} alt="Avatar" className="h-full w-full object-cover" />
+                ) : (
+                  <User className="h-5 w-5 text-muted-foreground" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 mt-2 bg-popover shadow-xl border p-1">
+              <DropdownMenuLabel className="font-normal px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm group">
+                <Link href="/settings?tab=profile" className="flex flex-col space-y-1">
+                  <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{me?.first_name || me?.username || 'Usuário'}</span>
+                  <span className="text-xs leading-none text-muted-foreground">{me?.email || ''}</span>
+                </Link>
+              </DropdownMenuLabel>
 
-            <DropdownMenuSeparator className="bg-muted/50 mx-1" />
+              <DropdownMenuSeparator className="bg-muted/50 mx-1" />
 
-            {(me?.is_superuser) && (
-              <>
-                <DropdownMenuLabel className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground px-3 py-1 flex items-center gap-2">
-                  <Building2 className="h-3 w-3" />
-                  Trocar Empresa
-                </DropdownMenuLabel>
-                <div className="max-h-40 overflow-y-auto px-1 space-y-0.5">
-                  {(companies || []).map((c: any, idx: number) => (
-                    <button
-                      key={c.slug || `company-${idx}`}
-                      onClick={() => {
-                        localStorage.setItem('companySlug', c.slug)
-                        window.dispatchEvent(new Event('app-company-changed'))
-                        window.location.reload()
-                      }}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-primary/10 hover:text-primary transition-colors text-left group"
-                    >
-                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 group-hover:bg-primary transition-colors" />
-                      <span className="text-sm truncate">{c.name}</span>
-                    </button>
-                  ))}
-                </div>
-                <DropdownMenuSeparator className="bg-muted/50 mx-1" />
-              </>
-            )}
-            <DropdownMenuSeparator className="bg-muted/50 mx-1" />
-            <DropdownMenuItem asChild className="cursor-pointer rounded-md focus:bg-primary/5 focus:text-primary transition-colors">
-              <Link href="/settings" className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Configurações
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive flex items-center gap-2 cursor-pointer rounded-md focus:bg-destructive/5 transition-colors">
-              <LogOut className="h-4 w-4" />
-              Sair
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuItem asChild className="cursor-pointer rounded-md focus:bg-primary/5 focus:text-primary transition-colors">
+                <Link href="/settings" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Configurações
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive flex items-center gap-2 cursor-pointer rounded-md focus:bg-destructive/5 transition-colors">
+                <LogOut className="h-4 w-4" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button variant="ghost" size="icon" className="rounded-full" asChild>
+            <Link href="/login" title="Acessar Sistema">
+              <LogIn className="h-5 w-5" />
+              <span className="sr-only">Acessar Sistema</span>
+            </Link>
+          </Button>
+        )}
       </FadeIn>
     </header>
   )

@@ -35,8 +35,8 @@ export function ProfileForm() {
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['me'],
-    queryFn: async () => {
-      const res = await api.get<UserType>('/api/accounts/users/me/')
+    queryFn: async ({ signal }) => {
+      const res = await api.get<UserType>('/api/accounts/users/me/', { signal })
       return res.data
     }
   })

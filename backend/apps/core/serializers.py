@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Company, TenantBranding, AuditLog
+from .models import Company, TenantBranding, AuditLog, LDAPConfig
 from django.contrib.auth import get_user_model
 
 
@@ -117,3 +117,61 @@ class DashboardStatsSerializer(serializers.Serializer):
     charts = serializers.DictField(child=serializers.ListField(child=DashboardChartDataSerializer()))
     recent_activity = RecentActivitySerializer(many=True)
     system_status = SystemStatusSerializer()
+
+
+class LDAPConfigSerializer(serializers.ModelSerializer):
+    """Serializer para configuração LDAP do tenant."""
+    bind_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    
+    class Meta:
+        model = LDAPConfig
+        fields = [
+            'id', 'company', 'enabled', 'server_uri', 'bind_dn', 'bind_password',
+            'user_search_base', 'user_search_filter', 'attr_username', 'attr_email',
+            'attr_first_name', 'attr_last_name', 'use_tls', 'require_group',
+            'admin_group_dn', 'last_test_status', 'last_test_message', 'last_test_at',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'company', 'last_test_status', 'last_test_message', 'last_test_at', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        password = validated_data.pop('bind_password', None)
+        instance = super().create(validated_data)
+        if password:
+            instance.set_bind_password(password)
+            instance.save()
+        return instance
+    
+    def update(self, instance, validated_data):
+        password = validated_data.pop('bind_password', None)
+        instance = super().update(instance, validated_data)
+        if password:
+            instance.set_bind_password(password)
+            instance.save()
+        return instance
+    
+    def validate(self, data):
+        """Validar campos obrigatórios quando LDAP está habilitado."""
+        if data.get('enabled', False):
+            required_fields = {
+                'server_uri': 'Server URI',
+                'bind_dn': 'Bind DN',
+                'user_search_base': 'User Search Base'
+            }
+            
+            errors = {}
+            for field, label in required_fields.items():
+                if not data.get(field):
+                    errors[field] = f"{label} é obrigatório quando LDAP está ativado."
+            
+            if errors:
+                raise serializers.ValidationError(errors)
+            
+            # Validar filtro de busca
+            if '%(user)s' not in data.get('user_search_filter', ''):
+                raise serializers.ValidationError({
+                    'user_search_filter': 'O filtro deve conter o placeholder %(user)s'
+                })
+        
+        return data
+

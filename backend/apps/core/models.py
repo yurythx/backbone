@@ -134,9 +134,54 @@ class TenantEmailConfig(models.Model):
     smtp_host = models.CharField(max_length=255, blank=True)
     smtp_port = models.IntegerField(default=587)
     smtp_user = models.CharField(max_length=255, blank=True)
-    smtp_password = models.CharField(max_length=255, blank=True, help_text="Senha do servidor SMTP")
+    
+    # SECURITY: Encrypted password storage
+    smtp_password_encrypted = models.BinaryField(blank=True, null=True, help_text="Senha SMTP criptografada")
+    # Legacy field - deprecated, use smtp_password_encrypted
+    smtp_password = models.CharField(max_length=255, blank=True, help_text="[DEPRECATED] Use set_smtp_password() instead")
+    
     smtp_use_tls = models.BooleanField(default=True)
     from_email = models.EmailField(blank=True, help_text="E-mail remetente (ex: contato@empresa.com)")
+
+    def set_smtp_password(self, raw_password: str):
+        """
+        Encrypts and stores the SMTP password securely.
+        
+        Args:
+            raw_password: Plain text password to encrypt
+        """
+        from shared_kernel.encryption import encrypt_value
+        if raw_password:
+            self.smtp_password_encrypted = encrypt_value(raw_password)
+            self.smtp_password = ''  # Clear legacy field
+        else:
+            self.smtp_password_encrypted = b''
+            self.smtp_password = ''
+
+    def get_smtp_password(self) -> str:
+        """
+        Retrieves and decrypts the SMTP password.
+        
+        Returns:
+            Decrypted password string, or empty string if not set
+        """
+        from shared_kernel.encryption import decrypt_value
+        
+        # Try encrypted field first
+        if self.smtp_password_encrypted:
+            return decrypt_value(self.smtp_password_encrypted)
+        
+        # Fallback to legacy field (for backward compatibility during migration)
+        if self.smtp_password:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Company {self.company_id}: Using legacy unencrypted SMTP password. "
+                "Please re-save this configuration to encrypt the password."
+            )
+            return self.smtp_password
+        
+        return ''
 
     def __str__(self):
         return f"SMTP Config for {self.company.name}"
@@ -164,6 +209,126 @@ class AuditLog(BaseTenantModel):
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['company', 'created_at'], name='audit_company_created_idx'),
+            models.Index(fields=['company', 'action'], name='audit_company_action_idx'),
+            models.Index(fields=['company', 'user'], name='audit_company_user_idx'),
+            models.Index(fields=['resource', 'resource_id'], name='audit_resource_idx'),
+        ]
+
     def __str__(self):
         return f"{self.user} - {self.action} {self.resource} - {self.created_at}"
+
+
+class LDAPConfig(models.Model):
+    """
+    Configuração LDAP por tenant para autenticação centralizada.
+    Permite que cada empresa configure seu próprio servidor LDAP/Active Directory.
+    """
+    company = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='ldap_config'
+    )
+    
+    # Habilitação
+    enabled = models.BooleanField(
+        default=False,
+        help_text="Ativar autenticação LDAP para esta empresa"
+    )
+    
+    # Configurações de Servidor
+    server_uri = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="URI do servidor LDAP (ex: ldap://ldap.empresa.com:389 ou ldaps://ldap.empresa.com:636)"
+    )
+    bind_dn = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="DN para bind (ex: cn=admin,dc=empresa,dc=com)"
+    )
+    bind_password_encrypted = models.BinaryField(
+        blank=True,
+        null=True,
+        help_text="Senha do bind DN (criptografada)"
+    )
+    
+    # Base de Busca
+    user_search_base = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Base DN para buscar usuários (ex: ou=users,dc=empresa,dc=com)"
+    )
+    user_search_filter = models.CharField(
+        max_length=255,
+        default="(uid=%(user)s)",
+        help_text="Filtro de busca LDAP - use %(user)s como placeholder"
+    )
+    
+    # Mapeamento de Atributos
+    attr_username = models.CharField(max_length=50, default="uid", help_text="Atributo LDAP para username")
+    attr_email = models.CharField(max_length=50, default="mail", help_text="Atributo LDAP para email")
+    attr_first_name = models.CharField(max_length=50, default="givenName", help_text="Atributo LDAP para primeiro nome")
+    attr_last_name = models.CharField(max_length=50, default="sn", help_text="Atributo LDAP para sobrenome")
+    
+    # Configurações Avançadas
+    use_tls = models.BooleanField(
+        default=True,
+        help_text="Usar StartTLS para conexão segura"
+    )
+    require_group = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="DN do grupo LDAP obrigatório para acesso (opcional)"
+    )
+    admin_group_dn = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="DN do grupo LDAP para administradores (opcional)"
+    )
+    
+    # Status de Teste
+    last_test_status = models.CharField(
+        max_length=20,
+        choices=[('success', 'Sucesso'), ('failed', 'Falha'), ('pending', 'Pendente')],
+        default='pending',
+        help_text="Status do último teste de conexão"
+    )
+    last_test_message = models.TextField(
+        blank=True,
+        help_text="Mensagem do último teste de conexão"
+    )
+    last_test_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Data/hora do último teste"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def set_bind_password(self, raw_password: str):
+        """Criptografa e armazena a senha do bind DN."""
+        from shared_kernel.encryption import encrypt_value
+        if raw_password:
+            self.bind_password_encrypted = encrypt_value(raw_password)
+        else:
+            self.bind_password_encrypted = b''
+    
+    def get_bind_password(self) -> str:
+        """Recupera e descriptografa a senha do bind DN."""
+        from shared_kernel.encryption import decrypt_value
+        if self.bind_password_encrypted:
+            return decrypt_value(self.bind_password_encrypted)
+        return ''
+    
+    class Meta:
+        verbose_name = "Configuração LDAP"
+        verbose_name_plural = "Configurações LDAP"
+    
+    def __str__(self):
+        status = "✓ Ativo" if self.enabled else "✗ Inativo"
+        return f"LDAP {status} - {self.company.name}"
 

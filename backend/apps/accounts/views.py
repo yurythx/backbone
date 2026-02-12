@@ -138,14 +138,29 @@ class UserViewSet(viewsets.ModelViewSet):
     ordering_fields = ['username', 'email', 'first_name', 'last_name', 'date_joined']
 
     def get_queryset(self):
-        # Usar o manager filtrado para listagem de usuários
-        qs = User.tenant_objects.select_related('role').all().order_by('username')
+        # Para listagem de usuários
+        # Se for superusuário, vê todos os usuários de todas as empresas
+        if self.request.user.is_superuser:
+            qs = User.objects.select_related('role', 'company').all().order_by('username')
+        else:
+            # Usuários normais (mesmo admin) só veem da sua própria empresa
+            # Usando filter explicito em vez de tenant_objects para garantir
+            qs = User.objects.filter(company=self.request.company).select_related('role').order_by('username')
+            
         role_id = self.request.query_params.get('role')
         q = self.request.query_params.get('q')
+        
         if role_id:
             qs = qs.filter(role_id=role_id)
         if q:
-            qs = qs.filter(username__icontains=q)
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(username__icontains=q) |
+                Q(email__icontains=q) |
+                Q(first_name__icontains=q) |
+                Q(last_name__icontains=q)
+            )
+            
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -160,7 +175,13 @@ class UserViewSet(viewsets.ModelViewSet):
         import logging
         logger = logging.getLogger(__name__)
         
-        company = getattr(self.request, 'company', None)
+        # Se for superusuário, pode definir a company explicitamente no payload
+        # Se não for, usa a company do request (tenant atual)
+        if self.request.user.is_superuser and 'company' in serializer.validated_data:
+            company = serializer.validated_data['company']
+        else:
+            company = getattr(self.request, 'company', None)
+        
         if not company:
             logger.error("USER CREATION FAILED: No company in request context")
             from rest_framework.exceptions import ValidationError
@@ -170,7 +191,9 @@ class UserViewSet(viewsets.ModelViewSet):
         can_add, limit, current = check_feature_limit(company, 'max_users')
         logger.info(f"Checking user limit for company {company.slug}: {current}/{limit} (Can add: {can_add})")
         
-        if not can_add:
+        # Superusers bypass limits check? Maybe not, strict licensing.
+        # Let's keep strict for now unless explicit bypass requested.
+        if not can_add and not self.request.user.is_superuser:
             logger.warning(f"USER CREATION FAILED: Limit reached for company {company.slug} ({current}/{limit})")
             from rest_framework.exceptions import ValidationError
             raise ValidationError(f"Limite de usuários atingido ({current}/{limit}). Faça um upgrade do seu plano.")

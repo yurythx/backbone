@@ -23,11 +23,14 @@ def send_email_task(self, subject, recipient_list, template_name, context, from_
                 if not from_email:
                     from_email = config.from_email
                 
+                # SECURITY: Use encrypted password getter
+                smtp_password = config.get_smtp_password()
+                
                 connection = get_connection(
                     host=config.smtp_host,
                     port=config.smtp_port,
                     username=config.smtp_user,
-                    password=config.smtp_password,
+                    password=smtp_password,  # Now using decrypted password
                     use_tls=config.smtp_use_tls
                 )
                 logger.info(f"Usando SMTP customizado para empresa {company_id}")

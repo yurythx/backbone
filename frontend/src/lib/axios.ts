@@ -40,7 +40,6 @@ api.interceptors.request.use(
     }
 
     if (companySlug) {
-      config.headers['x-company-slug'] = companySlug;
       config.headers['X-Company-Slug'] = companySlug;
     }
 
@@ -95,7 +94,7 @@ api.interceptors.response.use(
         const response = await axios.post(`${API_URL}/api/accounts/token/refresh/`, {
           refresh: refreshToken,
         }, {
-          headers: companySlug ? { 'x-company-slug': companySlug, 'X-Company-Slug': companySlug } : {}
+          headers: companySlug ? { 'X-Company-Slug': companySlug } : {}
         });
 
         const { access } = response.data;
@@ -116,7 +115,10 @@ api.interceptors.response.use(
         if (typeof window !== 'undefined') {
           const isAuthError = axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403);
 
-          if (isAuthError) {
+          // Don't redirect if checking current user session (silent check)
+          const isMeCheck = originalRequest.url?.includes('/users/me/');
+
+          if (isAuthError && !isMeCheck) {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
             window.location.href = '/login';

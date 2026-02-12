@@ -1,9 +1,12 @@
 import mimetypes
+import logging
 from django.http import StreamingHttpResponse, Http404, HttpResponse
 from django.core.files.storage import default_storage
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 class MediaProxyView(APIView):
     """

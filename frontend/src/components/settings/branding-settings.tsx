@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import axios from "axios"
 import { useTheme } from "@/components/theme-provider"
 import { api } from "@/lib/axios"
 import { H3, P, Muted } from "@/components/ui/typography"
@@ -41,22 +42,33 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
     })
 
     useEffect(() => {
+        const controller = new AbortController()
+
         const fetchBranding = async () => {
             try {
-                const res = await api.get('/api/core/branding/current/')
-                setFooterText(res.data.footer_text || "")
-                setSocialLinks({
-                    facebook: res.data.facebook_url || "",
-                    instagram: res.data.instagram_url || "",
-                    linkedin: res.data.linkedin_url || "",
-                    twitter: res.data.twitter_url || ""
+                const res = await api.get('/api/core/branding/current/', {
+                    signal: controller.signal
                 })
-                setSelectedPalette(res.data.theme_palette || currentPalette)
+                if (!controller.signal.aborted) {
+                    setFooterText(res.data.footer_text || "")
+                    setSocialLinks({
+                        facebook: res.data.facebook_url || "",
+                        instagram: res.data.instagram_url || "",
+                        linkedin: res.data.linkedin_url || "",
+                        twitter: res.data.twitter_url || ""
+                    })
+                    setSelectedPalette(res.data.theme_palette || currentPalette)
+                }
             } catch (error) {
+                if (axios.isCancel(error)) return
                 console.error("Failed to fetch branding", error)
             }
         }
         fetchBranding()
+
+        return () => {
+            controller.abort()
+        }
     }, [currentPalette])
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'icon') => {

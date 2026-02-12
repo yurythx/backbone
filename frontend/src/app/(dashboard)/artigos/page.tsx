@@ -11,11 +11,46 @@ import { ArticleAnalytics } from "@/features/articles/article-analytics"
 import { Article } from "@/types"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PublicArticleCard } from "@/components/public/article-card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Search, Filter, Clock, ArrowRight, BookOpen, Tag } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
+import { formatDistanceToNow } from "date-fns"
+import { ptBR } from "date-fns/locale"
+
+import { useRouter } from "next/navigation"
+
+function PublicArticlesView() {
+    return null
+}
 
 function ArtigosPageContent() {
     const [view, setView] = useState<'list' | 'blog' | 'create' | 'edit'>('list')
     const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
     const searchParams = useSearchParams()
+    const router = useRouter()
+
+    const { data: me, isLoading } = useQuery({
+        queryKey: ['me'],
+        queryFn: async ({ signal }) => {
+            try {
+                const res = await api.get('/api/accounts/users/me/', { signal })
+                return res.data
+            } catch (error) {
+                return null
+            }
+        },
+        retry: false
+    })
+
+    useEffect(() => {
+        if (!isLoading && !me) {
+            router.push('/login')
+        }
+    }, [me, isLoading, router])
 
     useEffect(() => {
         if (searchParams.get('action') === 'create') {
@@ -23,15 +58,12 @@ function ArtigosPageContent() {
             setSelectedArticle(null)
         }
     }, [searchParams])
-    const { data: publishedArticles } = useQuery({
-        queryKey: ['articles-published'],
-        queryFn: async () => {
-            const res = await api.get('/api/articles/articles/')
-            const data = res.data.results || res.data
-            return Array.isArray(data) ? data.filter((a: Article) => a.is_published) : []
-        }
-    })
 
+    if (isLoading || !me) {
+        return <div className="flex items-center justify-center h-full">Carregando...</div>
+    }
+
+    // Existing authenticated view logic...
     const handleCreate = () => {
         setSelectedArticle(null)
         setView('create')

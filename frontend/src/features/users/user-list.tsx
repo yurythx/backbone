@@ -11,7 +11,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import { Plus, Edit, User as UserIcon, MoreVertical, Shield, Mail, Trash2, Clock } from "lucide-react"
+import { Plus, Edit, User as UserIcon, MoreVertical, Shield, Mail, Trash2, Clock, Building2 } from "lucide-react"
 import { useState } from "react"
 import { UserForm } from "./user-form"
 import { InviteForm } from "./invite-form"
@@ -122,6 +122,7 @@ export function UserList() {
                                     <TableHead className="py-4">Usuário</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Papel</TableHead>
+                                    <TableHead>Empresa</TableHead>
                                     <TableHead className="text-right">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -148,6 +149,16 @@ export function UserList() {
                                                 </Badge>
                                             ) : (
                                                 <span className="text-xs text-muted-foreground italic">Sem papel definido</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {user.company ? (
+                                                <Badge variant="secondary" className="gap-1.5 rounded-lg text-[10px] font-medium">
+                                                    <Building2 className="h-3 w-3" />
+                                                    {typeof user.company === 'object' ? user.company.name : `Empresa #${user.company}`}
+                                                </Badge>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">-</span>
                                             )}
                                         </TableCell>
                                         <TableCell className="text-right">

@@ -17,8 +17,8 @@ export function ModuleList() {
   // 1. Fetch all available modules
   const { data: allModules, isLoading: isLoadingAll } = useQuery({
     queryKey: ['modules'],
-    queryFn: async () => {
-      const res = await api.get<Module[]>('/api/modules/available/')
+    queryFn: async ({ signal }) => {
+      const res = await api.get<Module[]>('/api/modules/available/', { signal })
       return res.data
     },
     retry: 1,
@@ -29,8 +29,8 @@ export function ModuleList() {
   // 2. Fetch active modules for tenant
   const { data: tenantModules, isLoading: isLoadingTenant } = useQuery({
     queryKey: ['my-modules'],
-    queryFn: async () => {
-      const res = await api.get<TenantModule[]>('/api/modules/my-modules/')
+    queryFn: async ({ signal }) => {
+      const res = await api.get<TenantModule[]>('/api/modules/my-modules/', { signal })
       return res.data
     },
     retry: 1,

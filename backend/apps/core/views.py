@@ -9,9 +9,9 @@ from datetime import timedelta
 from apps.articles.models import Article, Category, ArticleView
 
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from .models import Company, AuditLog
+from .models import Company, AuditLog, LDAPConfig
 from .serializers import (
-    CompanySerializer, AuditLogSerializer, DashboardStatsSerializer
+    CompanySerializer, AuditLogSerializer, DashboardStatsSerializer, LDAPConfigSerializer
 )
 
 @extend_schema_view(
@@ -36,7 +36,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def health(self, request):
         """Health check endpoint for monitoring."""
-        print("DEBUG: HEALTH CHECK V2 - SIMPLIFIED MINIO") # Debug log to verify code update
         from django.db import connection
         from django.core.cache import cache
         import time
@@ -95,6 +94,17 @@ class CompanyViewSet(viewsets.ModelViewSet):
             return Response({"detail": "No tenant context found."}, status=status.HTTP_404_NOT_FOUND)
         serializer = self.get_serializer(request.company)
         return Response(serializer.data)
+    
+    def perform_update(self, serializer):
+        """Override to invalidate cache when Company is updated."""
+        instance = serializer.save()
+        
+        # Invalidate cache for this company
+        from django.core.cache import cache
+        cache_key = f"company:slug:{instance.slug}"
+        cache.delete(cache_key)
+        
+        return instance
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def complete_onboarding(self, request):
@@ -303,3 +313,57 @@ class RobotsView(generics.GenericAPIView):
         base_url = f"https://{company.slug}.backbone.com"
         content = f"User-agent: *\nAllow: /\nSitemap: {base_url}/api/core/sitemap/"
         return HttpResponse(content, content_type="text/plain")
+
+
+@extend_schema_view(
+    list=extend_schema(tags=['LDAP']),
+    retrieve=extend_schema(tags=['LDAP']),
+    create=extend_schema(tags=['LDAP']),
+    update=extend_schema(tags=['LDAP']),
+    partial_update=extend_schema(tags=['LDAP']),
+    test_connection=extend_schema(tags=['LDAP'])
+)
+class LDAPConfigViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gerenciar configurações LDAP por tenant.
+    Permite testar conexão antes de salvar.
+    """
+    serializer_class = LDAPConfigSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filtrar por tenant atual."""
+        return LDAPConfig.objects.filter(company=self.request.company)
+    
+    def perform_create(self, serializer):
+        """Associar ao tenant atual."""
+        serializer.save(company=self.request.company)
+    
+    @action(detail=True, methods=['post'])
+    def test_connection(self, request, pk=None):
+        """
+        Testa conexão LDAP com as configurações atuais.
+        
+        Retorna:
+            - success: bool
+            - message: str com detalhes do resultado
+            - tested_at: timestamp do teste
+        """
+        config = self.get_object()
+        
+        from .ldap_utils import test_ldap_connection
+        
+        success, message = test_ldap_connection(config)
+        
+        # Atualizar status do teste no banco
+        config.last_test_status = 'success' if success else 'failed'
+        config.last_test_message = message
+        config.last_test_at = timezone.now()
+        config.save(update_fields=['last_test_status', 'last_test_message', 'last_test_at'])
+        
+        return Response({
+            'success': success,
+            'message': message,
+            'tested_at': config.last_test_at,
+            'status': config.last_test_status
+        }, status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST)

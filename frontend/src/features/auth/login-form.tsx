@@ -93,6 +93,10 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
     if (onCompanyChange) {
       onCompanyChange(company || null)
     }
+    
+    // Update company context immediately to trigger theme reload
+    localStorage.setItem('companySlug', slug)
+    window.dispatchEvent(new Event('app-company-changed'))
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -116,9 +120,13 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
       // 4. Notify theme config to refresh in the same tab
       window.dispatchEvent(new Event('app-login'))
 
-      // 5. Redirect
+      // 5. Redirect and Force Reload
       toast.success("Login realizado com sucesso! Bem-vindo de volta.")
-      router.push('/')
+      
+      // Forçar reload completo para garantir que todos os contextos (Header, React Query, Theme)
+      // sejam reidratados corretamente com o novo usuário logado.
+      // Isso corrige o problema de "não carregar elementos" no primeiro login.
+      window.location.href = '/'
     } catch (err: any) {
       console.error(err)
 

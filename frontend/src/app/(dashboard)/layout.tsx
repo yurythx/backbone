@@ -16,14 +16,21 @@ export default function DashboardLayout({
 
   useEffect(() => {
     const checkAuth = () => {
+      // Se for a página inicial, NUNCA redireciona, apenas libera o acesso
+      if (window.location.pathname === '/') {
+        setAuthorized(true)
+        setChecked(true)
+        return
+      }
+
       try {
         const accessToken = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
         const companySlug = typeof window !== "undefined" ? localStorage.getItem("companySlug") : null
+        // Removida a verificação de rota de artigos daqui, pois ela tem sua própria lógica de redirecionamento na página
+        // const isPublicRoute = window.location.pathname.startsWith('/artigos') 
 
         if (!accessToken || !companySlug) {
-          // Apenas redireciona se realmente não tiver token, mas não bloqueia a renderização imediatamente
-          // O middleware ou o servidor deve lidar com a proteção real.
-          // Aqui é apenas uma conveniência de UI.
+          // Apenas redireciona se realmente não tiver token
           if (!isRedirecting.current) {
              isRedirecting.current = true
              router.replace("/login")
@@ -35,8 +42,6 @@ export default function DashboardLayout({
         setChecked(true)
       } catch (err) {
         console.error("[DashboardLayout] Auth check error:", err)
-        // Em caso de erro, não forçamos redirect imediatamente para evitar loops
-        // Deixamos a API retornar 401 e o interceptor lidar com isso
         setAuthorized(true) 
         setChecked(true)
       }

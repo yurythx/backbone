@@ -31,8 +31,8 @@ export function RoleList() {
 
     const { data: roles, isLoading } = useQuery({
         queryKey: ['roles'],
-        queryFn: async () => {
-            const res = await api.get('/api/accounts/roles/')
+        queryFn: async ({ signal }) => {
+            const res = await api.get('/api/accounts/roles/', { signal })
             return res.data
         }
     })
