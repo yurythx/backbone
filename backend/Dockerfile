@@ -8,10 +8,18 @@ ENV PYTHONUNBUFFERED 1
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y netcat-openbsd gcc postgresql-client libpq-dev libmagic1 && rm -rf /var/lib/apt/lists/*
+# Install system dependencies including LDAP libraries for python-ldap
+RUN apt-get update && apt-get install -y \
+    netcat-traditional \
+    gcc \
+    libldap2-dev \
+    libsasl2-dev \
+    postgresql-client \
+    libpq-dev \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
+# Copy requirements and install Python dependencies
 COPY requirements.txt /app/
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
