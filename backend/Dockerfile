@@ -40,8 +40,8 @@ RUN chmod +x /app/entrypoint.sh
 # Switch to non-root user
 USER app
 
-# Collect static files
-RUN DATABASE_URL="" REDIS_URL="" python manage.py collectstatic --noinput
+# Collect static files (com variáveis dummy para build)
+RUN SECRET_KEY="dummy-key-for-build" DATABASE_URL="" REDIS_URL="" python manage.py collectstatic --noinput
 
 # Expose port
 EXPOSE 8000
