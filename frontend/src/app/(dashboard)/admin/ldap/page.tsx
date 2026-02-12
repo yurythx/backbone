@@ -10,7 +10,7 @@ interface LDAPConfig {
     enabled: boolean;
     server_uri: string;
     bind_dn: string;
-    bind_password: string;
+    bind_password?: string;  // Opcional para permitir delete
     user_search_base: string;
     user_search_filter: string;
     attr_username: string;
@@ -148,8 +148,8 @@ export default function LDAPSettingsPage() {
             {/* Test Result Banner */}
             {testResult && (
                 <div className={`p-4 rounded-lg border mb-6 ${testResult.success
-                        ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800'
-                        : 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800'
+                    ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800'
                     }`}>
                     <div className="flex items-start gap-3">
                         {testResult.success ? (
