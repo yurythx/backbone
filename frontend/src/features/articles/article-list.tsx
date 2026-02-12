@@ -150,7 +150,7 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
               <div className="relative aspect-video overflow-hidden bg-muted">
                 {article.cover_image || article.image ? (
                   <img
-                    src={article.cover_image || article.image}
+                    src={(article.cover_image || article.image) ?? undefined}
                     alt={article.title}
                     className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
                   />
