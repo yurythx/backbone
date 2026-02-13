@@ -62,6 +62,38 @@ class ArticleSerializer(serializers.ModelSerializer):
         
         return attrs
 
+class ArticlePublicSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    author_name = serializers.CharField(source='author.username', read_only=True)
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    company_slug = serializers.CharField(source='company.slug', read_only=True)
+    tags = serializers.SlugRelatedField(slug_field='name', many=True, read_only=True)
+    cover_image = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Article
+        fields = [
+            'id', 'title', 'slug', 'content', 'excerpt',
+            'cover_image', 'image',
+            'category_name', 'tags',
+            'meta_title', 'meta_description', 'meta_keywords',
+            'published_at', 'created_at', 'updated_at',
+            'author_name', 'company_name', 'company_slug'
+        ]
+        read_only_fields = fields
+
+    def get_cover_image(self, obj):
+        try:
+            if obj.image and hasattr(obj.image, 'url'):
+                return obj.image.url
+        except Exception:
+            return None
+        return None
+
+    def get_image(self, obj):
+        return self.get_cover_image(obj)
+
 class CommentSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source='author.username', read_only=True)
     article_title = serializers.CharField(source='article.title', read_only=True)

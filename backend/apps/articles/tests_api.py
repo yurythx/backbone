@@ -4,7 +4,9 @@ from django.contrib.auth import get_user_model
 from apps.core.models import Company
 from apps.module_manager.models import Module, TenantModule
 from apps.accounts.models import Role
-from apps.articles.models import Category, Tag
+from apps.articles.models import Category, Tag, Article, Comment
+from rest_framework.test import APIClient
+from django.core.cache import cache
 
 User = get_user_model()
 
@@ -81,3 +83,412 @@ class ArticlesAPITest(APITestCase):
 
         res = self.client.get('/api/articles/articles/')
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class PublicArticlesAPITest(APITestCase):
+    def setUp(self):
+        # Tenants
+        self.company_a = Company.objects.create(name="Alpha", slug="alpha")
+        self.company_b = Company.objects.create(name="Beta", slug="beta")
+
+        # Categories
+        self.cat_a = Category.objects.create(name="Tech", slug="tech", company=self.company_a)
+        self.cat_b = Category.objects.create(name="News", slug="news", company=self.company_b)
+
+        # Articles (public/published)
+        self.art_a = Article.objects.create(
+            company=self.company_a,
+            title="Artigo Público Alpha",
+            slug="artigo-publico-alpha",
+            content="<p>Alpha content</p>",
+            excerpt="Alpha excerpt",
+            status=Article.STATUS_PUBLISHED,
+            is_public=True,
+        )
+        self.art_b = Article.objects.create(
+            company=self.company_b,
+            title="Artigo Público Beta",
+            slug="artigo-publico-beta",
+            content="<p>Beta content</p>",
+            excerpt="Beta excerpt",
+            status=Article.STATUS_PUBLISHED,
+            is_public=True,
+        )
+        # Garantir published_at para inclusão no queryset público
+        from django.utils import timezone
+        self.art_a.published_at = timezone.now()
+        self.art_b.published_at = timezone.now()
+        self.art_a.save(update_fields=['published_at'])
+        self.art_b.save(update_fields=['published_at'])
+
+        # Clients
+        self.public_client = APIClient()
+        # Reset simple rate limit cache keys used by PublicCommentViewSet
+        cache.delete(f"rate:pub_comment:alpha:127.0.0.1")
+        cache.delete(f"rate:pub_comment:beta:127.0.0.1")
+
+    def test_public_list_filters_by_company(self):
+        # Without tenant context, both slugs must be accessible via retrieve
+        res_alpha_det = self.public_client.get(f'/api/articles/public/articles/{self.art_a.slug}/')
+        res_beta_det = self.public_client.get(f'/api/articles/public/articles/{self.art_b.slug}/')
+        self.assertEqual(res_alpha_det.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_beta_det.status_code, status.HTTP_200_OK)
+
+        # With tenant header, should list only that company
+        res_alpha = self.public_client.get('/api/articles/public/articles/', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_alpha.status_code, status.HTTP_200_OK)
+        data_alpha = res_alpha.data if isinstance(res_alpha.data, list) else res_alpha.data.get('results', [])
+        slugs_alpha = [a['slug'] for a in data_alpha]
+        self.assertIn(self.art_a.slug, slugs_alpha)
+        self.assertNotIn(self.art_b.slug, slugs_alpha)
+
+        res_beta = self.public_client.get('/api/articles/public/articles/', HTTP_X_COMPANY_SLUG='beta')
+        self.assertEqual(res_beta.status_code, status.HTTP_200_OK)
+        data_beta = res_beta.data if isinstance(res_beta.data, list) else res_beta.data.get('results', [])
+        slugs_beta = [a['slug'] for a in data_beta]
+        self.assertIn(self.art_b.slug, slugs_beta)
+        self.assertNotIn(self.art_a.slug, slugs_beta)
+
+    def test_public_retrieve_by_slug(self):
+        # Retrieve with tenant header
+        res = self.public_client.get(f'/api/articles/public/articles/{self.art_a.slug}/', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['slug'], self.art_a.slug)
+        self.assertEqual(res.data['title'], self.art_a.title)
+        self.assertEqual(res.data.get('company_slug'), self.company_a.slug)
+        self.assertIn('excerpt', res.data)
+        self.assertIn('content', res.data)
+
+    def test_public_comments_create_and_list_with_moderation_and_rate_limit(self):
+        # Initially, list should be empty (no approved comments)
+        res_list_empty = self.public_client.get('/api/articles/public/comments/', {'article_slug': self.art_a.slug}, HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_list_empty.status_code, status.HTTP_200_OK)
+        data_empty = res_list_empty.data if isinstance(res_list_empty.data, list) else res_list_empty.data.get('results', [])
+        self.assertEqual(len(data_empty), 0)
+
+        # Post a public comment (pending moderation)
+        payload = {
+            "article_slug": self.art_a.slug,
+            "name": "Visitante",
+            "email": "visitante@example.com",
+            "content": "Ótimo artigo!"
+        }
+        res_create = self.public_client.post('/api/articles/public/comments/', payload, format='json', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_create.status_code, status.HTTP_201_CREATED)
+        created_id = res_create.data.get('id')
+        comment = Comment.objects.get(id=created_id)
+        self.assertFalse(comment.is_approved)
+        self.assertEqual(comment.company, self.company_a)
+
+        # After creation, list remains empty until approved
+        res_list_after = self.public_client.get('/api/articles/public/comments/', {'article_slug': self.art_a.slug}, HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_list_after.status_code, status.HTTP_200_OK)
+        data_after = res_list_after.data if isinstance(res_list_after.data, list) else res_list_after.data.get('results', [])
+        self.assertEqual(len(data_after), 0)
+
+        # Approve and then list should include it
+        comment.is_approved = True
+        comment.save(update_fields=['is_approved'])
+        res_list_approved = self.public_client.get('/api/articles/public/comments/', {'article_slug': self.art_a.slug}, HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_list_approved.status_code, status.HTTP_200_OK)
+        data_approved = res_list_approved.data if isinstance(res_list_approved.data, list) else res_list_approved.data.get('results', [])
+        self.assertEqual(len(data_approved), 1)
+        self.assertEqual(data_approved[0]['content'], "Ótimo artigo!")
+
+        # Test rate limit: 6 quick posts should yield 429 on the 6th
+        # Considering initial create above counts as 1, allow only 4 more before rate limit (max=5)
+        for i in range(4):
+            pl = dict(payload)
+            pl['content'] = f"Outro comentário {i}"
+            res_ok = self.public_client.post('/api/articles/public/comments/', pl, format='json', HTTP_X_COMPANY_SLUG='alpha')
+            self.assertEqual(res_ok.status_code, status.HTTP_201_CREATED)
+        pl_over = dict(payload)
+        pl_over['content'] = "Limite"
+        res_over = self.public_client.post('/api/articles/public/comments/', pl_over, format='json', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_over.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_public_retrieve_records_view(self):
+        # No views initially
+        from apps.articles.models import ArticleView
+        self.assertEqual(ArticleView.objects.filter(article=self.art_a).count(), 0)
+        # Retrieve should record a view (anonymous)
+        res = self.public_client.get(f'/api/articles/public/articles/{self.art_a.slug}/', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(ArticleView.objects.filter(article=self.art_a).count(), 1)
+        view = ArticleView.objects.filter(article=self.art_a).first()
+        self.assertEqual(view.company, self.company_a)
+        self.assertIsNone(view.user)
+        self.assertIsNotNone(view.viewed_at)
+
+    def test_public_list_filters_by_query_company_slug(self):
+        # Using query param company_slug should filter
+        res_alpha = self.public_client.get('/api/articles/public/articles/?company_slug=alpha')
+        self.assertEqual(res_alpha.status_code, status.HTTP_200_OK)
+        data_alpha = res_alpha.data if isinstance(res_alpha.data, list) else res_alpha.data.get('results', [])
+        slugs_alpha = [a['slug'] for a in data_alpha]
+        self.assertIn(self.art_a.slug, slugs_alpha)
+        self.assertNotIn(self.art_b.slug, slugs_alpha)
+
+    def test_public_comments_invalid_article_slug(self):
+        payload = {
+            "article_slug": "inexistente",
+            "name": "Visitante",
+            "email": "v@example.com",
+            "content": "Teste"
+        }
+        res = self.public_client.post('/api/articles/public/comments/', payload, format='json', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_public_comments_list_respects_company(self):
+        # Create approved comment for alpha article
+        from apps.articles.models import Comment
+        c = Comment.objects.create(
+            article=self.art_a,
+            company=self.company_a,
+            content="Aprovado Alpha",
+            is_approved=True
+        )
+        # Listing in beta should not include
+        res_beta = self.public_client.get('/api/articles/public/comments/', {'article_slug': self.art_a.slug}, HTTP_X_COMPANY_SLUG='beta')
+        self.assertEqual(res_beta.status_code, status.HTTP_200_OK)
+        data_beta = res_beta.data if isinstance(res_beta.data, list) else res_beta.data.get('results', [])
+        self.assertEqual(len(data_beta), 0)
+
+    def test_public_search_by_title(self):
+        # SearchFilter: ?search=Alpha should return only alpha article
+        res_search_alpha = self.public_client.get('/api/articles/public/articles/?search=Alpha')
+        self.assertEqual(res_search_alpha.status_code, status.HTTP_200_OK)
+        data = res_search_alpha.data if isinstance(res_search_alpha.data, list) else res_search_alpha.data.get('results', [])
+        slugs = [a['slug'] for a in data]
+        self.assertIn(self.art_a.slug, slugs)
+        self.assertNotIn(self.art_b.slug, slugs)
+
+    def test_public_ordering_by_published_at(self):
+        # Make published_at different to test ordering
+        from django.utils import timezone
+        self.art_a.published_at = timezone.now() - timezone.timedelta(minutes=5)
+        self.art_b.published_at = timezone.now()
+        self.art_a.save(update_fields=['published_at'])
+        self.art_b.save(update_fields=['published_at'])
+        # Default ordering is -published_at (desc): art_b first
+        res_default = self.public_client.get('/api/articles/public/articles/')
+        self.assertEqual(res_default.status_code, status.HTTP_200_OK)
+        data_default = res_default.data if isinstance(res_default.data, list) else res_default.data.get('results', [])
+        slugs_default = [a['slug'] for a in data_default]
+        self.assertGreaterEqual(len(slugs_default), 2)
+        self.assertEqual(slugs_default[0], self.art_b.slug)
+        # Ascending ordering by ?ordering=published_at: art_a first
+        res_asc = self.public_client.get('/api/articles/public/articles/?ordering=published_at')
+        self.assertEqual(res_asc.status_code, status.HTTP_200_OK)
+        data_asc = res_asc.data if isinstance(res_asc.data, list) else res_asc.data.get('results', [])
+        slugs_asc = [a['slug'] for a in data_asc]
+        self.assertGreaterEqual(len(slugs_asc), 2)
+        self.assertEqual(slugs_asc[0], self.art_a.slug)
+
+    def test_public_serializer_seo_fields(self):
+        # Set meta fields and ensure they are present in public serializer
+        self.art_a.meta_title = "Meta Alpha"
+        self.art_a.meta_description = "Descrição curta para SEO"
+        self.art_a.save(update_fields=['meta_title', 'meta_description'])
+        res = self.public_client.get(f'/api/articles/public/articles/{self.art_a.slug}/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data.get('meta_title'), "Meta Alpha")
+        self.assertEqual(res.data.get('meta_description'), "Descrição curta para SEO")
+
+    def test_public_filter_combined(self):
+        # Category + Search + Ordering
+        # Art A: Tech, "Alpha", older
+        # Art B: News, "Beta", newer
+        
+        from django.utils import timezone
+        
+        # Ensure art_a is setup correctly (category and time)
+        self.art_a.category = self.cat_a
+        self.art_a.published_at = timezone.now() - timezone.timedelta(hours=2)
+        self.art_a.save(update_fields=['category', 'published_at'])
+        
+        art_c = Article.objects.create(
+            company=self.company_a,
+            title="Artigo Público Alpha Extra",
+            slug="artigo-publico-alpha-extra",
+            content="Conteúdo Alpha Extra",
+            excerpt="Resumo Alpha Extra",
+            category=self.cat_a,
+            status=Article.STATUS_PUBLISHED,
+            is_public=True,
+            published_at=timezone.now() - timezone.timedelta(hours=1)
+        )
+        
+        # Filter: Category Tech (cat_a) + Search "Alpha" + Order -published_at
+        # art_c (-1h) is newer than art_a (-2h).
+        # Order should be art_c, then art_a.
+        url = f'/api/articles/public/articles/?category={self.cat_a.id}&search=Alpha&ordering=-published_at'
+        res = self.public_client.get(url, HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        
+        data = res.data if isinstance(res.data, list) else res.data.get('results', [])
+        slugs = [a['slug'] for a in data]
+        
+        self.assertEqual(len(slugs), 2, f"Expected 2 articles, got {len(slugs)}. Slugs: {slugs}")
+        self.assertEqual(slugs[0], art_c.slug)
+        self.assertEqual(slugs[1], self.art_a.slug)
+
+    def test_public_filter_multiple_tags(self):
+        # Create tags
+        tag1 = Tag.objects.create(name="Tag1", slug="tag1", company=self.company_a)
+        tag2 = Tag.objects.create(name="Tag2", slug="tag2", company=self.company_a)
+        
+        # Art A: Tag1
+        self.art_a.tags.add(tag1)
+        
+        # Create Art C: Tag2
+        from django.utils import timezone
+        art_c = Article.objects.create(
+            company=self.company_a,
+            title="Artigo C",
+            slug="art-c",
+            content="C",
+            status=Article.STATUS_PUBLISHED,
+            is_public=True,
+            published_at=timezone.now()
+        )
+        art_c.tags.add(tag2)
+        
+        # Create Art D: Tag1 & Tag2
+        art_d = Article.objects.create(
+            company=self.company_a,
+            title="Artigo D",
+            slug="art-d",
+            content="D",
+            status=Article.STATUS_PUBLISHED,
+            is_public=True,
+            published_at=timezone.now()
+        )
+        art_d.tags.add(tag1, tag2)
+        
+        # Filter Tag1: Art A, Art D
+        res1 = self.public_client.get(f'/api/articles/public/articles/?tags={tag1.id}', HTTP_X_COMPANY_SLUG='alpha')
+        slugs1 = [a['slug'] for a in res1.data.get('results', [])]
+        self.assertIn(self.art_a.slug, slugs1)
+        self.assertIn(art_d.slug, slugs1)
+        self.assertNotIn(art_c.slug, slugs1)
+        
+        # Filter Tag2: Art C, Art D
+        res2 = self.public_client.get(f'/api/articles/public/articles/?tags={tag2.id}', HTTP_X_COMPANY_SLUG='alpha')
+        slugs2 = [a['slug'] for a in res2.data.get('results', [])]
+        self.assertIn(art_c.slug, slugs2)
+        self.assertIn(art_d.slug, slugs2)
+        self.assertNotIn(self.art_a.slug, slugs2)
+
+    def test_public_pagination_consistency(self):
+        # Create 15 articles with distinct timestamps
+        from django.utils import timezone
+        base_time = timezone.now()
+        
+        # Delete existing to start clean for this test or just add more
+        Article.all_objects.filter(company=self.company_a).delete()
+        
+        articles = []
+        for i in range(15):
+            articles.append(Article(
+                company=self.company_a,
+                title=f"Art {i}",
+                slug=f"art-{i}",
+                content="Content",
+                status=Article.STATUS_PUBLISHED,
+                is_public=True,
+                published_at=base_time - timezone.timedelta(minutes=i) # Art 0 newest, Art 14 oldest
+            ))
+        Article.objects.bulk_create(articles)
+        
+        # Page 1: Should have 10 articles (Art 0 to Art 9)
+        res_p1 = self.public_client.get('/api/articles/public/articles/?page=1&ordering=-published_at', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_p1.status_code, status.HTTP_200_OK)
+        results_p1 = res_p1.data.get('results', [])
+        self.assertEqual(len(results_p1), 10)
+        self.assertEqual(results_p1[0]['slug'], 'art-0')
+        self.assertEqual(results_p1[9]['slug'], 'art-9')
+        
+        # Page 2: Should have 5 articles (Art 10 to Art 14)
+        res_p2 = self.public_client.get('/api/articles/public/articles/?page=2&ordering=-published_at', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_p2.status_code, status.HTTP_200_OK)
+        results_p2 = res_p2.data.get('results', [])
+        self.assertEqual(len(results_p2), 5)
+        self.assertEqual(results_p2[0]['slug'], 'art-10')
+        self.assertEqual(results_p2[4]['slug'], 'art-14')
+    
+    def test_public_search_by_content(self):
+        res = self.public_client.get('/api/articles/public/articles/?search=Beta')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        data = res.data if isinstance(res.data, list) else res.data.get('results', [])
+        slugs = [a['slug'] for a in data]
+        self.assertIn(self.art_b.slug, slugs)
+        self.assertNotIn(self.art_a.slug, slugs)
+    
+    def test_public_pagination(self):
+        from django.utils import timezone
+        for i in range(12):
+            Article.objects.create(
+                company=self.company_a,
+                title=f"Alpha {i}",
+                slug=f"alpha-{i}",
+                content="<p>X</p>",
+                excerpt="x",
+                status=Article.STATUS_PUBLISHED,
+                is_public=True,
+                published_at=timezone.now()
+            )
+        res_page1 = self.public_client.get('/api/articles/public/articles/', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_page1.status_code, status.HTTP_200_OK)
+        data1 = res_page1.data if isinstance(res_page1.data, list) else res_page1.data.get('results', [])
+        self.assertLessEqual(len(data1), 10)
+        res_page2 = self.public_client.get('/api/articles/public/articles/?page=2', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_page2.status_code, status.HTTP_200_OK)
+        data2 = res_page2.data if isinstance(res_page2.data, list) else res_page2.data.get('results', [])
+        self.assertGreaterEqual(len(data2), 1)
+    
+    def test_public_pagination_with_query_company_slug(self):
+        from django.utils import timezone
+        for i in range(11):
+            Article.objects.create(
+                company=self.company_a,
+                title=f"Alpha Q {i}",
+                slug=f"alpha-q-{i}",
+                content="<p>X</p>",
+                excerpt="x",
+                status=Article.STATUS_PUBLISHED,
+                is_public=True,
+                published_at=timezone.now()
+            )
+        res_page1 = self.public_client.get('/api/articles/public/articles/?company_slug=alpha')
+        self.assertEqual(res_page1.status_code, status.HTTP_200_OK)
+        data1 = res_page1.data if isinstance(res_page1.data, list) else res_page1.data.get('results', [])
+        self.assertLessEqual(len(data1), 10)
+        res_page2 = self.public_client.get('/api/articles/public/articles/?company_slug=alpha&page=2')
+        self.assertEqual(res_page2.status_code, status.HTTP_200_OK)
+        data2 = res_page2.data if isinstance(res_page2.data, list) else res_page2.data.get('results', [])
+        self.assertGreaterEqual(len(data2), 1)
+    
+    def test_public_filter_by_category_id(self):
+        self.art_a.category = self.cat_a
+        self.art_a.save(update_fields=['category'])
+        self.art_b.category = self.cat_b
+        self.art_b.save(update_fields=['category'])
+        res = self.public_client.get(f'/api/articles/public/articles/?category={self.cat_a.id}', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        data = res.data if isinstance(res.data, list) else res.data.get('results', [])
+        slugs = [a['slug'] for a in data]
+        self.assertIn(self.art_a.slug, slugs)
+        self.assertNotIn(self.art_b.slug, slugs)
+    
+    def test_public_filter_by_tag_id(self):
+        t_alpha = Tag.objects.create(name="AlphaTag", slug="alpha-tag", company=self.company_a)
+        t_beta = Tag.objects.create(name="BetaTag", slug="beta-tag", company=self.company_b)
+        self.art_a.tags.add(t_alpha)
+        self.art_b.tags.add(t_beta)
+        res_alpha_tag = self.public_client.get(f'/api/articles/public/articles/?tags={t_alpha.id}', HTTP_X_COMPANY_SLUG='alpha')
+        self.assertEqual(res_alpha_tag.status_code, status.HTTP_200_OK)
+        data_alpha_tag = res_alpha_tag.data if isinstance(res_alpha_tag.data, list) else res_alpha_tag.data.get('results', [])
+        slugs_alpha_tag = [a['slug'] for a in data_alpha_tag]
+        self.assertIn(self.art_a.slug, slugs_alpha_tag)
+        self.assertNotIn(self.art_b.slug, slugs_alpha_tag)

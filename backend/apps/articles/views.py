@@ -1,7 +1,8 @@
-from rest_framework import viewsets, permissions, status, filters, serializers
+from rest_framework import viewsets, permissions, status, filters, serializers, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import models
+from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
@@ -10,7 +11,7 @@ from apps.accounts.permissions import HasRolePermission
 from shared_kernel.audit import log_create, log_update, log_delete
 from .models import Article, Category, Tag, Comment, ArticleView
 from .serializers import (
-    ArticleSerializer, CategorySerializer, TagSerializer, 
+    ArticleSerializer, ArticlePublicSerializer, CategorySerializer, TagSerializer, 
     CommentSerializer, ArticleHistorySerializer, ArticleAnalyticsSerializer,
     GlobalArticlesAnalyticsSerializer
 )
@@ -21,14 +22,12 @@ from .filters import ArticleFilter
     list=extend_schema(tags=['Public Articles'], description='Lista artigos públicos sem necessidade de autenticação'),
     retrieve=extend_schema(tags=['Public Articles'], description='Detalhe de artigo público'),
 )
-@method_decorator(cache_page(60 * 15), name='list')  # Cache de listagem por 15 minutos
-@method_decorator(cache_page(60 * 15), name='retrieve')  # Cache de detalhe por 15 minutos
 class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet público - sem autenticação requerida.
     Retorna apenas artigos marcados como públicos (is_public=True) e publicados.
     """
-    serializer_class = ArticleSerializer
+    serializer_class = ArticlePublicSerializer
     permission_classes = [permissions.AllowAny]
     lookup_field = 'slug'
     filterset_fields = ['category', 'tags']
@@ -39,13 +38,25 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """
         Retorna apenas artigos públicos e publicados.
-        Não requer autenticação ou filtro por tenant.
+        Se houver tenant identificado (via middleware por domínio, header X-Company-Slug
+        ou query param company_slug), filtra pela empresa atual.
         """
-        return Article.objects.filter(
+        qs = Article.all_objects.filter(
             is_public=True,
             status=Article.STATUS_PUBLISHED,
             published_at__isnull=False
-        ).select_related('category', 'author', 'company').prefetch_related('tags').order_by('-published_at')
+        )
+        company = getattr(self.request, 'company', None)
+        if company:
+            qs = qs.filter(company=company)
+        else:
+            # Tentar obter company_slug via query params ou header manualmente se o middleware falhar
+            # Isso é um fallback para garantir que o filtro funcione mesmo sem autenticação forte
+            company_slug = self.request.query_params.get('company_slug') or self.request.headers.get('X-Company-Slug')
+            if company_slug:
+                qs = qs.filter(company__slug=company_slug)
+                
+        return qs.select_related('category', 'author', 'company').prefetch_related('tags').order_by('-published_at')
     
     def retrieve(self, request, *args, **kwargs):
         """
@@ -390,3 +401,90 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company, author=self.request.user)
+
+@extend_schema_view(
+    list=extend_schema(tags=['Public Articles'], description='Lista comentários aprovados de um artigo público'),
+    create=extend_schema(tags=['Public Articles'], description='Cria comentário público pendente de moderação'),
+)
+class PublicCommentViewSet(mixins.ListModelMixin,
+                           mixins.CreateModelMixin,
+                           viewsets.GenericViewSet):
+    """
+    Endpoint público de comentários com moderação e rate limit básico.
+    """
+    serializer_class = CommentSerializer
+    permission_classes = [permissions.AllowAny]
+    filterset_fields = ['article']
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        from .models import Article
+        qs = Comment.objects.filter(is_approved=True).select_related('article', 'author', 'company').order_by('-created_at')
+        article_slug = self.request.query_params.get('article_slug')
+        article_id = self.request.query_params.get('article')
+        company = getattr(self.request, 'company', None)
+        if article_slug:
+            article_qs = Article.objects.filter(slug=article_slug, is_public=True, status=Article.STATUS_PUBLISHED)
+            if company:
+                article_qs = article_qs.filter(company=company)
+            article = article_qs.first()
+            if article:
+                qs = qs.filter(article=article, company=article.company)
+            else:
+                qs = qs.none()
+        elif article_id:
+            qs = qs.filter(article_id=article_id)
+            if company:
+                qs = qs.filter(company=company)
+        else:
+            qs = qs.none()
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        """
+        Cria comentário público com moderação (is_approved=False) e rate limit por IP.
+        Requer article_slug ou article (id) no corpo.
+        """
+        from .models import Article
+        data = request.data.copy()
+        article_slug = data.get('article_slug')
+        article_id = data.get('article')
+        company = getattr(request, 'company', None)
+
+        # Rate limit simples: 5 comentários/10min por IP por empresa
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+        company_key = company.slug if company else 'public'
+        key = f"rate:pub_comment:{company_key}:{ip}"
+        count = cache.get(key, 0)
+        if count >= 5:
+            return Response({"detail": "Limite de envio de comentários atingido. Tente mais tarde."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        cache.set(key, count + 1, timeout=600)
+
+        # Resolver artigo
+        article = None
+        if article_slug:
+            article_qs = Article.objects.filter(slug=article_slug, is_public=True, status=Article.STATUS_PUBLISHED)
+            if company:
+                article_qs = article_qs.filter(company=company)
+            article = article_qs.first()
+        elif article_id:
+            article_qs = Article.objects.filter(pk=article_id, is_public=True, status=Article.STATUS_PUBLISHED)
+            if company:
+                article_qs = article_qs.filter(company=company)
+            article = article_qs.first()
+
+        if not article:
+            return Response({"detail": "Artigo não encontrado ou não público."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Criar comentário pendente de moderação
+        serializer = self.get_serializer(data={
+            "article": article.id,
+            "name": data.get("name", ""),
+            "email": data.get("email", ""),
+            "content": data.get("content", ""),
+        })
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(company=article.company, author=None, is_approved=False)
+        headers = self.get_success_headers(serializer.data)
+        return Response(self.get_serializer(obj).data, status=status.HTTP_201_CREATED, headers=headers)

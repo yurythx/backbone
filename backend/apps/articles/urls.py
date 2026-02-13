@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ArticleViewSet, CategoryViewSet, TagViewSet, CommentViewSet, PublicArticleViewSet
+from .views import ArticleViewSet, CategoryViewSet, TagViewSet, CommentViewSet, PublicArticleViewSet, PublicCommentViewSet
 
 # Router principal (autenticado)
 router = DefaultRouter()
@@ -11,10 +11,11 @@ router.register(r'comments', CommentViewSet, basename='comments')
 
 # Router público (sem autenticação)
 public_router = DefaultRouter()
-public_router.register(r'public/articles', PublicArticleViewSet, basename='public-articles')
+public_router.register(r'articles', PublicArticleViewSet, basename='public-articles')
+public_router.register(r'comments', PublicCommentViewSet, basename='public-comments')
 
 urlpatterns = [
+    path('public/', include(public_router.urls)),
     path('', include(router.urls)),
-    path('', include(public_router.urls)),
 ]
 

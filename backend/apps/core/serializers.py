@@ -152,7 +152,12 @@ class LDAPConfigSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Validar campos obrigatórios quando LDAP está habilitado."""
-        if data.get('enabled', False):
+        # Se for update, data pode não ter todos os campos, usar instance como fallback
+        is_enabled = data.get('enabled')
+        if is_enabled is None and self.instance:
+            is_enabled = self.instance.enabled
+            
+        if is_enabled:
             required_fields = {
                 'server_uri': 'Server URI',
                 'bind_dn': 'Bind DN',
@@ -161,17 +166,23 @@ class LDAPConfigSerializer(serializers.ModelSerializer):
             
             errors = {}
             for field, label in required_fields.items():
-                if not data.get(field):
+                value = data.get(field)
+                if value is None and self.instance:
+                    value = getattr(self.instance, field)
+                
+                if not value:
                     errors[field] = f"{label} é obrigatório quando LDAP está ativado."
+            
+            # Validar filtro de busca
+            filter_val = data.get('user_search_filter')
+            if filter_val is None and self.instance:
+                filter_val = self.instance.user_search_filter
+                
+            if filter_val and '%(user)s' not in filter_val:
+                errors['user_search_filter'] = 'O filtro deve conter o placeholder %(user)s'
             
             if errors:
                 raise serializers.ValidationError(errors)
-            
-            # Validar filtro de busca
-            if '%(user)s' not in data.get('user_search_filter', ''):
-                raise serializers.ValidationError({
-                    'user_search_filter': 'O filtro deve conter o placeholder %(user)s'
-                })
         
         return data
 

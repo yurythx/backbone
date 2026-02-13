@@ -9,7 +9,14 @@ User = get_user_model()
 class AccountsAPITest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Test Corp", slug="test-corp")
-        self.user = User.all_objects.create_user(
+        # Set generous limits for testing
+        from apps.licensing.models import License, Plan, Feature, PlanFeature
+        plan = Plan.objects.create(name="Enterprise")
+        feat = Feature.objects.create(code="max_users", name="Max Users")
+        PlanFeature.objects.create(plan=plan, feature=feat, value="100")
+        License.objects.create(company=self.company, plan=plan, is_active=True)
+        
+        self.user = User.objects.create_user(
             username="tester",
             email="tester@test.corp",
             password="pass",
@@ -52,7 +59,10 @@ class AccountsAPITest(APITestCase):
         role = Role.objects.create(company=self.company, name="Member")
         # Create invitation
         res = self.client.post('/api/accounts/invitations/', {"email": "new@test.corp", "role": role.id}, format='json')
+        if res.status_code != status.HTTP_201_CREATED:
+            print(f"Invitation Error: {res.data}")
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        
         inv = Invitation.objects.latest('created_at')
         self.assertEqual(inv.email, "new@test.corp")
         # Accept invitation via service endpoint
@@ -81,3 +91,60 @@ class AccountsAPITest(APITestCase):
             "dark_mode_preference": "dark"
         }, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_user_update_with_role_and_avatar(self):
+        # Create a new role
+        role = Role.objects.create(company=self.company, name="Admin")
+        
+        # Ensure role is visible/valid for the company context
+        # The serializer validates role queryset, but we need to ensure test context is correct
+        
+        # Create a temporary image file for avatar upload
+        import tempfile
+        from PIL import Image
+        
+        image = Image.new('RGB', (100, 100))
+        tmp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
+        image.save(tmp_file)
+        tmp_file.seek(0)
+        
+        # Prepare multipart/form-data payload
+        data = {
+            'first_name': 'Updated Name',
+            'role': role.id,
+            'avatar': tmp_file
+        }
+        
+        # Perform PATCH request
+        # Note: We use the user's ID in the URL
+        url = f'/api/accounts/users/{self.user.id}/'
+        res = self.client.patch(url, data, format='multipart')
+        
+        if res.status_code != status.HTTP_200_OK:
+            print(f"User Update Error: {res.data}")
+            
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        
+        # Verify database update
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, 'Updated Name')
+        self.assertEqual(self.user.role.id, role.id)
+        self.assertTrue(bool(self.user.avatar)) # Check if avatar exists
+        
+        tmp_file.close()
+
+    def test_user_update_password(self):
+        url = f'/api/accounts/users/{self.user.id}/'
+        data = {
+            'password': 'newpassword123'
+        }
+        res = self.client.patch(url, data, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        
+        # Verify login with new password
+        self.client.logout()
+        login_res = self.client.post('/api/accounts/token/', {
+            "username": self.user.username,
+            "password": "newpassword123"
+        }, format='json')
+        self.assertEqual(login_res.status_code, status.HTTP_200_OK)

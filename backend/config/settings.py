@@ -155,7 +155,9 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = env.list(
     "CORS_ALLOWED_ORIGINS",
     default=[
+        "http://localhost:3000",
         "http://localhost:3005",
+        "http://127.0.0.1:3000",
         "http://127.0.0.1:3005",
     ] if DEBUG else []
 )
@@ -171,6 +173,7 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[
     "https://api.backbone.projetoravenna.cloud",
     "http://192.168.1.121:3005",
     "http://192.168.1.121:8005",
+    "http://localhost:3000",
     "http://localhost:3005",
     "http://localhost:8005",
 ])
