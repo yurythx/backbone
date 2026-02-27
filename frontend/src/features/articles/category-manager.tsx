@@ -53,14 +53,14 @@ export function CategoryManager() {
     onError: () => toast.error("Failed to delete category")
   })
 
-  if (isLoading) return <div>Loading categories...</div>
+  if (isLoading) return <div role="status" aria-live="polite" aria-label="Carregando categorias">Loading categories...</div>
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">Categories</h3>
         <Button size="sm" onClick={() => setIsCreating(!isCreating)} variant={isCreating ? "outline" : "default"}>
-          {isCreating ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+          {isCreating ? <X className="h-4 w-4 mr-2" aria-hidden="true" /> : <Plus className="h-4 w-4 mr-2" aria-hidden="true" />}
           {isCreating ? "Cancel" : "Add Category"}
         </Button>
       </div>
@@ -87,14 +87,14 @@ export function CategoryManager() {
               placeholder="news" 
             />
           </div>
-          <Button onClick={() => createMutation.mutate()} disabled={!newCategoryName || !newCategorySlug}>
-            <Save className="h-4 w-4" />
+          <Button onClick={() => createMutation.mutate()} disabled={!newCategoryName || !newCategorySlug} aria-label="Salvar categoria">
+            <Save className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       )}
 
       <div className="rounded-md border">
-        <Table>
+        <Table aria-label="Tabela de categorias">
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
@@ -115,8 +115,9 @@ export function CategoryManager() {
                     onClick={() => {
                         if(confirm("Delete category?")) deleteMutation.mutate(cat.slug)
                     }}
+                    aria-label={`Excluir categoria ${cat.name}`}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </TableCell>
               </TableRow>

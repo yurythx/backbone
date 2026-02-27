@@ -190,7 +190,6 @@ class Command(BaseCommand):
                 author=user,
                 category=random.choice(categories),
                 status=Article.STATUS_PUBLISHED,
-                is_published=True
             )
             if tags:
                 article.tags.set(random.sample(tags, k=min(len(tags), 2)))

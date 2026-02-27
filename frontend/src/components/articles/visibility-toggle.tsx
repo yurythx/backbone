@@ -15,9 +15,9 @@ export function VisibilityToggle({ isPublic, onChange, disabled }: VisibilityTog
             <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${isPublic ? 'bg-green-100 dark:bg-green-900/30' : 'bg-orange-100 dark:bg-orange-900/30'}`}>
                     {isPublic ? (
-                        <Globe className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <Globe className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />
                     ) : (
-                        <Lock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                        <Lock className="h-5 w-5 text-orange-600 dark:text-orange-400" aria-hidden="true" />
                     )}
                 </div>
                 <div>
@@ -39,7 +39,9 @@ export function VisibilityToggle({ isPublic, onChange, disabled }: VisibilityTog
                         ? 'bg-green-600 dark:bg-green-500'
                         : 'bg-gray-200 dark:bg-gray-700'
                     } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                aria-label="Toggle visibility"
+                role="switch"
+                aria-checked={isPublic}
+                aria-label="Alternar visibilidade do artigo"
             >
                 <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'

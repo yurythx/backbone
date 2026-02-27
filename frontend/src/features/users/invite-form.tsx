@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog"
 import { notify } from "@/lib/notifications"
 import { Mail, Shield, Loader2 } from "lucide-react"
+import { Role } from "@/types"
 
 const formSchema = z.object({
     email: z.string().email("Email inválido."),
@@ -39,7 +40,7 @@ const formSchema = z.object({
 })
 
 interface InviteFormProps {
-    roles?: any[]
+    roles?: Role[]
     onSuccess: () => void
     onCancel: () => void
 }
@@ -64,7 +65,7 @@ export function InviteForm({ roles, onSuccess, onCancel }: InviteFormProps) {
             notify.success("Convite enviado!", "O convite foi enviado para o email informado.")
             onSuccess()
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             notify.error("Erro ao enviar convite", error)
         }
     })

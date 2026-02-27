@@ -2,10 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
-import { Users, FileText, MessageSquare, CreditCard, Shield, Zap, Layout, Code } from "lucide-react"
+import { Users, FileText, MessageSquare, Zap, Layout, Code } from "lucide-react"
 import { DjangoHero } from "@/components/dashboard/django-hero"
-import { FeatureCard } from "@/components/dashboard/feature-card"
-import { ModuleCard } from "@/components/dashboard/module-card"
 import { AnalyticsChart } from "@/components/dashboard/analytics-chart"
 import { H2, P } from "@/components/ui/typography"
 import { SlideUp, FadeIn } from "@/components/ui/motion"
@@ -133,7 +131,7 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
               <div className="divide-y divide-border/50">
-                {(stats?.recent_activity || []).map((log: any, idx: number) => (
+                {(stats?.recent_activity || []).map((log: { action: string; resource: string; user?: { name?: string } | null; created_at: string }, idx: number) => (
                   <div key={idx} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-all group">
                     <div className="flex items-center gap-4">
                       <div className="h-2 w-2 rounded-full bg-primary/40 group-hover:bg-primary transition-colors" />
@@ -164,14 +162,14 @@ export default function DashboardPage() {
           <SlideUp delay={0.8} className="space-y-6">
             <H2 className="border-none text-2xl font-bold">Distribuição de Conteúdo</H2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {(stats?.charts?.categories || []).map((cat: any, i: number) => (
+              {(stats?.charts?.categories || []).map((cat: { name: string; article_count: number }, i: number) => (
                 <div key={i} className="p-4 rounded-xl border bg-background hover:border-primary/30 transition-all flex items-center justify-between group">
                   <div>
                     <div className="text-xs font-bold text-muted-foreground uppercase mb-1">{cat.name}</div>
                     <div className="text-2xl font-bold text-foreground">{cat.article_count}</div>
                   </div>
                   <div className="h-10 w-10 rounded-lg bg-primary/5 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all">
-                    <FileText className="h-5 w-5" />
+                    <FileText className="h-5 w-5" aria-hidden="true" />
                   </div>
                 </div>
               ))}
@@ -183,17 +181,26 @@ export default function DashboardPage() {
   )
 }
 
-function StatItem({ title, value, growth, icon: Icon, isStatus, label, statusColor }: any) {
+interface StatItemProps {
+  title: string
+  value: number | string
+  growth?: number
+  icon: React.ComponentType<{ size?: number }>
+  isStatus?: boolean
+  label?: string
+  statusColor?: string
+}
+function StatItem({ title, value, growth, icon: Icon, isStatus, label, statusColor }: StatItemProps) {
   return (
     <Card className="glass-card relative overflow-hidden group hover:shadow-lg transition-all duration-500 border-border/50">
-      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity" aria-hidden="true">
         <Icon size={80} />
       </div>
       <CardHeader className="pb-2">
         <CardDescription className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground">{title}</CardDescription>
         <CardTitle className={cn("text-4xl font-black tracking-tight flex items-baseline gap-2", statusColor)}>
             {isStatus && (
-                <span className={cn("inline-block w-4 h-4 rounded-full mr-2", value === "Online" || value === "100%" ? "bg-green-500 animate-pulse" : "bg-red-500")} />
+                <span className={cn("inline-block w-4 h-4 rounded-full mr-2", value === "Online" || value === "100%" ? "bg-green-500 animate-pulse" : "bg-red-500")} aria-hidden="true" />
             )}
           {value}
           {growth !== undefined && (
@@ -215,11 +222,16 @@ function StatItem({ title, value, growth, icon: Icon, isStatus, label, statusCol
   )
 }
 
-function ActiveModule({ title, status, icon: Icon }: any) {
+interface ActiveModuleProps {
+  title: string
+  status: string
+  icon: React.ComponentType<{ className?: string }>
+}
+function ActiveModule({ title, status, icon: Icon }: ActiveModuleProps) {
   return (
     <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/10 transition-colors">
       <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-md bg-foreground/5 flex items-center justify-center">
+        <div className="h-8 w-8 rounded-md bg-foreground/5 flex items-center justify-center" aria-hidden="true">
           <Icon className="h-4 w-4" />
         </div>
         <span className="text-sm font-medium">{title}</span>

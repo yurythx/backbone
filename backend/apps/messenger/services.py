@@ -1,7 +1,9 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
-from .models import Conversation, Message
+from django.db.models import Count
+from .models import Conversation, Message, ConversationPreference
+
 from .serializers import MessageSerializer
 from apps.notifications.tasks import notify_user_push
 
@@ -11,24 +13,53 @@ class MessengerService:
     @staticmethod
     def create_conversation(creator, company, participant_usernames=None, title=None, is_group=False):
         """
-        Creates a new conversation and adds participants.
+        Creates a new conversation or returns an existing one for private chats.
+        Ensures that 1:1 conversations are unique per company.
         """
-        conversation = Conversation.objects.create(
+        if isinstance(participant_usernames, str):
+            participant_usernames = [participant_usernames]
+        elif not participant_usernames:
+            participant_usernames = []
+
+        # Normalize: others = set of unique usernames excluding the creator
+        others = {u for u in participant_usernames if u != creator.username}
+        
+        if not is_group:
+            # 1:1 Chat: Find existing private conversation between EXACTLY these participants
+            # (either creator + 1 other, or just creator for self-chat)
+            qs = Conversation.all_objects.filter(company=company, is_group=False, participants=creator)
+            
+            if others:
+                target_username = list(others)[0] # only consider first for 1:1
+                try:
+                    target_user = User.all_objects.get(company=company, username=target_username)
+                    existing = qs.filter(participants=target_user).annotate(p_count=Count('participants')).filter(p_count=2).first()
+                    if existing: return existing
+                except User.DoesNotExist:
+                    pass
+            else:
+                # Self-chat: exactly 1 participant (the creator)
+                existing = qs.annotate(p_count=Count('participants')).filter(p_count=1).first()
+                if existing: return existing
+
+        conversation = Conversation.all_objects.create(
             company=company,
             title=title,
             is_group=is_group
         )
         conversation.participants.add(creator)
         
-        if participant_usernames:
-            for username in participant_usernames:
+        if others:
+            for username in others:
                 try:
-                    target_user = User.objects.get(company=company, username=username)
+                    target_user = User.all_objects.get(company=company, username=username)
                     conversation.participants.add(target_user)
+                    if not is_group: break # Stop after first for 1:1
                 except User.DoesNotExist:
                     continue
                     
         return conversation
+
 
     @staticmethod
     def send_message(user, company, conversation, content=None, file_obj=None, request=None, reply_to_id=None):
@@ -50,25 +81,34 @@ class MessengerService:
 
         if reply_to_id:
             try:
-                reply_to = Message.objects.get(id=reply_to_id, conversation=conversation)
+                reply_to = Message.all_objects.get(id=reply_to_id, conversation=conversation)
                 message_data['reply_to'] = reply_to
             except Message.DoesNotExist:
                 pass
 
-        message = Message.objects.create(**message_data)
+        message = Message.all_objects.create(**message_data)
         
         # Signaling
         MessengerService.broadcast_message(company, conversation, message, request)
         
         # Web Push Notification
-        participants = conversation.participants.exclude(id=user.id)
-        for participant in participants:
+        # Respect Mute settings: only notify participants who haven't muted this conversation
+        # Also exclude the sender (user)
+        muted_user_ids = ConversationPreference.objects.filter(
+            conversation=conversation,
+            is_muted=True
+        ).values_list('user_id', flat=True)
+
+        recipients = conversation.participants.exclude(id=user.id).exclude(id__in=muted_user_ids)
+        
+        for participant in recipients:
             notify_user_push(
                 participant,
-                title=f"Nova mensagem de {user.username}",
+                title=f"{user.first_name or user.username}",
                 message=content[:100] if content else "Enviou um arquivo.",
-                link=f"/messenger?conversation={conversation.id}"
+                link=f"/messenger?conversation={conversation.id}&message_id={message.id}"
             )
+
 
         return message
 
@@ -108,7 +148,7 @@ class MessengerService:
     def add_reaction(user, message, emoji):
         from .models import MessageReaction
         
-        reaction, created = MessageReaction.objects.get_or_create(
+        reaction, created = MessageReaction.all_objects.get_or_create(
             message=message,
             user=user,
             emoji=emoji,

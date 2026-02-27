@@ -4,15 +4,15 @@
 import { LoginForm } from "@/features/auth/login-form"
 import { useTheme } from "@/components/theme-provider"
 import { H2, P } from "@/components/ui/typography"
-import Link from "next/link"
 import { useState } from "react"
+import Image from "next/image"
 
 export default function LoginPage() {
-  const { logo, companyName } = useTheme()
+  const {} = useTheme()
   const [previewCompany, setPreviewCompany] = useState<{ name: string, logo?: string | null } | null>(null)
 
   return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row bg-background">
+    <div className="min-h-screen w-full flex flex-col md:flex-row bg-background" role="main" aria-labelledby="login-title">
       {/* Visual Side - Hidden on mobile */}
       <div className="hidden md:flex md:w-1/2 bg-primary/5 items-center justify-center p-12 relative overflow-hidden">
         {/* Abstract background elements */}
@@ -24,11 +24,15 @@ export default function LoginPage() {
             {previewCompany ? (
               // Case 1: Company Selected
               previewCompany.logo ? (
-                <img
-                  src={previewCompany.logo}
-                  alt={previewCompany.name}
-                  className="h-24 w-auto object-contain transition-all duration-500 hover:scale-105"
-                />
+                <div className="relative h-24 w-24">
+                  <Image
+                    src={previewCompany.logo}
+                    alt={previewCompany.name}
+                    fill
+                    className="object-contain transition-all duration-500 hover:scale-105"
+                    sizes="96px"
+                  />
+                </div>
               ) : (
                 <div className="h-20 w-20 bg-primary/20 rounded-2xl flex items-center justify-center text-primary font-bold text-3xl shadow-sm">
                   {previewCompany.name.charAt(0)}
@@ -66,7 +70,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm space-y-8">
           <div className="md:hidden flex flex-col items-center gap-4 mb-8 text-center transition-all animate-in fade-in slide-in-from-top-4">
             {previewCompany && previewCompany.logo ? (
-              <img src={previewCompany.logo} alt={previewCompany.name} className="h-12 w-auto object-contain" />
+              <Image src={previewCompany.logo} alt={previewCompany.name} width={48} height={48} className="object-contain" />
             ) : (
               <div className="h-12 w-12 bg-primary rounded-xl hidden" />
             )}
@@ -74,7 +78,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2 text-center">
-            <h1 className="text-3xl font-bold tracking-tight">{previewCompany ? "Login Corporativo" : "Acesso ao Sistema"}</h1>
+            <h1 id="login-title" className="text-3xl font-bold tracking-tight">{previewCompany ? "Login Corporativo" : "Acesso ao Sistema"}</h1>
             <p className="text-muted-foreground">
               {previewCompany ? `Entre com suas credenciais do ${previewCompany.name}` : "Selecione sua empresa e insira suas credenciais"}
             </p>

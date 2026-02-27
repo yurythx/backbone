@@ -17,21 +17,24 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Loader2, User, Mail, UserCheck, Save } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AvatarUpload } from "@/components/avatar-upload"
+import { usePresence } from "@/hooks/use-presence"
+import { cn } from "@/lib/utils"
 
 const profileSchema = z.object({
   username: z.string().min(2, "O nome de usuário deve ter pelo menos 2 caracteres."),
   email: z.string().email("Endereço de e-mail inválido."),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
 })
 
 export function ProfileForm() {
   const queryClient = useQueryClient()
+  const { userStatuses, updateStatus } = usePresence()
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['me'],
@@ -51,15 +54,15 @@ export function ProfileForm() {
     defaultValues: {
       username: "",
       email: "",
-      firstName: "",
-      lastName: "",
+      first_name: "",
+      last_name: "",
       avatar: null,
     },
     values: user ? {
       username: user.username,
       email: user.email || "",
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
+      first_name: user.first_name || "",
+      last_name: user.last_name || "",
       avatar: user.avatar_url || user.avatar || null,
     } : undefined
   })
@@ -68,8 +71,8 @@ export function ProfileForm() {
     mutationFn: async (values: z.infer<typeof extendedSchema>) => {
       const formData = new FormData()
       formData.append('username', values.username)
-      if (values.firstName) formData.append('first_name', values.firstName)
-      if (values.lastName) formData.append('last_name', values.lastName)
+      if (values.first_name) formData.append('first_name', values.first_name)
+      if (values.last_name) formData.append('last_name', values.last_name)
 
       // Avatar handling
       if (values.avatar instanceof File) {
@@ -98,7 +101,7 @@ export function ProfileForm() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card role="status" aria-live="polite" aria-label="Carregando dados do perfil">
         <CardHeader>
           <Skeleton className="h-8 w-1/3 mb-2" />
           <Skeleton className="h-4 w-1/2" />
@@ -123,7 +126,7 @@ export function ProfileForm() {
     <div className="space-y-6">
       <div className="flex items-center gap-4 border-b pb-6">
         <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-          <UserCheck className="h-6 w-6 text-primary" />
+          <UserCheck className="h-6 w-6 text-primary" aria-hidden="true" />
         </div>
         <div>
           <h2 className="text-xl font-bold tracking-tight">Dados Pessoais</h2>
@@ -134,30 +137,78 @@ export function ProfileForm() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-3xl">
 
-          {/* Avatar Section */}
-          <div className="bg-muted/30 p-6 rounded-2xl border border-border/50">
-             <FormField
-               control={form.control}
-               name="avatar"
-               render={({ field }) => (
-                 <FormItem className="flex flex-col sm:flex-row items-center gap-6 space-y-0">
-                   <FormControl>
-                     <AvatarUpload
-                       value={field.value}
-                       onChange={field.onChange}
-                       initials={user?.username?.substring(0, 2).toUpperCase()}
-                     />
-                   </FormControl>
-                   <div className="text-center sm:text-left space-y-1">
-                      <FormLabel className="text-base font-semibold">Sua Foto</FormLabel>
-                      <FormDescription>
-                        Isso será exibido no seu perfil e em comentários.
-                      </FormDescription>
-                      <FormMessage />
-                   </div>
-                 </FormItem>
-               )}
-             />
+          {/* Avatar & Status Section */}
+          <div className="bg-muted/30 p-6 rounded-2xl border border-border/50 space-y-6">
+            <FormField
+              control={form.control}
+              name="avatar"
+              render={({ field }) => (
+                <FormItem className="flex flex-col sm:flex-row items-center gap-6 space-y-0">
+                  <FormControl>
+                    <div className="relative group/avatar">
+                      <AvatarUpload
+                        value={field.value}
+                        onChange={field.onChange}
+                        initials={user?.username?.substring(0, 2).toUpperCase()}
+                      />
+                      <span
+                        className={cn(
+                          "absolute bottom-0 right-12 h-5 w-5 rounded-full border-4 border-background shadow-sm transition-colors",
+                          (userStatuses.get(user?.id || 0) || user?.status) === 'online' ? "bg-green-500" :
+                            (userStatuses.get(user?.id || 0) || user?.status) === 'busy' ? "bg-amber-500" : "bg-slate-400"
+                        )}
+                      />
+                    </div>
+                  </FormControl>
+                  <div className="text-center sm:text-left space-y-1">
+                    <FormLabel className="text-base font-semibold">Sua Foto</FormLabel>
+                    <FormDescription>
+                      Isso será exibido no seu perfil e em conversas.
+                    </FormDescription>
+                    <FormMessage />
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            <div className="pt-4 border-t flex flex-col gap-3">
+              <FormLabel className="font-semibold text-sm">Seu Status de Presença</FormLabel>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={(userStatuses.get(user?.id || 0) || user?.status) === 'online' ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-full gap-2 transition-all px-4"
+                  onClick={() => updateStatus('online')}
+                >
+                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  Online
+                </Button>
+                <Button
+                  type="button"
+                  variant={(userStatuses.get(user?.id || 0) || user?.status) === 'busy' ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-full gap-2 transition-all px-4"
+                  onClick={() => updateStatus('busy')}
+                >
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  Ocupado
+                </Button>
+                <Button
+                  type="button"
+                  variant={(userStatuses.get(user?.id || 0) || user?.status) === 'offline' ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-full gap-2 transition-all px-4"
+                  onClick={() => updateStatus('offline')}
+                >
+                  <span className="h-2 w-2 rounded-full bg-slate-400" />
+                  Offline
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Altere como os outros vêm sua disponibilidade em tempo real.
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -169,7 +220,7 @@ export function ProfileForm() {
                   <FormLabel className="font-semibold">Nome de Usuário</FormLabel>
                   <FormControl>
                     <div className="relative group">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
                       <Input placeholder="seu.usuario" className="pl-10 h-11 bg-background/50" {...field} />
                     </div>
                   </FormControl>
@@ -186,7 +237,7 @@ export function ProfileForm() {
                   <FormLabel className="font-semibold">E-mail</FormLabel>
                   <FormControl>
                     <div className="relative group opacity-80">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                       <Input placeholder="seu@email.com" className="pl-10 h-11 bg-muted/50" {...field} disabled />
                     </div>
                   </FormControl>
@@ -200,12 +251,12 @@ export function ProfileForm() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}
-              name="firstName"
+              name="first_name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="font-semibold">Primeiro Nome</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: João" className="h-11 bg-background/50" {...field} />
+                    <Input placeholder="Ex: João" className="h-11 bg-background/50" {...field} value={field.value || ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -214,12 +265,12 @@ export function ProfileForm() {
 
             <FormField
               control={form.control}
-              name="lastName"
+              name="last_name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="font-semibold">Sobrenome</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: Silva" className="h-11 bg-background/50" {...field} />
+                    <Input placeholder="Ex: Silva" className="h-11 bg-background/50" {...field} value={field.value || ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -230,9 +281,9 @@ export function ProfileForm() {
           <div className="pt-4 border-t">
             <Button type="submit" size="lg" className="rounded-xl px-8 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all" disabled={mutation.isPending}>
               {mutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Save className="mr-2 h-4 w-4" />
+                <Save className="mr-2 h-4 w-4" aria-hidden="true" />
               )}
               Salvar Alterações
             </Button>

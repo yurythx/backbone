@@ -13,14 +13,13 @@ import {
   FormDescription,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Loader2, Building2, User, Mail, Lock, Sparkles, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
-import { cn } from "@/lib/utils"
+ 
 
 const registerSchema = z.object({
   username: z.string().min(2, "O nome de usuário deve ter pelo menos 2 caracteres."),
@@ -52,9 +51,12 @@ export function RegisterForm() {
       await api.post('/api/accounts/register/', values)
       toast.success("Conta criada com sucesso! Você já pode entrar.")
       router.push('/login')
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      const message = err.response?.data?.detail || "Falha no registro. Por favor, tente novamente."
+      const message =
+        typeof err === 'object' && err !== null
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Falha no registro. Por favor, tente novamente."
+          : "Falha no registro. Por favor, tente novamente."
       toast.error(message)
     } finally {
       setIsLoading(false)
@@ -66,7 +68,7 @@ export function RegisterForm() {
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-bold tracking-tight">Crie sua conta</h1>
         <p className="text-muted-foreground text-sm flex items-center justify-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
+          <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
           Comece seu teste gratuito de 14 dias agora.
         </p>
       </div>
@@ -75,7 +77,7 @@ export function RegisterForm() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="p-4 border rounded-2xl bg-muted/5 space-y-4">
             <h3 className="text-sm font-bold flex items-center gap-2 px-1">
-              <Building2 className="h-4 w-4 text-primary" />
+              <Building2 className="h-4 w-4 text-primary" aria-hidden="true" />
               Empresa
             </h3>
 
@@ -124,6 +126,7 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative group">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
                       <Input placeholder="Nome de usuário" className="bg-background pl-10" {...field} />
                     </div>
                   </FormControl>
@@ -140,6 +143,7 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative group">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
                       <Input type="email" placeholder="email@empresa.com" className="bg-background pl-10" {...field} />
                     </div>
                   </FormControl>
@@ -156,6 +160,7 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative group">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
                       <Input type="password" placeholder="Sua senha secreta" className="bg-background pl-10" {...field} />
                     </div>
                   </FormControl>
@@ -172,13 +177,13 @@ export function RegisterForm() {
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                <Loader2 className="mr-2 h-6 w-6 animate-spin" aria-hidden="true" />
                 Criando conta...
               </>
             ) : (
               <span className="flex items-center gap-2">
                 Começar agora
-                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
               </span>
             )}
           </Button>

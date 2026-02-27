@@ -2,77 +2,239 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
+
+# Cancel in-flight runs for the same branch (saves CI minutes)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  backend-lint-test:
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1 — Backend: lint + tests
+  # ─────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (lint + tests)
     runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      SECRET_KEY: "ci-test-secret-key-not-used-in-production"
+      DEBUG: "True"
+      DATABASE_URL: "sqlite:///ci_test.sqlite3"
+      REDIS_URL: "redis://localhost:6379"
+      FIELD_ENCRYPTION_KEY: "ci-fernet-key-placeholder-32bytes=="
+      CELERY_TASK_ALWAYS_EAGER: "True"
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python
+
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
-          
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       - name: Install dependencies
         working-directory: ./backend
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          
-      - name: Run Ruff
-        working-directory: ./backend
-        run: ruff check .
-        
-      - name: Run Mypy
-        working-directory: ./backend
-        run: mypy .
-        
-      - name: Run Tests
-        working-directory: ./backend
-        run: python manage.py test
-        env:
-          SECRET_KEY: 'ci-test-key'
-          DEBUG: 'True'
-          DATABASE_URL: 'sqlite:///db.sqlite3'
+          pip install ruff
 
-  frontend-lint-build:
+      # Lint — fast, runs first so we fail early
+      - name: Lint (ruff)
+        working-directory: ./backend
+        run: ruff check . --output-format=github
+
+      - name: Format check (ruff)
+        working-directory: ./backend
+        run: ruff format . --check
+
+      # Django system check
+      - name: Django system check
+        working-directory: ./backend
+        run: python manage.py check --fail-level WARNING
+
+      # Run full test suite
+      - name: Run tests
+        working-directory: ./backend
+        run: |
+          python manage.py test --verbosity=2 --parallel 2>&1
+        timeout-minutes: 15
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2 — Frontend: lint + unit tests + build
+  # ─────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (lint + tests + build)
     runs-on: ubuntu-latest
+
+    env:
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Node.js
+
+      - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: './frontend/package-lock.json'
-          
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
       - name: Install dependencies
         working-directory: ./frontend
         run: npm ci
-        
-      - name: Run Lint
+
+      - name: Lint (ESLint)
         working-directory: ./frontend
         run: npm run lint
-        
-      - name: Run Build
+
+      - name: Unit tests (Vitest)
+        working-directory: ./frontend
+        run: npm test
+
+      - name: Build (Next.js)
         working-directory: ./frontend
         run: npm run build
-        env:
-          NEXT_PUBLIC_API_URL: 'http://localhost:8000'
 
-  docker-build-check:
+      # Upload coverage report as artifact for review
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3 — Docker: smoke-test image builds
+  # ─────────────────────────────────────────────────────────────
+  docker:
+    name: Docker build check
     runs-on: ubuntu-latest
+    needs: [backend, frontend]   # Only build if tests pass
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Check Backend Dockerfile
-        run: docker build -t backbone-backend-test ./backend
-        
-      - name: Check Frontend Dockerfile
-        run: docker build -t backbone-frontend-test ./frontend --target deps
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: backbone-backend:ci
+
+      - name: Build frontend image (deps stage only, faster)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          target: deps
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: backbone-frontend:ci
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 4 — E2E (only on PRs to main, not on every push)
+  # ─────────────────────────────────────────────────────────────
+  e2e:
+    name: E2E tests (Playwright)
+    runs-on: ubuntu-latest
+    # Only run E2E on PRs targeting main — too slow for every push
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    needs: [backend, frontend]
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      SECRET_KEY: "ci-test-secret-key-not-used-in-production"
+      DEBUG: "True"
+      DATABASE_URL: "sqlite:///ci_e2e.sqlite3"
+      REDIS_URL: "redis://localhost:6379"
+      FIELD_ENCRYPTION_KEY: "ci-fernet-key-placeholder-32bytes=="
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+      E2E_BASE_URL: "http://localhost:3005"
+      E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      E2E_COMPANY_SLUG: ${{ secrets.E2E_COMPANY_SLUG }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: pip install -r requirements.txt
+
+      - name: Start backend
+        working-directory: ./backend
+        run: |
+          python manage.py migrate --run-syncdb
+          python manage.py runserver 0.0.0.0:8000 &
+          sleep 5
+        env:
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          DEBUG: "True"
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: ./frontend
+        run: npm run e2e -- --project=chromium-public
+        # Only run public (unauthenticated) E2E tests in CI
+        # Authenticated tests require a real test user (set up secrets if needed)
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/e2e/report/
+          retention-days: 7

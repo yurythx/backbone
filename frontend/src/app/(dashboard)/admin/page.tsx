@@ -1,26 +1,19 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { UserList } from "@/features/admin/user-list"
-import { UserForm } from "@/features/admin/user-form"
-import { User, TenantModule } from "@/types"
+import { UserList } from "@/features/users/user-list"
+import { UserForm } from "@/features/users/user-form"
+import { User } from "@/types"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatsCard } from "@/components/ui/stats-card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Users,
-  UserPlus,
-  Activity,
-  Database,
-  ShieldCheck,
-  LayoutGrid,
-  FileText
-} from "lucide-react"
+import { Users, UserPlus, Activity, Database, ShieldCheck, FileText } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import dynamic from "next/dynamic"
+import { Protected } from "@/components/auth/protected"
 
 const AnalyticsChart = dynamic(() =>
   import("../../../components/dashboard/analytics-chart").then(mod => mod.AnalyticsChart),
@@ -33,16 +26,12 @@ const ActivityTimeline = dynamic(() =>
 )
 
 function AdminPageContent() {
-  const [view, setView] = useState<'list' | 'create' | 'edit'>('list')
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const searchParams = useSearchParams()
+  const initialView = searchParams.get('action') === 'create' ? 'create' : 'list'
+  const [view, setView] = useState<'list' | 'create' | 'edit'>(initialView)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
-  useEffect(() => {
-    if (searchParams.get('action') === 'create') {
-      setView('create')
-      setSelectedUser(null)
-    }
-  }, [searchParams])
+  // Estado inicial já deriva de searchParams; sem sincronização via effect
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -81,7 +70,7 @@ function AdminPageContent() {
       >
         {view === 'list' && (
           <Button onClick={handleCreate} className="shadow-lg shadow-primary/20">
-            <UserPlus className="mr-2 h-4 w-4" /> Novo Usuário
+            <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" /> Novo Usuário
           </Button>
         )}
       </PageHeader>
@@ -127,17 +116,17 @@ function AdminPageContent() {
           <Tabs defaultValue="management" className="space-y-6">
             <TabsList className="bg-muted/50 p-1 rounded-2xl border w-full justify-start md:w-auto">
               <TabsTrigger value="management" className="rounded-xl px-6">
-                <ShieldCheck className="mr-2 h-4 w-4" /> Usuários
+                <ShieldCheck className="mr-2 h-4 w-4" aria-hidden="true" /> Usuários
               </TabsTrigger>
               <TabsTrigger value="analytics" className="rounded-xl px-6">
-                <Activity className="mr-2 h-4 w-4" /> Analytics
+                <Activity className="mr-2 h-4 w-4" aria-hidden="true" /> Analytics
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="management" className="mt-0">
               <div className="glass rounded-3xl p-6 border shadow-sm">
                 {view === 'list' ? (
-                  <UserList onCreate={handleCreate} onEdit={handleEdit} />
+                  <UserList onEdit={handleEdit} />
                 ) : (
                   <UserForm
                     initialData={selectedUser}
@@ -175,7 +164,9 @@ function AdminPageContent() {
 export default function AdminPage() {
   return (
     <Suspense fallback={null}>
-      <AdminPageContent />
+      <Protected requiredPermissions={['admin.view_dashboard']} requireStaff>
+        <AdminPageContent />
+      </Protected>
     </Suspense>
   )
 }

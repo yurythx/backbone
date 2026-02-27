@@ -217,8 +217,9 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                 host=config.smtp_host,
                 port=config.smtp_port,
                 username=config.smtp_user,
-                password=config.smtp_password,
+                password=config.get_smtp_password(),
                 use_tls=config.smtp_use_tls
+
             )
             
             email = EmailMessage(

@@ -6,16 +6,16 @@ import { api as axios } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
+import Image from "next/image"
 import {
     Loader2,
     Upload,
     Trash2,
-    Image as ImageIcon,
+    
     CheckCircle2,
     FileText,
     Search,
-    Filter,
-    X,
+    
     ExternalLink,
     Info,
     Calendar,
@@ -32,7 +32,7 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-    DialogFooter
+    
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -249,12 +249,16 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                                         >
                                             <CardContent className="p-0 aspect-square relative flex items-center justify-center bg-muted/30">
                                                 {item.file_type.startsWith("image/") ? (
-                                                    <img
-                                                        src={item.file_url}
-                                                        alt={item.title}
-                                                        className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-500"
-                                                        loading="lazy"
-                                                    />
+                                                    <div className="relative w-full h-full">
+                                                        <Image
+                                                            src={item.file_url}
+                                                            alt={item.title || 'Imagem'}
+                                                            fill
+                                                            className="object-cover transition-transform group-hover:scale-110 duration-500"
+                                                            sizes="(max-width: 768px) 50vw, 25vw"
+                                                            priority={false}
+                                                        />
+                                                    </div>
                                                 ) : (
                                                     <div className="flex flex-col items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
                                                         <FileText className="h-12 w-12" />
@@ -311,11 +315,13 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                         <div className="flex flex-col md:flex-row min-h-[400px]">
                             <div className="flex-1 bg-muted/30 p-6 flex items-center justify-center border-b md:border-b-0 md:border-r">
                                 {selectedItem.file_type.startsWith("image/") ? (
-                                    <div className="relative group">
-                                        <img
+                                    <div className="relative group w-full h-[300px]">
+                                        <Image
                                             src={selectedItem.file_url}
-                                            alt={selectedItem.title}
-                                            className="max-h-[300px] rounded-lg shadow-lg border bg-background"
+                                            alt={selectedItem.title || 'Imagem'}
+                                            fill
+                                            className="object-contain rounded-lg shadow-lg border bg-background"
+                                            sizes="(max-width: 768px) 100vw, 50vw"
                                         />
                                         <a
                                             href={selectedItem.file_url}

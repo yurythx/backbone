@@ -9,19 +9,26 @@ User = get_user_model()
 class UsersFiltersTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Filter Corp", slug="filter-corp")
-        self.user = User.all_objects.create_user(
+        # Role com permissão admin.user_manage (necessária após A7)
+        self.admin_role = Role.objects.create(
+            company=self.company,
+            name="Admin",
+            permissions=["admin.user_manage"]
+        )
+        self.user = User.objects.create_user(
             username="owner",
             email="owner@corp.com",
             password="pass",
-            company=self.company
+            company=self.company,
+            role=self.admin_role
         )
         self.client.force_authenticate(user=self.user)
         self.client.credentials(HTTP_X_COMPANY_SLUG='filter-corp')
 
         role_dev = Role.objects.create(company=self.company, name="Dev")
         role_hr = Role.objects.create(company=self.company, name="HR")
-        User.all_objects.create_user(username="devguy", email="d@corp.com", password="pass", company=self.company, role=role_dev)
-        User.all_objects.create_user(username="hrgal", email="h@corp.com", password="pass", company=self.company, role=role_hr)
+        User.objects.create_user(username="devguy", email="d@corp.com", password="pass", company=self.company, role=role_dev)
+        User.objects.create_user(username="hrgal", email="h@corp.com", password="pass", company=self.company, role=role_hr)
 
         self.role_dev = role_dev
 

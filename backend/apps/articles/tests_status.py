@@ -39,7 +39,6 @@ class ArticleStatusFlowTest(APITestCase):
         # Publish
         article = ArticleService.publish_article(self.user, article)
         self.assertEqual(article.status, Article.STATUS_PUBLISHED)
-        self.assertTrue(article.is_published)
         self.assertIsNotNone(article.published_at)
 
     def test_reject_only_pending(self):

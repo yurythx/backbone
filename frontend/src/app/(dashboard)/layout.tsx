@@ -3,6 +3,10 @@
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
+import { PresenceHeartbeat } from "@/components/layout/presence-heartbeat"
+import { PresenceProvider } from "@/hooks/use-presence"
+import { PushNotificationManager } from "@/components/notifications/PushNotificationManager"
+
 
 export default function DashboardLayout({
   children,
@@ -32,8 +36,8 @@ export default function DashboardLayout({
         if (!accessToken || !companySlug) {
           // Apenas redireciona se realmente não tiver token
           if (!isRedirecting.current) {
-             isRedirecting.current = true
-             router.replace("/login")
+            isRedirecting.current = true
+            router.replace("/login")
           }
           return
         }
@@ -42,14 +46,17 @@ export default function DashboardLayout({
         setChecked(true)
       } catch (err) {
         console.error("[DashboardLayout] Auth check error:", err)
-        setAuthorized(true) 
+        setAuthorized(true)
         setChecked(true)
       }
     }
 
     checkAuth()
+
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Executa apenas uma vez na montagem do layout
+
 
   if (!checked) {
     return (
@@ -62,13 +69,22 @@ export default function DashboardLayout({
   // Se não autorizado e não estiver redirecionando, não renderiza o shell
   // Se estiver redirecionando, mostra loading
   if (!authorized && !isRedirecting.current) {
-      // Força um estado de carregamento em vez de null para evitar cancelamento de requisições
-      return (
-        <div className="flex h-screen w-full items-center justify-center bg-background">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      )
+    // Força um estado de carregamento em vez de null para evitar cancelamento de requisições
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
   }
 
-  return <DashboardShell>{children}</DashboardShell>
+  return (
+    <PresenceProvider>
+      <DashboardShell>
+        <PresenceHeartbeat />
+        <PushNotificationManager />
+        {children}
+      </DashboardShell>
+
+    </PresenceProvider>
+  )
 }

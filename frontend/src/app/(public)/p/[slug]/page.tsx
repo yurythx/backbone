@@ -1,7 +1,6 @@
 import { api } from "@/lib/axios"
 import { Page } from "@/types"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
+// Removed unused imports
 import { Metadata } from 'next'
 import PublicPageContent from "./content"
 
@@ -11,7 +10,11 @@ export async function generateMetadata(
     const { slug } = await params
 
     try {
-        const res = await api.get<Page[]>(`/api/pages/?slug=${slug}`)
+        const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG || ''
+        const qs = envCompany ? `&company_slug=${encodeURIComponent(envCompany)}` : ''
+        const res = await api.get<Page[]>(`/api/pages/?slug=${slug}${qs}`, {
+            headers: envCompany ? { 'X-Company-Slug': envCompany } : {}
+        })
         const page = res.data[0]
 
         if (!page) return { title: 'Página não encontrada' }
@@ -24,7 +27,7 @@ export async function generateMetadata(
                 description: page.meta_description,
             },
         }
-    } catch (error) {
+    } catch {
         return { title: 'Backbone Page' }
     }
 }

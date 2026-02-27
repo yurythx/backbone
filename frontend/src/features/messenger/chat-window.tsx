@@ -1,10 +1,12 @@
 import * as React from "react"
 import { useInfiniteQuery, useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
-import { Send, Loader2, Paperclip, FileIcon, Download, X, ImageIcon, Check, SmilePlus, Reply, ArrowLeft, MoreVertical, Trash2, Copy, Pencil } from "lucide-react"
+import { Send, Loader2, Paperclip, FileIcon, Download, X, ImageIcon, Check, CheckCheck, SmilePlus, Reply, ArrowLeft, MoreVertical, Trash2, Copy, Pencil, Bell, BellOff, Ban, Mail, Phone, Pin } from "lucide-react"
 import { api } from "@/lib/axios"
-import { Contact, Message, Conversation, MessageReaction, User } from "@/types"
+import { Contact, User } from "@/types"
+import { Conversation, Message, MessageReaction } from "@/types/messenger"
 import { useChat } from "@/hooks/use-chat"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { usePresence } from "@/hooks/use-presence"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
@@ -14,27 +16,34 @@ import { cn } from "@/lib/utils"
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
+import Image from "next/image";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
+import { Badge } from "@/components/ui/badge"
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+
+
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { LinkPreview } from "./link-preview"
+
 
 interface ChatWindowProps {
   contact: Contact;
   currentUser: User | null;
   onBack?: () => void;
+  conversationId?: number | null;
 }
 
-export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
+export function ChatWindow({ contact, currentUser, onBack, conversationId }: ChatWindowProps) {
   // Force HMR refresh
   const [messageInput, setMessageInput] = React.useState("")
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
@@ -49,34 +58,153 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
   const [isDragging, setIsDragging] = React.useState(false)
   const [replyingTo, setReplyingTo] = React.useState<Message | null>(null)
   const [editingMessage, setEditingMessage] = React.useState<Message | null>(null)
+  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+
   const [lightboxOpen, setLightboxOpen] = React.useState(false)
   const [lightboxIndex, setLightboxIndex] = React.useState(0)
-  
-  const inputRef = React.useRef<HTMLInputElement>(null)
-
-  // 1. Get or Create Conversation
-  const { data: conversation, isLoading: isLoadingConv, error: convError } = useQuery({
-    queryKey: ['conversation', contact.id],
+  const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [isMuted, setIsMuted] = React.useState(false)
+  const [isBlocked, setIsBlocked] = React.useState(false)
+  const [isPinned, setIsPinned] = React.useState(false)
+  const [seekingTarget, setSeekingTarget] = React.useState(false)
+  const [highlightedMsgId, setHighlightedMsgId] = React.useState<number | null>(null)
+  const { onlineUsers } = usePresence()
+  // Track which message IDs have already been marked as read to prevent duplicate API calls
+  const markReadRef = React.useRef<Set<number>>(new Set())
+  const { data: profile, isLoading: isLoadingProfile } = useQuery<User>({
+    queryKey: ['user-profile', contact.id],
     queryFn: async () => {
-      // Try to find existing conversation via dedicated endpoint
+      const res = await api.get<User>(`/api/accounts/users/${contact.id}/`)
+      return res.data
+    },
+    enabled: !!contact.id && detailsOpen
+  })
+
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const profilePhone = React.useMemo(() => {
+    if (!profile) return undefined
+    const candidate = profile as unknown as { phone?: string; phone_number?: string }
+    return candidate.phone || candidate.phone_number
+  }, [profile])
+
+  React.useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('blockedContacts') : null
+      const arr = raw ? JSON.parse(raw) : []
+      setIsBlocked(Array.isArray(arr) && arr.includes(contact.id))
+    } catch {
+      setIsBlocked(false)
+    }
+  }, [contact.id])
+
+  const toggleBlock = () => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('blockedContacts') : null
+      let arr: number[] = []
+      if (raw) {
+        try { arr = JSON.parse(raw) } catch { arr = [] }
+      }
+      const exists = arr.includes(contact.id)
+      const next = exists ? arr.filter(id => id !== contact.id) : arr.concat(contact.id)
+      localStorage.setItem('blockedContacts', JSON.stringify(next))
+      setIsBlocked(!exists)
+      toast.success(!exists ? "Contato bloqueado" : "Contato desbloqueado")
+    } catch { }
+  }
+
+  // #2 Fix: toggleMute/togglePin now call backend REST API and fall back gracefully
+  const toggleMute = async () => {
+    if (!conversation?.id) return
+    const next = !isMuted
+    setIsMuted(next) // optimistic
+    try {
+      await api.post(`/api/messenger/conversations/${conversation.id}/${next ? 'mute' : 'unmute'}/`)
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      toast.success(next ? "Conversa silenciada" : "Som ativado nesta conversa")
+    } catch {
+      setIsMuted(!next) // rollback
+      toast.error("Erro ao atualizar preferência")
+    }
+  }
+
+  const togglePin = async () => {
+    if (!conversation?.id) return
+    const next = !isPinned
+    setIsPinned(next) // optimistic
+    try {
+      await api.post(`/api/messenger/conversations/${conversation.id}/${next ? 'pin' : 'unpin'}/`)
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      toast.success(next ? "Contato fixado" : "Contato desafixado")
+    } catch {
+      setIsPinned(!next) // rollback
+      toast.error("Erro ao atualizar preferência")
+    }
+  }
+
+  const markAllRead = async () => {
+    if (!conversation?.id) return
+    try {
+      await api.post(`/api/messenger/conversations/${conversation.id}/mark_all_read/`)
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] })
+      toast.success("Mensagens marcadas como lidas")
+    } catch {
+      toast.error("Erro ao marcar mensagens como lidas")
+    }
+  }
+
+  // 1. Load Conversation: prefer conversationId, else find/create by participant
+  const { data: conversation, isLoading: isLoadingConv } = useQuery({
+    queryKey: conversationId ? ['conversation-by-id', conversationId] : ['conversation', contact.id],
+    queryFn: async () => {
+      if (conversationId) {
+        const res = await api.get<Conversation>(`/api/messenger/conversations/${conversationId}/`)
+        return res.data
+      }
       try {
         const findRes = await api.get<Conversation>(`/api/messenger/conversations/find_by_participant/?username=${contact.username}`)
         return findRes.data
-      } catch (err) {
-        // Not found (404), so create it
+      } catch {
         const createRes = await api.post<Conversation>('/api/messenger/conversations/', {
           target_username: contact.username
         })
         return createRes.data
       }
     },
-    enabled: !!contact.id
+    enabled: conversationId ? true : !!contact.id
   })
-  
+
+  // #2 Fix: Hydrate muted/pinned state from conversation.preference (API) not localStorage
+  React.useEffect(() => {
+    if (conversation?.preference) {
+      setIsMuted(!!conversation.preference.is_muted)
+      setIsPinned(!!conversation.preference.is_pinned)
+    }
+  }, [conversation?.id, conversation?.preference?.is_muted, conversation?.preference?.is_pinned])
+
+  // Track the active conversation so notifications can be suppressed without relying on URL params
+  React.useEffect(() => {
+    if (conversation?.id) {
+      try {
+        localStorage.setItem('activeConversationId', String(conversation.id))
+      } catch { }
+    }
+    return () => {
+      try {
+        localStorage.removeItem('activeConversationId')
+      } catch { }
+    }
+  }, [conversation?.id])
+
+  // Reset the mark-read dedup set when switching conversations
+  React.useEffect(() => {
+    markReadRef.current = new Set()
+  }, [contact.id])
+
   // 2. Fetch Messages with Infinite Query (Timestamp-based)
+  const anchor = typeof window !== 'undefined' ? (localStorage.getItem('focusMessageCreatedAt') || null) : null
   const {
     data: infiniteMessages,
-    isLoading: isLoadingMessages,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage
@@ -100,53 +228,36 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
       // or if backend explicitly tells us there is a next page
       return lastPage.next ? oldest.created_at : undefined
     },
-    initialPageParam: null as string | null,
+    initialPageParam: (anchor as string | null),
     enabled: !!conversation?.id,
   })
 
   // 3. WebSocket Hook
-  const { realtimeMessages, typingUsers, handleTyping, sendTypingStatus, lastMessage } = useChat(conversation?.id ?? null)
+  const { typingUsers, handleTyping, sendTypingStatus, lastMessage } = useChat(conversation?.id ?? null)
 
   // Sound effect
   const playNotificationSound = React.useCallback(() => {
     const audio = new Audio('/sounds/notification.mp3');
-    audio.play().catch(e => console.log('Audio play failed', e));
+    audio.play().catch(e => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Audio play failed', e)
+      }
+    });
   }, []);
 
-  // Effect for sound notification
   React.useEffect(() => {
-      // @ts-ignore
-      if (lastMessage && lastMessage.sender !== currentUser?.id) {
-          playNotificationSound();
-      }
-  }, [lastMessage, currentUser?.id, playNotificationSound]);
+    const lm = lastMessage as { sender?: number } | null
+    if (lm && typeof lm.sender === 'number' && lm.sender !== currentUser?.id && !isMuted) {
+      playNotificationSound();
+    }
+    // Auto scroll on new message
+    scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [lastMessage, currentUser?.id, playNotificationSound, isMuted]);
 
-  // Collect all images for Lightbox
-  const allMessages = React.useMemo(() => {
-      // Handle potential undefined infiniteMessages or pages
-      const history = infiniteMessages?.pages?.flatMap((page: any) => page.results || []) || [];
-      const historyReversed = [...history].reverse();
-      
-      // Remove duplicates
-      const historyIds = new Set(historyReversed.map((m: Message) => m.id));
-      const uniqueRealtime = realtimeMessages.filter(m => !historyIds.has(m.id));
-      
-      return [...historyReversed, ...uniqueRealtime];
-  }, [infiniteMessages, realtimeMessages]);
 
-  const images = React.useMemo(() => {
-      return allMessages
-        .filter(m => m.file_type?.startsWith('image/') && m.file_url)
-        .map(m => ({ src: m.file_url!, alt: m.file_name }));
-  }, [allMessages]);
 
-  const handleImageClick = (imageUrl: string) => {
-      const index = images.findIndex(img => img.src === imageUrl);
-      if (index >= 0) {
-          setLightboxIndex(index);
-          setLightboxOpen(true);
-      }
-  };
+
+
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -179,7 +290,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
   // Moved to top-level to avoid conditional hook call if we had it inside
   // But we already called it above at line 64, so let's remove this duplicate declaration
   // and use the values from the first call.
-  
+
   // 4. Send Message Mutation
   const sendMessageMutation = useMutation({
     mutationFn: async ({ content, file, replyToId }: { content: string, file?: File | null, replyToId?: number | null }) => {
@@ -202,6 +313,11 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
       retryCountRef.current = 0
       lastPayloadRef.current = null
       queryClient.invalidateQueries({ queryKey: ['messages', conversation?.id] })
+      // Clear focus anchors after sending a new message to ensure it's not excluded from refetch
+      try {
+        localStorage.removeItem('focusMessageId')
+        localStorage.removeItem('focusMessageCreatedAt')
+      } catch { }
     },
     onError: () => {
       const attempts = retryCountRef.current
@@ -222,31 +338,75 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
     }
   })
 
-  // Merge history and realtime
+  // Merge paginated history into a flat, chronologically-sorted list
   const messages = React.useMemo(() => {
-    const history = infiniteMessages?.pages.flatMap((page: { results: Message[] }) => page.results) || []
-    const combined = [...history, ...realtimeMessages]
+    const history =
+      infiniteMessages?.pages?.flatMap((page) => {
+        const results = (page as { results?: Message[] }).results
+        return Array.isArray(results) ? results : []
+      }) || []
     const seen = new Set()
-    return combined.filter(m => {
+    return history.filter(m => {
       if (seen.has(m.id)) return false
       seen.add(m.id)
       return true
     }).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-  }, [infiniteMessages, realtimeMessages])
+  }, [infiniteMessages])
 
-  // Scroll to bottom on NEW realtime message
+  // Collect image slides for the Lightbox — must come after `messages` is declared
+  const lightboxImages = React.useMemo(() => {
+    return messages
+      .filter((m: Message) => m.file_type?.startsWith('image/') && m.file_url)
+      .map((m: Message) => ({ src: m.file_url!, alt: m.file_name ?? undefined }));
+  }, [messages]);
+
+  // Focus and highlight a specific message (for deep-linking via URL/search)
+  // Placed AFTER `messages` declaration to avoid "used before declaration" lint errors
   React.useEffect(() => {
-    if (scrollRef.current && realtimeMessages.length > 0) {
+    const targetIdStr = typeof window !== 'undefined' ? localStorage.getItem('focusMessageId') : null
+    const targetId = targetIdStr ? parseInt(targetIdStr) : null
+    if (!targetId || !conversation?.id) return
+    const exists = messages.some((m: Message) => m.id === targetId)
+    if (!exists && hasNextPage && !isFetchingNextPage) {
+      setSeekingTarget(true)
+      fetchNextPage()
+    } else if (!exists && !hasNextPage) {
+      setSeekingTarget(false)
+    } else if (exists) {
+      setSeekingTarget(false)
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${targetId}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.classList.add('bg-primary/5', 'transition-colors', 'duration-1000')
+          setTimeout(() => el.classList.remove('bg-primary/5'), 2000)
+          setHighlightedMsgId(targetId)
+          setTimeout(() => setHighlightedMsgId(null), 6000)
+        }
+        // Clear anchors immediately after locating the target
+        try {
+          localStorage.removeItem('focusMessageId')
+          localStorage.removeItem('focusMessageCreatedAt')
+        } catch { }
+      }, 300)
+    }
+  }, [messages, conversation?.id, hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  // Scroll to bottom when messages change (new message arrived via WS → cache updated)
+  const prevMessageCountRef = React.useRef(0)
+  React.useEffect(() => {
+    if (messages.length > prevMessageCountRef.current && scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [realtimeMessages])
+    prevMessageCountRef.current = messages.length
+  }, [messages.length])
 
   // Initial scroll to bottom
   React.useEffect(() => {
     if (scrollRef.current && messages.length > 0 && !isFetchingNextPage) {
       scrollRef.current.scrollIntoView({ behavior: 'auto' })
     }
-  }, [conversation?.id])
+  }, [conversation?.id, isFetchingNextPage, messages.length])
 
   // Infinite Scroll Observer - DISABLED AUTO-FETCH
   // We are using the manual "Carregar mensagens anteriores" button for better UX stability
@@ -255,17 +415,21 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
   //   const observer = new IntersectionObserver(...)
   // }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSend = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     if (!messageInput.trim() && !selectedFile) return
+    if (isBlocked) {
+      toast.error("Você bloqueou este contato.")
+      return
+    }
 
     if (!conversation?.id) {
-        toast.error("Erro: Conversa não inicializada.");
-        return;
+      toast.error("Erro: Conversa não inicializada.");
+      return;
     }
 
     sendTypingStatus(false)
-    
+
     // Check if editing
     if (editingMessage) {
       editMessageMutation.mutate({ messageId: editingMessage.id, content: messageInput })
@@ -275,7 +439,9 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
     lastPayloadRef.current = { content: messageInput, file: selectedFile, replyToId: replyingTo?.id }
     retryCountRef.current = 0
     setSendError(null)
-    console.log("[ChatWindow] Mutating sendMessageMutation with:", lastPayloadRef.current);
+    if (process.env.NODE_ENV === 'development') {
+      console.log("[ChatWindow] Mutating sendMessageMutation with:", lastPayloadRef.current)
+    }
     sendMessageMutation.mutate(lastPayloadRef.current)
   }
 
@@ -284,10 +450,26 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
     mutationFn: async ({ messageId, content }: { messageId: number, content: string }) => {
       await api.patch(`/api/messenger/messages/${messageId}/`, { content })
     },
-    onSuccess: () => {
+    onSuccess: (_, { messageId, content }) => {
       setEditingMessage(null)
       setMessageInput("")
       toast.success("Mensagem editada")
+      // #11 fix: update cache immediately without waiting for WS
+      queryClient.setQueryData<{ pages: { results: Message[] }[] }>(
+        ['messages', conversation?.id],
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              results: page.results.map((m) =>
+                m.id === messageId ? { ...m, content, edited_at: new Date().toISOString() } : m
+              )
+            }))
+          }
+        }
+      )
     },
     onError: () => {
       toast.error("Erro ao editar mensagem")
@@ -296,10 +478,10 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
 
   const handleEdit = (msg: Message) => {
     setEditingMessage(msg)
-    setMessageInput(msg.content)
+    setMessageInput(msg.content ?? '') // #7 fix: content may be null for deleted messages
     inputRef.current?.focus()
   }
-  
+
   const cancelEdit = () => {
     setEditingMessage(null)
     setMessageInput("")
@@ -332,7 +514,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
 
     try {
       await api.post(`/api/messenger/messages/${messageId}/reaction/`, { emoji, action });
-    } catch (e) {
+    } catch {
       toast.error("Falha ao reagir")
     }
   }
@@ -349,11 +531,11 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
 
   const handleDelete = async (messageId: number) => {
     try {
-        await api.delete(`/api/messenger/messages/${messageId}/`)
-        // Optimistic update handled by WebSocket listener in useChat
-        toast.success("Mensagem excluída")
-    } catch (error) {
-        toast.error("Erro ao excluir mensagem")
+      await api.delete(`/api/messenger/messages/${messageId}/`)
+      // Optimistic update handled by WebSocket listener in useChat
+      toast.success("Mensagem excluída")
+    } catch {
+      toast.error("Erro ao excluir mensagem")
     }
   }
 
@@ -389,7 +571,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
   }
 
   return (
-    <div 
+    <div
       className="flex flex-col h-full bg-background relative"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -397,12 +579,12 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
     >
       {isDragging && (
         <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center border-2 border-dashed border-primary m-4 rounded-xl animate-in fade-in duration-200">
-           <div className="flex flex-col items-center gap-4 text-primary">
-             <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center animate-bounce">
-                <Download className="h-10 w-10" />
-             </div>
-             <p className="text-xl font-bold">Solte o arquivo para enviar</p>
-           </div>
+          <div className="flex flex-col items-center gap-4 text-primary">
+            <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center animate-bounce">
+              <Download className="h-10 w-10" />
+            </div>
+            <p className="text-xl font-bold">Solte o arquivo para enviar</p>
+          </div>
         </div>
       )}
       {/* Header */}
@@ -418,32 +600,233 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
               <ArrowLeft className="h-5 w-5" />
             </Button>
           )}
-          <Avatar className="h-10 w-10 border border-border/50 shadow-sm">
-            <AvatarImage src={contact.avatar_url || undefined} />
-            <AvatarFallback className="bg-primary/10 text-primary font-bold">
-              {contact.username.substring(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+          <Button
+            type="button"
+            variant={isPinned ? "secondary" : "ghost"}
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            onClick={togglePin}
+            aria-label={isPinned ? "Desafixar contato" : "Fixar contato"}
+            title={isPinned ? "Desafixar" : "Fixar"}
+          >
+            <Pin className="h-4 w-4" />
+          </Button>
+          {isMuted && (
+            <Badge variant="outline" className="text-[10px] px-2">Silenciada</Badge>
+          )}
+          <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <SheetTrigger asChild>
+              <button className="rounded-full focus:outline-none focus:ring-2 focus:ring-primary/30" aria-label="Abrir detalhes do contato">
+                <Avatar className="h-10 w-10 border border-border/50 shadow-sm">
+                  <AvatarImage src={contact.avatar_url || undefined} />
+                  <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                    {(contact.username || contact.email || '??').slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>Detalhes do contato</SheetTitle>
+                <SheetDescription>Informações do perfil e status</SheetDescription>
+              </SheetHeader>
+              <div className="p-4 space-y-6">
+                {isLoadingProfile && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <Skeleton className="h-16 w-16 rounded-full" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-3 w-56" />
+                      </div>
+                    </div>
+                    <div className="grid gap-3">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16 border border-border/50 shadow-sm">
+                    <AvatarImage src={contact.avatar_url || undefined} />
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                      {(contact.username || contact.email || '??').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-base">
+                      {([profile?.first_name, profile?.last_name].filter(Boolean).join(' ')) || contact.username || contact.email}
+                    </span>
+                    {profile?.email ? (
+                      <span className="text-sm text-muted-foreground">{profile.email}</span>
+                    ) : contact.email ? (
+                      <span className="text-sm text-muted-foreground">{contact.email}</span>
+                    ) : null}
+                    {contact.is_online ? (
+                      <span className="text-xs text-green-600 font-medium mt-1 flex items-center gap-1">
+                        <span className="h-2 w-2 rounded-full bg-green-600" />
+                        Online
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground mt-1">
+                        {contact.last_seen ? `Visto por último: ${new Date(contact.last_seen).toLocaleString()}` : 'Offline'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="grid gap-3">
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Usuário</span>
+                    <span className="text-sm">
+                      {profile?.username || contact.username}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Nome completo</span>
+                    <span className="text-sm">
+                      {([profile?.first_name, profile?.last_name].filter(Boolean).join(' ')) || contact.username}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Email</span>
+                    <span className="text-sm">
+                      {profile?.email || contact.email || 'Não informado'}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Telefone</span>
+                    <span className="text-sm">
+                      {(() => {
+                        const p = profile as User & { phone?: string; phone_number?: string }
+                        return p?.phone || p?.phone_number || 'Não informado'
+                      })()}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Empresa</span>
+                    <span className="text-sm">
+                      {typeof profile?.company === 'object' && profile?.company && 'name' in profile.company
+                        ? (profile.company as { name: string }).name
+                        : null}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Papel</span>
+                    <span className="text-sm">
+                      {profile?.role_details?.name || (contact.is_staff ? 'Staff' : 'Membro')}
+                    </span>
+                  </div>
+                </div>
+                <div className="pt-2 space-y-3">
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Ações rápidas</span>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" className="rounded-xl" onClick={toggleMute}>
+                        {isMuted ? <BellOff className="h-4 w-4 mr-2" /> : <Bell className="h-4 w-4 mr-2" />}
+                        {isMuted ? "Ativar som" : "Silenciar conversa"}
+                      </Button>
+                      <Button variant="outline" className="rounded-xl" onClick={toggleBlock}>
+                        <Ban className="h-4 w-4 mr-2" />
+                        {isBlocked ? "Desbloquear contato" : "Bloquear contato"}
+                      </Button>
+                      {profile?.email && (
+                        <Button variant="ghost" className="rounded-xl" onClick={() => handleCopy(profile.email!)}>
+                          <Mail className="h-4 w-4 mr-2" />
+                          Copiar e-mail
+                        </Button>
+                      )}
+                      {profilePhone && (
+                        <Button variant="ghost" className="rounded-xl" onClick={() => {
+                          handleCopy(profilePhone)
+                        }}>
+                          <Phone className="h-4 w-4 mr-2" />
+                          Copiar telefone
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <span className="text-xs text-muted-foreground">Grupos</span>
+                  <div className="flex flex-wrap gap-2">
+                    {(contact.group_names || []).length > 0 ? (
+                      contact.group_names.map((g) => (
+                        <Badge key={g} variant="secondary">{g}</Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Sem grupos</span>
+                    )}
+                  </div>
+                </div>
+                {contact.is_staff && <Badge variant="outline">Equipe</Badge>}
+              </div>
+            </SheetContent>
+          </Sheet>
           <div className="flex flex-col">
-            <h3 className="font-semibold text-sm leading-none">{contact.username}</h3>
-            {contact.is_online ? (
-               <span className="text-[10px] text-green-500 font-medium mt-1 flex items-center gap-1">
-                 <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                 Online
-               </span>
-            ) : (
-               <span className="text-[10px] text-muted-foreground mt-1">
+            <h3 className="font-semibold text-sm leading-none">
+              {([profile?.first_name, profile?.last_name].filter(Boolean).join(' ')) || contact.username || contact.email || 'Contato'}
+            </h3>
+            {/* #13 fix: show correct status label for online/busy/offline */}
+            {(() => {
+              const status = onlineUsers.has(contact.id)
+                ? (contact.is_online === false ? 'busy' : 'online')
+                : contact.is_online
+                  ? 'online'
+                  : null
+              if (status === 'online' || status === 'busy') {
+                const isBusy = status === 'busy'
+                return (
+                  <span className={cn(
+                    "text-[10px] font-medium mt-1 flex items-center gap-1",
+                    isBusy ? "text-yellow-500" : "text-green-500"
+                  )}>
+                    <span className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      isBusy ? "bg-yellow-500" : "bg-green-500 animate-pulse"
+                    )} />
+                    {isBusy ? 'Ocupado' : 'Online'}
+                  </span>
+                )
+              }
+              return (
+                <span className="text-[10px] text-muted-foreground mt-1">
                   {contact.last_seen ? `Visto por último: ${new Date(contact.last_seen).toLocaleString()}` : 'Offline'}
-               </span>
-            )}
+                </span>
+              )
+            })()}
           </div>
         </div>
-        
+
         {/* Actions */}
         <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Menu da conversa">
                 <MoreVertical className="h-5 w-5" />
-            </Button>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setDetailsOpen(true)}>
+                Ver detalhes do contato
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={markAllRead}>
+                <CheckCheck className="mr-2 h-4 w-4" />
+                Marcar todas como lidas
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={toggleMute}>
+                {isMuted ? <><Bell className="mr-2 h-4 w-4" /> Ativar som</> : <><BellOff className="mr-2 h-4 w-4" /> Silenciar conversa</>}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={togglePin}>
+                <Pin className="mr-2 h-4 w-4" />
+                {isPinned ? "Desafixar contato" : "Fixar contato"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={toggleBlock} className="text-destructive focus:text-destructive">
+                <Ban className="mr-2 h-4 w-4" />
+                {isBlocked ? "Desbloquear contato" : "Bloquear contato"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -451,18 +834,27 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
       <ScrollArea className="flex-1 p-4 overflow-x-hidden">
         <div className="space-y-6 max-w-4xl mx-auto pb-4">
 
+          {(seekingTarget || isFetchingNextPage) && (
+            <div className="flex justify-center py-2">
+              <span className="text-xs text-muted-foreground inline-flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Carregando mensagens anteriores para localizar a mensagem…
+              </span>
+            </div>
+          )}
+
           {hasNextPage && (
             <div className="flex justify-center py-2">
-               <Button 
-                 variant="ghost" 
-                 size="sm" 
-                 onClick={() => fetchNextPage()} 
-                 disabled={isFetchingNextPage}
-                 className="text-xs text-muted-foreground"
-               >
-                 {isFetchingNextPage ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
-                 Carregar mensagens anteriores
-               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="text-xs text-muted-foreground"
+              >
+                {isFetchingNextPage ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+                Carregar mensagens anteriores
+              </Button>
             </div>
           )}
 
@@ -473,20 +865,20 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
             const isMe = msg.sender === currentUser?.id
             const isImage = msg.file_type?.startsWith('image/')
             const showAvatar = !isMe && (index === 0 || messages[index - 1].sender !== msg.sender)
-            
-            // Date Separator Logic
-            const showDateSeparator = index === 0 || 
-              new Date(msg.created_at).toDateString() !== new Date(messages[index - 1].created_at).toDateString();
-            
-            const dateLabel = (() => {
-                const date = new Date(msg.created_at);
-                const today = new Date();
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
 
-                if (date.toDateString() === today.toDateString()) return "Hoje";
-                if (date.toDateString() === yesterday.toDateString()) return "Ontem";
-                return date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
+            // Date Separator Logic
+            const showDateSeparator = index === 0 ||
+              new Date(msg.created_at).toDateString() !== new Date(messages[index - 1].created_at).toDateString();
+
+            const dateLabel = (() => {
+              const date = new Date(msg.created_at);
+              const today = new Date();
+              const yesterday = new Date();
+              yesterday.setDate(yesterday.getDate() - 1);
+
+              if (date.toDateString() === today.toDateString()) return "Hoje";
+              if (date.toDateString() === yesterday.toDateString()) return "Ontem";
+              return date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
             })();
 
             return (
@@ -498,60 +890,66 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                     </span>
                   </div>
                 )}
-              <div
-                key={msg.id}
-                ref={(el) => {
-                  if (el && !msg.is_read && msg.sender !== currentUser?.id) {
-                    const observer = new IntersectionObserver(
-                      (entries) => {
-                        if (entries[0].isIntersecting) {
-                          api.post(`/api/messenger/messages/${msg.id}/mark_read/`)
-                            .then(() => {
-                              msg.is_read = true;  // Optimistic update
-                            })
-                            .catch(() => { })
-                          observer.disconnect()
-                        }
-                      },
-                      { threshold: 0.5 }
-                    )
-                    observer.observe(el)
-                  }
-                }}
-                className={cn(
-                  "flex gap-3 w-full group",
-                  isMe ? "justify-end" : "justify-start"
-                )}
-              >
-                {!isMe && (
-                   <div className="w-8 flex-shrink-0 flex flex-col justify-end">
+                <div
+                  key={msg.id}
+                  ref={(el) => {
+                    if (el && !msg.is_read && msg.sender !== currentUser?.id) {
+                      // Guard: only mark each message once per session
+                      if (markReadRef.current.has(msg.id)) return
+                      const observer = new IntersectionObserver(
+                        (entries) => {
+                          if (entries[0].isIntersecting) {
+                            // Double-check the ref before calling (React StrictMode can fire twice)
+                            if (!markReadRef.current.has(msg.id)) {
+                              markReadRef.current.add(msg.id)
+                              api.post(`/api/messenger/messages/${msg.id}/mark_read/`)
+                                .then(() => {
+                                  msg.is_read = true;  // Optimistic update
+                                })
+                                .catch(() => { })
+                            }
+                            observer.disconnect()
+                          }
+                        },
+                        { threshold: 0.5 }
+                      )
+                      observer.observe(el)
+                    }
+                  }}
+                  className={cn(
+                    "flex gap-3 w-full group",
+                    isMe ? "justify-end" : "justify-start"
+                  )}
+                >
+                  {!isMe && (
+                    <div className="w-8 flex-shrink-0 flex flex-col justify-end">
                       {showAvatar ? (
-                        <Avatar className="h-8 w-8 border border-border/50 shadow-sm">
-                            <AvatarImage src={contact.avatar_url || undefined} />
-                            <AvatarFallback className="bg-muted text-muted-foreground text-[10px] font-bold">
-                                {contact.username.substring(0, 2).toUpperCase()}
-                            </AvatarFallback>
+                        <Avatar className="h-8 w-8 border border-border/50 shadow-sm cursor-pointer" onClick={() => setDetailsOpen(true)}>
+                          <AvatarImage src={contact.avatar_url || undefined} />
+                          <AvatarFallback className="bg-muted text-muted-foreground text-[10px] font-bold">
+                            {(contact.username || contact.email || '??').slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
                         </Avatar>
                       ) : <div className="w-8" />}
-                   </div>
-                )}
-                
-                {/* Reply Action (Left for Me) */}
-                {isMe && (
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center px-2">
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 rounded-full hover:bg-muted text-muted-foreground"
-                            onClick={() => handleReply(msg)}
-                        >
-                            <Reply className="h-4 w-4" />
-                        </Button>
                     </div>
-                )}
+                  )}
 
-                <div className={cn("flex flex-col gap-1 max-w-[75%]", isMe ? "items-end" : "items-start")}>
-                    
+                  {/* Reply Action (Left for Me) */}
+                  {isMe && (
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center px-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full hover:bg-muted text-muted-foreground"
+                        onClick={() => handleReply(msg)}
+                      >
+                        <Reply className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className={cn("flex flex-col gap-1 max-w-[75%]", isMe ? "items-end" : "items-start")}>
+
                     <div
                       id={`msg-${msg.id}`}
                       className={cn(
@@ -561,46 +959,62 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                           : "bg-card border border-border/50 text-foreground rounded-bl-none shadow-sm"
                       )}
                     >
+                      {highlightedMsgId === msg.id && (
+                        <Badge className="absolute -top-2 -right-2 h-5 px-2 text-[10px] rounded-full">
+                          Nova
+                        </Badge>
+                      )}
                       {/* Reply Context (Inside Bubble) */}
                       {msg.reply_to && (
-                          <div 
-                            className={cn(
-                              "mb-2 text-xs px-3 py-2 rounded-lg border-l-4 cursor-pointer opacity-90 transition-opacity hover:opacity-100",
-                              isMe 
-                                ? "bg-black/10 border-l-primary-foreground/70 text-primary-foreground/90" 
-                                : "bg-muted border-l-primary/70 text-muted-foreground"
-                            )}
-                            onClick={() => {
-                              const el = document.getElementById(`msg-${msg.reply_to?.id}`);
-                              if (el) {
-                                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                  el.classList.add('bg-primary/5', 'transition-colors', 'duration-1000');
-                                  setTimeout(() => el.classList.remove('bg-primary/5'), 2000);
-                              } else {
-                                  toast.info("Mensagem original não está visível no histórico carregado.");
-                              }
-                            }}
-                          >
-                             <p className="font-bold mb-0.5 text-[10px] opacity-80">
-                                {msg.reply_to.sender === currentUser?.id ? 'Você' : msg.reply_to.sender_username}
-                             </p>
-                             <p className="truncate line-clamp-1">
-                                {msg.reply_to.content || (msg.reply_to.file_name ? 'Anexo' : 'Mensagem')}
-                             </p>
-                          </div>
+                        <div
+                          className={cn(
+                            "mb-2 text-xs px-3 py-2 rounded-lg border-l-4 cursor-pointer opacity-90 transition-opacity hover:opacity-100",
+                            isMe
+                              ? "bg-black/10 border-l-primary-foreground/70 text-primary-foreground/90"
+                              : "bg-muted border-l-primary/70 text-muted-foreground"
+                          )}
+                          onClick={() => {
+                            const el = document.getElementById(`msg-${msg.reply_to?.id}`);
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              el.classList.add('bg-primary/5', 'transition-colors', 'duration-1000');
+                              setTimeout(() => el.classList.remove('bg-primary/5'), 2000);
+                            } else {
+                              toast.info("Mensagem original não está visível no histórico carregado.");
+                            }
+                          }}
+                        >
+                          <p className="font-bold mb-0.5 text-[10px] opacity-80">
+                            {msg.reply_to.sender === currentUser?.id ? 'Você' : msg.reply_to.sender_username}
+                          </p>
+                          <p className="truncate line-clamp-1">
+                            {msg.reply_to.content || (msg.reply_to.file_name ? 'Anexo' : 'Mensagem')}
+                          </p>
+                        </div>
                       )}
 
                       {/* Image Attachment */}
-                      {isImage && msg.file_url && (
-                        <div className="mb-2 overflow-hidden rounded-xl border border-border/20 bg-black/5">
-                          <img
-                            src={msg.file_url}
-                            alt={msg.file_name}
-                            className="max-h-[300px] w-full object-contain cursor-pointer transition-transform hover:scale-[1.02]"
-                            onClick={() => window.open(msg.file_url, '_blank')}
-                          />
-                        </div>
-                      )}
+                      {isImage && msg.file_url && (() => {
+                        const imgIdx = lightboxImages.findIndex(i => i.src === msg.file_url)
+                        return (
+                          <div
+                            className="mb-2 overflow-hidden rounded-xl border border-border/20 bg-black/5 relative h-[240px] cursor-pointer"
+                            onClick={() => {
+                              setLightboxIndex(imgIdx >= 0 ? imgIdx : 0)
+                              setLightboxOpen(true)
+                            }}
+                            title="Clique para ampliar"
+                          >
+                            <Image
+                              src={msg.file_url}
+                              alt={msg.file_name || 'Imagem'}
+                              fill
+                              className="object-contain transition-transform hover:scale-[1.02]"
+                              sizes="(max-width: 768px) 100vw, 50vw"
+                            />
+                          </div>
+                        )
+                      })()}
 
                       {/* Other File Attachment */}
                       {!isImage && msg.file_url && (
@@ -634,7 +1048,28 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                         </div>
                       )}
 
-                      {msg.content && <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>}
+                      {/* #16 fix: show 'Mensagem excluída' for soft-deleted messages */}
+                      {msg.is_deleted ? (
+                        <span className="italic text-xs opacity-60 flex items-center gap-1">
+                          <Trash2 className="h-3 w-3" />
+                          Mensagem excluída
+                        </span>
+                      ) : msg.content ? (
+                        <div className="space-y-2">
+                          <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                          {(() => {
+                            // Simple URL detection regex
+                            const urlRegex = /(https?:\/\/[^\s]+)/g;
+                            const urls = msg.content.match(urlRegex);
+                            if (urls && urls.length > 0) {
+                              // We only show preview for the first link to avoid clutter
+                              return <LinkPreview url={urls[0]} className={isMe ? "bg-black/20" : ""} />;
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      ) : null}
+
 
                       <div className="flex items-center justify-between gap-4 mt-0.5 min-w-[60px]">
                         <span className={cn(
@@ -645,96 +1080,104 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                         </span>
 
                         <div className="flex items-center gap-1">
-                             {/* Message Actions Menu */}
-                             <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className={cn(
-                                            "h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 data-[state=open]:opacity-100",
-                                            isMe ? "text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/20" : "text-muted-foreground hover:text-foreground"
-                                        )}
-                                    >
-                                        <MoreVertical className="h-3 w-3" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align={isMe ? "end" : "start"}>
-                                    <DropdownMenuItem onClick={() => handleReply(msg)}>
-                                        <Reply className="mr-2 h-4 w-4" />
-                                        Responder
-                                    </DropdownMenuItem>
-                                    {msg.content && (
-                                        <DropdownMenuItem onClick={() => handleCopy(msg.content)}>
-                                            <Copy className="mr-2 h-4 w-4" />
-                                            Copiar
-                                        </DropdownMenuItem>
-                                    )}
-                                    {isMe && (
-                                        <DropdownMenuItem onClick={() => handleDelete(msg.id)} className="text-destructive focus:text-destructive">
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Excluir
-                                        </DropdownMenuItem>
-                                    )}
-                                </DropdownMenuContent>
-                             </DropdownMenu>
-
-                            {isMe && (
-                              <div className="flex items-center -mr-1 scale-90">
-                                {msg.is_read ? (
-                                  <div className="flex -space-x-1">
-                                    <Check className="h-3 w-3 text-sky-200" strokeWidth={3} />
-                                    <Check className="h-3 w-3 text-sky-200" strokeWidth={3} />
-                                  </div>
-                                ) : (
-                                  <Check className="h-3 w-3 text-primary-foreground/50" />
+                          {/* Message Actions Menu */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                  "h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 data-[state=open]:opacity-100",
+                                  isMe ? "text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/20" : "text-muted-foreground hover:text-foreground"
                                 )}
-                              </div>
-                            )}
+                                aria-label="Abrir menu da mensagem"
+                              >
+                                <MoreVertical className="h-3 w-3" aria-hidden="true" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={isMe ? "end" : "start"}>
+                              <DropdownMenuItem onClick={() => handleReply(msg)}>
+                                <Reply className="mr-2 h-4 w-4" aria-hidden="true" />
+                                Responder
+                              </DropdownMenuItem>
+                              {msg.content && (
+                                <DropdownMenuItem onClick={() => handleCopy(msg.content!)}>
+                                  <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                                  Copiar
+                                </DropdownMenuItem>
+                              )}
+                              {isMe && msg.content && (
+                                <DropdownMenuItem onClick={() => handleEdit(msg)}>
+                                  <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                                  Editar
+                                </DropdownMenuItem>
+                              )}
+                              {isMe && (
+                                <DropdownMenuItem onClick={() => handleDelete(msg.id)} className="text-destructive focus:text-destructive">
+                                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          {isMe && (
+                            <div className="flex items-center -mr-1 scale-90">
+                              {msg.is_read ? (
+                                <div className="flex -space-x-1">
+                                  <Check className="h-3 w-3 text-sky-200" strokeWidth={3} />
+                                  <Check className="h-3 w-3 text-sky-200" strokeWidth={3} />
+                                </div>
+                              ) : (
+                                <Check className="h-3 w-3 text-primary-foreground/50" />
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Reactions */}
                     {msg.reactions && msg.reactions.length > 0 && (
-                        <div className={cn("flex gap-1 flex-wrap -mt-2 z-10 px-2", isMe ? "justify-end" : "justify-start")}>
-                          {Object.entries((msg.reactions || []).reduce((acc, r) => {
-                            acc[r.emoji] = (acc[r.emoji] || []).concat(r);
-                            return acc;
-                          }, {} as Record<string, MessageReaction[]>)).map(([emoji, reactions]) => {
-                            const isReactedByMe = reactions.some(r => r.user === currentUser?.id);
-                            return (
-                              <button
-                                key={emoji}
-                                onClick={() => handleReaction(msg.id, emoji, msg.reactions || [])}
-                                className={cn(
-                                  "text-[10px] px-1.5 py-0.5 rounded-full border shadow-sm flex items-center gap-1 transition-all hover:scale-110",
-                                  isReactedByMe ? "bg-primary/10 border-primary/20 text-primary" : "bg-background border-border hover:bg-muted"
-                                )}
-                              >
-                                <span>{emoji}</span>
-                                <span className="font-bold">{reactions.length}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
+                      <div className={cn("flex gap-1 flex-wrap -mt-2 z-10 px-2", isMe ? "justify-end" : "justify-start")}>
+                        {Object.entries((msg.reactions || []).reduce((acc, r) => {
+                          acc[r.emoji] = (acc[r.emoji] || []).concat(r);
+                          return acc;
+                        }, {} as Record<string, MessageReaction[]>)).map(([emoji, reactions]) => {
+                          const isReactedByMe = reactions.some(r => r.user === currentUser?.id);
+                          return (
+                            <button
+                              key={emoji}
+                              onClick={() => handleReaction(msg.id, emoji, msg.reactions || [])}
+                              className={cn(
+                                "text-[10px] px-1.5 py-0.5 rounded-full border shadow-sm flex items-center gap-1 transition-all hover:scale-110",
+                                isReactedByMe ? "bg-primary/10 border-primary/20 text-primary" : "bg-background border-border hover:bg-muted"
+                              )}
+                            >
+                              <span>{emoji}</span>
+                              <span className="font-bold">{reactions.length}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     )}
-                </div>
+                  </div>
 
-                {/* Reply Action (Right for Others) */}
-                {!isMe && (
+                  {/* Reply Action (Right for Others) */}
+                  {!isMe && (
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center px-2">
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 rounded-full hover:bg-muted text-muted-foreground"
-                            onClick={() => handleReply(msg)}
-                        >
-                            <Reply className="h-4 w-4" />
-                        </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full hover:bg-muted text-muted-foreground"
+                        onClick={() => handleReply(msg)}
+                        aria-label="Responder mensagem"
+                      >
+                        <Reply className="h-4 w-4" aria-hidden="true" />
+                      </Button>
                     </div>
-                )}
-              </div>
+                  )}
+                </div>
               </React.Fragment>
             )
           })}
@@ -760,13 +1203,13 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
       {/* Input Area */}
       <div className="p-4 border-t bg-card shrink-0">
         <div className="max-w-4xl mx-auto space-y-4">
-          
+
           {/* Editing Preview */}
           {editingMessage && (
             <div className="flex items-center gap-3 p-3 bg-primary/10 rounded-xl border border-l-4 border-l-primary animate-in slide-in-from-bottom-2">
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-primary mb-0.5">
-                   Editando mensagem
+                  Editando mensagem
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
                   {editingMessage.content}
@@ -777,8 +1220,9 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                 size="icon"
                 className="h-6 w-6 rounded-full hover:bg-background/80"
                 onClick={cancelEdit}
+                aria-label="Cancelar edição"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3 w-3" aria-hidden="true" />
               </Button>
             </div>
           )}
@@ -788,7 +1232,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
             <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl border border-l-4 border-l-primary animate-in slide-in-from-bottom-2">
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-primary mb-0.5">
-                   Respondendo a {replyingTo.sender === currentUser?.id ? 'Você' : replyingTo.sender_username || 'Usuário'}
+                  Respondendo a {replyingTo.sender === currentUser?.id ? 'Você' : replyingTo.sender_username || 'Usuário'}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
                   {replyingTo.content || (replyingTo.file_url ? 'Anexo de arquivo' : 'Mensagem')}
@@ -799,8 +1243,9 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                 size="icon"
                 className="h-6 w-6 rounded-full hover:bg-background/80"
                 onClick={() => setReplyingTo(null)}
+                aria-label="Cancelar resposta"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3 w-3" aria-hidden="true" />
               </Button>
             </div>
           )}
@@ -810,9 +1255,9 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
             <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-2xl border border-primary/20 animate-in slide-in-from-bottom-2 shadow-sm">
               <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
                 {selectedFile.type.startsWith('image/') ? (
-                  <ImageIcon className="h-5 w-5 text-primary" />
+                  <ImageIcon className="h-5 w-5 text-primary" aria-hidden="true" />
                 ) : (
-                  <Paperclip className="h-5 w-5 text-primary" />
+                  <Paperclip className="h-5 w-5 text-primary" aria-hidden="true" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -826,8 +1271,9 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                 size="icon"
                 className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
                 onClick={() => setSelectedFile(null)}
+                aria-label="Remover arquivo"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           )}
@@ -844,11 +1290,14 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                 ref={inputRef}
                 value={messageInput}
                 onChange={handleInputChange}
+                aria-label="Campo de mensagem"
+                disabled={isBlocked}
+
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     if (messageInput.trim() || selectedFile) {
-                      handleSend(e as any)
+                      handleSend()
                     }
                   }
                 }}
@@ -858,19 +1307,19 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
               />
               <div className="absolute right-2 bottom-1.5 flex gap-1">
                 <Popover>
-                    <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        >
-                          <SmilePlus className="h-4 w-4" />
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 border-none bg-transparent shadow-none" side="top" align="end">
-                        <EmojiPicker onEmojiClick={handleEmojiClick} lazyLoadEmojis={true} theme={Theme.AUTO} />
-                    </PopoverContent>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    >
+                      <SmilePlus className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 border-none bg-transparent shadow-none" side="top" align="end">
+                    <EmojiPicker onEmojiClick={handleEmojiClick} lazyLoadEmojis={true} theme={Theme.AUTO} />
+                  </PopoverContent>
                 </Popover>
 
                 <input
@@ -885,49 +1334,51 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-primary"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={!!editingMessage}
+                  disabled={!!editingMessage || isBlocked}
                 >
                   <Paperclip className="h-4 w-4" />
                 </Button>
               </div>
             </div>
             {editingMessage ? (
-                <div className="flex gap-2">
-                     <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-11 w-11 rounded-xl"
-                      onClick={cancelEdit}
-                    >
-                      <X className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      type="submit"
-                      size="icon"
-                      className="h-11 w-11 rounded-xl shadow-lg shadow-primary/20 shrink-0"
-                      disabled={editMessageMutation.isPending || !messageInput.trim()}
-                    >
-                      {editMessageMutation.isPending ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <Check className="h-5 w-5" />
-                      )}
-                    </Button>
-                </div>
-            ) : (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 rounded-xl"
+                  onClick={cancelEdit}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
                 <Button
                   type="submit"
                   size="icon"
                   className="h-11 w-11 rounded-xl shadow-lg shadow-primary/20 shrink-0"
-                  disabled={sendMessageMutation.isPending || (!messageInput.trim() && !selectedFile)}
+                  disabled={editMessageMutation.isPending || !messageInput.trim()}
                 >
-                  {sendMessageMutation.isPending ? (
+                  {editMessageMutation.isPending ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
-                    <Send className="h-5 w-5" />
+                    <Check className="h-5 w-5" />
                   )}
                 </Button>
+              </div>
+            ) : (
+              <Button
+                type="submit"
+                size="icon"
+                className="h-11 w-11 rounded-xl shadow-lg shadow-primary/20 shrink-0"
+                disabled={sendMessageMutation.isPending || isBlocked || (!messageInput.trim() && !selectedFile)}
+                aria-label="Enviar mensagem"
+              >
+
+                {sendMessageMutation.isPending ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </Button>
             )}
           </form>
         </div>
@@ -936,7 +1387,7 @@ export function ChatWindow({ contact, currentUser, onBack }: ChatWindowProps) {
         open={lightboxOpen}
         close={() => setLightboxOpen(false)}
         index={lightboxIndex}
-        slides={images}
+        slides={lightboxImages}
       />
     </div>
   )

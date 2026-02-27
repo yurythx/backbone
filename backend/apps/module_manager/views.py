@@ -19,7 +19,8 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
     """
     serializer_class = TenantModuleSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None
+    from config.pagination import DefaultPagination
+    pagination_class = DefaultPagination
 
     @tenant_cached(timeout=3600, key_prefix='modules')
     def list(self, request, *args, **kwargs):
@@ -35,6 +36,12 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save()
         invalidate_tenant_cache('modules', self.request.company.slug)
+
+    # I-M1: invalidar cache também no destroy para evitar stale de até 1h
+    def perform_destroy(self, instance):
+        company_slug = self.request.company.slug
+        instance.delete()
+        invalidate_tenant_cache('modules', company_slug)
 
     @action(detail=False, methods=['post'], url_path='activate')
     def activate_module(self, request):

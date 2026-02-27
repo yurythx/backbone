@@ -3,7 +3,12 @@ from django.contrib.auth import get_user_model
 from apps.core.models import Company, TenantBranding
 from apps.accounts.models import Role
 from apps.licensing.models import Plan, Feature, PlanFeature, License
+from apps.articles.models import Category, Tag, Article
+from apps.pages.models import Page
 from shared_kernel.tenant_context import set_current_company
+from django.utils.text import slugify
+from django.utils import timezone
+
 
 User = get_user_model()
 
@@ -42,12 +47,12 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f'  [.] Plan {plan.name} already exists')
         
-        # 3. DEFAULT TENANT (Backbone Support)
+        # 3. DEFAULT TENANT (Empresa Raiz)
         company, created = Company.objects.get_or_create(
-            slug='suporte',
+            slug='raiz',
             defaults={
-                'name': 'Backbone Suporte', 
-                'domain': 'suporte.localhost',
+                'name': 'Empresa Raiz', 
+                'domain': 'raiz.localhost',
                 'onboarding_completed': True,
                 'onboarding_step': 4
             }
@@ -58,9 +63,10 @@ class Command(BaseCommand):
              # Default Branding
              TenantBranding.objects.create(
                 company=company,
-                company_name='Suporte Backbone',
-                primary_color='#000000'
+                company_name='Empresa Raiz',
+                primary_color='#0C4B33'
              )
+
         else:
              self.stdout.write(f'  [.] Company {company.name} already exists')
 
@@ -81,10 +87,10 @@ class Command(BaseCommand):
         )
 
         # 6. SUPER ADMIN USER (suporte / suporte123)
-        user, created = User.objects.get_or_create(
+        user, created = User.all_objects.get_or_create(
             username='suporte',
-            company=company,
             defaults={
+                'company': company,
                 'email': 'suporte@backbone.com',
                 'is_staff': True,
                 'is_superuser': True,
@@ -97,10 +103,133 @@ class Command(BaseCommand):
             user.save()
             self.stdout.write(self.style.SUCCESS(f'  [+] Created Superuser: {user.username} (Pass: suporte123)'))
         else:
-            # Optional: Reset password if ensures consistency? No, safer not to touch existing users' passwords.
             self.stdout.write(f'  [.] User {user.username} already exists')
+
+        # 7. COLLABORATOR ROLE
+        colab_role, _ = Role.objects.get_or_create(
+            company=company,
+            name='Colaborador',
+            defaults={
+                'permissions': ['articles.view_*', 'articles.add_article', 'messenger.*', 'pages.view_page']
+            }
+        )
+        self.stdout.write(f'  [+] Role {colab_role.name} verified')
+
+        # 8. TEST USER (yuri / yuri123)
+        test_user, created = User.all_objects.get_or_create(
+            username='yuri',
+            defaults={
+                'company': company,
+                'email': 'yuri@backbone.com',
+                'first_name': 'Yuri',
+                'last_name': 'Menezes',
+                'role': colab_role
+            }
+        )
+
+        if created:
+            test_user.set_password('yuri123')
+            test_user.save()
+            self.stdout.write(self.style.SUCCESS(f'  [+] Created Test User: {test_user.username} (Pass: yuri123)'))
+
+        # 9. CATEGORIES & TAGS
+        cats = ['Geral', 'Notícias', 'Tecnologia', 'RH']
+        cat_objs = []
+        for name in cats:
+            obj, _ = Category.objects.get_or_create(
+                company=company,
+                name=name,
+                defaults={'slug': slugify(name)}
+            )
+            cat_objs.append(obj)
         
+        tags = ['Backbone', 'Novidade', 'Tutorial', 'Destaque']
+        tag_objs = []
+        for name in tags:
+            obj, _ = Tag.objects.get_or_create(
+                company=company,
+                name=name,
+                defaults={'slug': slugify(name)}
+            )
+            tag_objs.append(obj)
+        self.stdout.write(self.style.SUCCESS('  [+] Categories and Tags created'))
+
+        # 10. SAMPLE ARTICLES
+        articles_data = [
+            {
+                'title': 'Bem-vindo ao Backbone',
+                'excerpt': 'Conheça a nova plataforma centralizada da sua empresa.',
+                'content': 'Estamos muito felizes em anunciar o lançamento do Backbone! Uma ferramenta completa para comunicação interna.',
+                'status': Article.STATUS_PUBLISHED,
+                'is_public': True
+            },
+            {
+                'title': 'Manual do Colaborador',
+                'excerpt': 'Tudo o que você precisa saber para começar.',
+                'content': 'Neste manual detalhamos as políticas internas e como utilizar cada módulo do sistema.',
+                'status': Article.STATUS_PUBLISHED,
+                'is_public': False
+            },
+            {
+                'title': 'Próximas Atualizações',
+                'excerpt': 'O que vem por aí no roadmap de 2026.',
+                'content': 'Estamos preparando o módulo de IA para transcrição de áudio e busca inteligente.',
+                'status': Article.STATUS_DRAFT,
+                'is_public': False
+            }
+        ]
+
+        for i, a_data in enumerate(articles_data):
+            slug = slugify(a_data['title'])
+            art, art_created = Article.objects.get_or_create(
+                company=company,
+                slug=slug,
+                defaults={
+                    'title': a_data['title'],
+                    'content': a_data['content'],
+                    'excerpt': a_data['excerpt'],
+                    'status': a_data['status'],
+                    'is_public': a_data['is_public'],
+                    'author': user, # Admin author
+                    'category': cat_objs[i % len(cat_objs)],
+                    'published_at': timezone.now() if a_data['status'] == Article.STATUS_PUBLISHED else None
+                }
+            )
+            if art_created:
+                art.tags.add(tag_objs[0], tag_objs[i % len(tag_objs)])
+                self.stdout.write(f'  [+] Created Article: {art.title}')
+
+        # 11. SAMPLE PAGES
+        pages_data = [
+            {
+                'title': 'Home',
+                'slug': 'home',
+                'content': '<h1>Bem-vindo à nossa intranet</h1><p>Esta é a página inicial configurável.</p>',
+                'status': Page.STATUS_PUBLISHED
+            },
+            {
+                'title': 'Sobre Nós',
+                'slug': 'sobre',
+                'content': '<p>Nossa missão é conectar pessoas e processos de forma eficiente.</p>',
+                'status': Page.STATUS_PUBLISHED
+            }
+        ]
+
+        for p_data in pages_data:
+            pg, pg_created = Page.objects.get_or_create(
+                company=company,
+                slug=p_data['slug'],
+                defaults={
+                    'title': p_data['title'],
+                    'content': p_data['content'],
+                    'status': p_data['status']
+                }
+            )
+            if pg_created:
+                self.stdout.write(f'  [+] Created Page: {pg.title}')
+
         self.stdout.write(self.style.SUCCESS('System Seeding completed!'))
+
         
         # Health Check
         self.verify_seed_health()
@@ -128,26 +257,27 @@ class Command(BaseCommand):
         
         # 3. Verificar Empresa Padrão
         try:
-            support_company = Company.objects.get(slug='suporte')
-            self.stdout.write(self.style.SUCCESS(f'  ✓ Support Company: {support_company.name} (ID: {support_company.id})'))
+            support_company = Company.objects.get(slug='raiz')
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Root Company: {support_company.name} (ID: {support_company.id})'))
             
             # 3.1 Verificar Branding
-            if not hasattr(support_company, 'branding'):
-                warnings.append('Support company has no branding configured')
+            if not hasattr(support_company, 'theme_branding'):
+                warnings.append('Root company has no branding configured')
             else:
                 self.stdout.write(self.style.SUCCESS(f'  ✓ Branding configured'))
         except Company.DoesNotExist:
-            issues.append('Support company not found (slug: suporte)')
+            issues.append('Root company not found (slug: raiz)')
         
         # 4. Verificar Licença
         try:
-            license = License.objects.get(company__slug='suporte')
+            license = License.objects.get(company__slug='raiz')
             if not license.is_active:
-                warnings.append('Support company license is inactive')
+                warnings.append('Root company license is inactive')
             else:
                 self.stdout.write(self.style.SUCCESS(f'  ✓ License: {license.plan.name} (Active: {license.is_active})'))
         except License.DoesNotExist:
-            issues.append('No license for support company')
+            issues.append('No license for root company')
+
         
         # 5. Verificar Superuser
         superuser_count = User.objects.filter(is_superuser=True).count()

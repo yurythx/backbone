@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions, status, mixins
+from rest_framework import viewsets, permissions, status, mixins, exceptions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
@@ -7,6 +7,12 @@ from .serializers import ConversationSerializer, MessageSerializer, ContactSeria
 from .services import MessengerService
 from django.contrib.auth import get_user_model
 from apps.module_manager.permissions import HasModuleAccess
+from shared_kernel.sanitization import sanitize_url
+from urllib.parse import urlparse, urljoin
+import ipaddress
+from django.core.cache import cache
+import time
+from rest_framework.throttling import ScopedRateThrottle
 
 User = get_user_model()
 
@@ -18,26 +24,26 @@ from apps.accounts.permissions import HasRolePermission
 )
 class ContactViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ContactSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = 'messenger.view'
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    required_permission = None
     module_code = 'messenger'
     
 
     def get_queryset(self):
-        user = self.request.user
+        # User.objects (TenantUserManager) already filters by company.
+        # Superusers use all_objects for global visibility if no company context is set.
+        # If company context is set, they should be restricted to that company by default.
+        if self.request.user.is_superuser:
+            if self.request.company:
+                qs = User.objects.exclude(id=self.request.user.id)
+            else:
+                qs = User.all_objects.exclude(id=self.request.user.id)
+        else:
+            # Users only see others in the same groups (Contact Privacy)
+            user_groups = self.request.user.groups.all()
+            qs = User.objects.filter(groups__in=user_groups).exclude(id=self.request.user.id).distinct()
         
-        # Superuser or Company Admin (staff) sees everyone in the company
-        if user.is_superuser or user.is_staff:
-            return User.objects.all().exclude(id=user.id).order_by('username')
-            
-        # Regular user: see users in same groups
-        # Note: We rely on User.objects (TenantUserManager) to filter by company automatically.
-        user_groups = user.groups.all()
-        if not user_groups.exists():
-            # If user has no groups, they see no one (except maybe themselves, but let's stick to strict group rule)
-            return User.objects.none()
-            
-        return User.objects.filter(groups__in=user_groups).exclude(id=user.id).distinct().order_by('username')
+        return qs.order_by('username')
 
 @extend_schema_view(
     list=extend_schema(tags=['Messenger']),
@@ -72,11 +78,52 @@ class ConversationViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
-        # Retorna apenas conversas onde o usuário é participante
-        return Conversation.objects.filter(participants=self.request.user).order_by('-created_at')
+        user = self.request.user
+        from django.db.models import Count, Q, Prefetch, OuterRef, Subquery
+        from .models import ConversationPreference
+        
+        # Use all_objects for superusers only if no company context exists.
+        if user.is_superuser:
+            if self.request.company:
+                manager = Conversation.objects
+            else:
+                manager = Conversation.all_objects
+        else:
+            manager = Conversation.objects
+        
+        # Subquery to get the last message per conversation
+        last_msg_qs = Message.objects.filter(conversation=OuterRef('pk')).order_by('-created_at')
+        pref_qs = ConversationPreference.objects.filter(user=user)
+        
+        qs = (
+            manager
+            .filter(participants=user)
+            .select_related('company')
+            .prefetch_related(
+                'participants',
+                Prefetch('preferences', queryset=pref_qs, to_attr='prefetched_pref'),
+            )
+            .annotate(
+                unread_count=Count(
+                    'messages',
+                    filter=Q(messages__is_read=False) & ~Q(messages__sender=user) & Q(messages__is_deleted=False)
+                ),
+                # Annotate last message details using Subqueries (Performance #26)
+                last_msg_id=Subquery(last_msg_qs.values('id')[:1]),
+                last_msg_content=Subquery(last_msg_qs.values('content')[:1]),
+                last_msg_sender_id=Subquery(last_msg_qs.values('sender_id')[:1]),
+                last_msg_sender_username=Subquery(last_msg_qs.values('sender__username')[:1]),
+                last_msg_created_at=Subquery(last_msg_qs.values('created_at')[:1]),
+                last_msg_file_name=Subquery(last_msg_qs.values('file_name')[:1]),
+                last_msg_file_type=Subquery(last_msg_qs.values('file_type')[:1]),
+            )
+            .order_by('-updated_at')
+        )
+        return qs
 
     @action(detail=False, methods=['get'])
     def find_by_participant(self, request):
+
         target_username = request.query_params.get('username')
         if not target_username:
             return Response({"error": "username param required"}, status=400)
@@ -86,28 +133,30 @@ class ConversationViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
             
-        # Find private conversation with these two participants
-        # This is a simple implementation assuming private chats are unique pairs
-        qs = Conversation.objects.filter(
-            participants=request.user, 
-            is_group=False
-        ).filter(
-            participants=target_user
-        )
+        from django.db.models import Count
+        # Find private conversation with exactly these participants
+        qs = Conversation.objects.filter(is_group=False, participants=request.user)
         
-        conversation = qs.first()
+        if target_user.id == request.user.id:
+            # Self-chat: only 1 participant
+            conversation = qs.annotate(p_count=Count('participants')).filter(p_count=1).first()
+        else:
+            # 1:1 Chat: exactly 2 participants
+            conversation = qs.filter(participants=target_user).annotate(p_count=Count('participants')).filter(p_count=2).first()
+        
         if conversation:
             serializer = self.get_serializer(conversation)
             return Response(serializer.data)
         else:
-            return Response(status=404)
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
 
     @action(detail=True, methods=['post'])
     def add_participant(self, request, pk=None):
         conversation = self.get_object()
         if not conversation.is_group:
             return Response({"error": "Only group conversations can have participants added"}, status=400)
-            
+
         username = request.data.get('username')
         try:
             target_user = User.objects.get(company=request.company, username=username)
@@ -121,7 +170,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         if not conversation.is_group:
             return Response({"error": "Only group conversations can have participants removed"}, status=400)
-            
+
         username = request.data.get('username')
         try:
             target_user = User.objects.get(company=request.company, username=username)
@@ -129,6 +178,62 @@ class ConversationViewSet(viewsets.ModelViewSet):
             return Response({"status": "Participant removed"})
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
+
+    # ── Mute / Unmute / Pin / Unpin ──────────────────────────────────────────
+
+    def _get_or_create_preference(self, request, conversation):
+        from .models import ConversationPreference
+        pref, _ = ConversationPreference.all_objects.get_or_create(
+            user=request.user,
+            conversation=conversation,
+            defaults={'company': request.company or conversation.company}
+        )
+        return pref
+
+    @action(detail=True, methods=['post'])
+    def mute(self, request, pk=None):
+        """Silence notifications for this conversation."""
+        pref = self._get_or_create_preference(request, self.get_object())
+        pref.is_muted = True
+        pref.save(update_fields=['is_muted'])
+        return Response({'is_muted': True})
+
+    @action(detail=True, methods=['post'])
+    def unmute(self, request, pk=None):
+        """Re-enable notifications for this conversation."""
+        pref = self._get_or_create_preference(request, self.get_object())
+        pref.is_muted = False
+        pref.save(update_fields=['is_muted'])
+        return Response({'is_muted': False})
+
+    @action(detail=True, methods=['post'])
+    def pin(self, request, pk=None):
+        """Pin this conversation to the top of the list."""
+        pref = self._get_or_create_preference(request, self.get_object())
+        pref.is_pinned = True
+        pref.save(update_fields=['is_pinned'])
+        return Response({'is_pinned': True})
+
+    @action(detail=True, methods=['post'])
+    def unpin(self, request, pk=None):
+        """Unpin this conversation."""
+        pref = self._get_or_create_preference(request, self.get_object())
+        pref.is_pinned = False
+        pref.save(update_fields=['is_pinned'])
+        return Response({'is_pinned': False})
+
+    @action(detail=True, methods=['post'])
+    def mark_all_read(self, request, pk=None):
+        """Mark all messages in this conversation as read for the current user."""
+        conversation = self.get_object()
+        unread_messages = conversation.messages.filter(is_read=False).exclude(sender=request.user)
+        
+        count = unread_messages.count()
+        if count > 0:
+            unread_messages.update(is_read=True)
+            # In a real-world scenario, we might want to broadcast this via WS.
+        
+        return Response({'marked_read': count})
 
     @extend_schema(
         parameters=[OpenApiParameter("q", OpenApiTypes.STR, description="Termo de pesquisa")],
@@ -197,26 +302,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
             except Exception:
                 pass
         
-        # Paginate (default is 50 usually)
+        # We want to return messages in chronological order for the frontend
+        # but paginate from latest to oldest. list(reversed(...)) is O(n) not O(n log n) (#9 fix)
         page = self.paginate_queryset(qs)
         if page is not None:
-            # We want to return them in chronological order for the frontend
-            # but we paginate from latest to oldest
-            messages_list = sorted(page, key=lambda x: x.created_at)
+            messages_list = list(reversed(page))
             serializer = MessageSerializer(messages_list, many=True, context={'request': request})
-            response = self.get_paginated_response(serializer.data)
-            
-            # Enrich response with 'before' param for next page if exists
-            if page:
-                oldest_msg = page[-1] # The last one in the page (oldest)
-                # Note: Default pagination 'next' uses ?page=2. 
-                # We might want to keep using standard pagination but adjust it, 
-                # or manually construct the next link.
-                pass
-            
-            return response
+            return self.get_paginated_response(serializer.data)
 
-        messages_list = sorted(qs, key=lambda x: x.created_at)
+        messages_list = list(qs.order_by('created_at'))
         serializer = MessageSerializer(messages_list, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -231,69 +325,107 @@ from django.utils import timezone
 class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = 'messenger.view'
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    required_permission = None
     module_code = 'messenger'
+    
+    def get_throttles(self):
+        if getattr(self, 'action', None) == 'link_preview':
+            self.throttle_scope = 'link_preview'
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
 
     def get_queryset(self):
-        # Users can only interact with messages in conversations they are part of
-        return Message.objects.filter(conversation__participants=self.request.user)
+        # Users can only interact with messages in conversations they are part of.
+        # Always filter by company to enforce tenant isolation (#18 security fix).
+        # Use all_objects to include soft-deleted messages in the chat history.
+        manager = Message.all_objects
+
+
+
+        qs = manager.filter(conversation__participants=self.request.user)
+        if self.request.company:
+            qs = qs.filter(conversation__company=self.request.company)
+        return qs
 
     def perform_destroy(self, instance):
         if instance.sender != self.request.user:
-            raise permissions.PermissionDenied("You can only delete your own messages.")
-        
-        # Capture context before deletion for broadcast
+            raise exceptions.PermissionDenied("You can only delete your own messages.")
+
         company = self.request.company
         conversation = instance.conversation
         message_id = instance.id
-        
-        instance.delete()
-        
+
+        # Soft delete: preserve thread integrity, clear content/file
+        instance.soft_delete()
+
         MessengerService.broadcast_delete(company, conversation, message_id)
 
     def perform_update(self, serializer):
         instance = serializer.instance
         if instance.sender != self.request.user:
-            raise permissions.PermissionDenied("You can only edit your own messages.")
-            
-        # Only allow updating content
+            raise exceptions.PermissionDenied("You can only edit your own messages.")
+
+        # Only allow updating content field
         if 'content' not in serializer.validated_data:
-             return
+            return
 
         instance.edited_at = timezone.now()
-        instance.save()
-        
-        # Broadcast edit
+        # Save the new content AND the edited_at timestamp together
+        serializer.save(edited_at=instance.edited_at)
+
+        # Broadcast edit to all participants via WebSocket
         MessengerService.broadcast_edit(self.request.company, instance.conversation, instance)
 
     @action(detail=False, methods=['get'])
     def link_preview(self, request):
+        def err(code, msg, status_code):
+            return Response({'error_code': code, 'message': msg}, status=status_code)
+
         url = request.query_params.get('url')
         if not url:
-            return Response({'error': 'URL is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return err('missing_url', 'URL is required', status.HTTP_400_BAD_REQUEST)
+
+        safe_url = sanitize_url(url, allowed_protocols=['http', 'https'])
+        if not safe_url:
+            return err('invalid_url', 'Invalid URL', status.HTTP_400_BAD_REQUEST)
+
+        parsed = urlparse(safe_url)
+        host = parsed.hostname or ''
+        if host in ('localhost', '127.0.0.1'):
+            return err('blocked_host', 'Localhost not allowed', status.HTTP_400_BAD_REQUEST)
         try:
-            import requests
-            from bs4 import BeautifulSoup
-            
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-            response = requests.get(url, headers=headers, timeout=5)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            title = soup.find('meta', property='og:title')
-            description = soup.find('meta', property='og:description')
-            image = soup.find('meta', property='og:image')
-            
-            data = {
-                'title': title['content'] if title else soup.title.string if soup.title else '',
-                'description': description['content'] if description else '',
-                'image': image['content'] if image else '',
-                'url': url
-            }
-            return Response(data)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            ip = ipaddress.ip_address(host) if host.replace('.', '').isdigit() else None
+            if ip and (ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local):
+                return err('blocked_ip', 'Private IP not allowed', status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            pass
+
+        # Rate limit: 15 previews/minute per (company, user)
+        if not request.company:
+            return err('no_company', 'Company context required', status.HTTP_400_BAD_REQUEST)
+        rl_key = f"lp:rl:{request.company.id}:{request.user.id}"
+        rl = cache.get(rl_key)
+        now = time.time()
+        if rl and now - rl.get('t', 0) < 60 and rl.get('c', 0) >= 15:
+            return err('rate_limited', 'Rate limit exceeded', status.HTTP_429_TOO_MANY_REQUESTS)
+        if not rl or now - rl.get('t', 0) >= 60:
+            cache.set(rl_key, {'c': 1, 't': now}, timeout=60)
+        else:
+            cache.set(rl_key, {'c': rl.get('c', 0) + 1, 't': rl.get('t', now)}, timeout=60)
+
+        # Check cache first — return immediately if available
+        import hashlib
+        cache_key = f"lp:res:{hashlib.md5(safe_url.encode()).hexdigest()}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        # Dispatch async Celery task to fetch the preview
+        # Return 202 so the client can poll or retry in a moment
+        from .tasks import fetch_link_preview
+        fetch_link_preview.delay(safe_url, cache_key)
+        return Response({'status': 'processing', 'url': safe_url}, status=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         request=OpenApiTypes.OBJECT,

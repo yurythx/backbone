@@ -57,6 +57,8 @@ class CompanySerializer(serializers.ModelSerializer):
 
 
 class TenantEmailConfigSerializer(serializers.ModelSerializer):
+    smtp_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         from .models import TenantEmailConfig
         model = TenantEmailConfig
@@ -64,9 +66,15 @@ class TenantEmailConfigSerializer(serializers.ModelSerializer):
             'id', 'use_custom_smtp', 'smtp_host', 'smtp_port',
             'smtp_user', 'smtp_password', 'smtp_use_tls', 'from_email'
         ]
-        extra_kwargs = {
-            'smtp_password': {'write_only': True}
-        }
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('smtp_password', None)
+        instance = super().update(instance, validated_data)
+        if password is not None:
+            instance.set_smtp_password(password)
+            instance.save()
+        return instance
+
 
 class AuditLogSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)

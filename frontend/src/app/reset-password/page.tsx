@@ -77,14 +77,14 @@ function ResetPasswordForm() {
 
     if (isSuccess) {
         return (
-            <div className="text-center space-y-6">
+            <div className="text-center space-y-6" role="status" aria-live="polite" aria-label="Senha redefinida com sucesso">
                 <div className="h-20 w-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <ShieldCheck className="h-10 w-10 text-green-500" />
+                    <ShieldCheck className="h-10 w-10 text-green-500" aria-hidden="true" />
                 </div>
                 <h2 className="text-2xl font-bold">Tudo pronto!</h2>
                 <p className="text-muted-foreground">Sua senha foi redefinida. Redirecionando para o login...</p>
                 <Button asChild className="w-full rounded-xl h-12 mt-4 shadow-lg shadow-primary/20">
-                    <Link href="/login">Ir para o Login Agora <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                    <Link href="/login">Ir para o Login Agora <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" /></Link>
                 </Button>
             </div>
         )
@@ -102,7 +102,13 @@ function ResetPasswordForm() {
                             <FormControl>
                                 <Input type="password" placeholder="••••••••" className="h-12 rounded-xl" {...field} />
                             </FormControl>
-                            <FormMessage />
+                            {form.formState.errors.new_password ? (
+                                <div role="alert" aria-live="assertive">
+                                    <FormMessage />
+                                </div>
+                            ) : (
+                                <FormMessage />
+                            )}
                         </FormItem>
                     )}
                 />
@@ -115,11 +121,17 @@ function ResetPasswordForm() {
                             <FormControl>
                                 <Input type="password" placeholder="••••••••" className="h-12 rounded-xl" {...field} />
                             </FormControl>
-                            <FormMessage />
+                            {form.formState.errors.confirm_password ? (
+                                <div role="alert" aria-live="assertive">
+                                    <FormMessage />
+                                </div>
+                            ) : (
+                                <FormMessage />
+                            )}
                         </FormItem>
                     )}
                 />
-                <Button type="submit" className="w-full h-12 rounded-xl text-lg font-bold shadow-lg shadow-primary/20" disabled={mutation.isPending}>
+                <Button type="submit" className="w-full h-12 rounded-xl text-lg font-bold shadow-lg shadow-primary/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" disabled={mutation.isPending}>
                     {mutation.isPending ? "Alterando..." : "Redefinir Senha"}
                 </Button>
             </form>
@@ -129,18 +141,18 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4" role="main" aria-labelledby="reset-title">
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="w-full max-w-md bg-background rounded-3xl p-8 shadow-2xl space-y-8"
             >
-                <Suspense fallback={<div className="p-8 text-center text-muted-foreground animate-pulse">Carregando formulário...</div>}>
+                <Suspense fallback={<div className="p-8 text-center text-muted-foreground animate-pulse" role="status" aria-live="polite" aria-label="Carregando formulário">Carregando formulário...</div>}>
                     <div className="space-y-2 text-center">
                         <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                            <KeyRound className="h-8 w-8 text-primary" />
+                            <KeyRound className="h-8 w-8 text-primary" aria-hidden="true" />
                         </div>
-                        <h1 className="text-3xl font-bold tracking-tight">Nova Senha</h1>
+                        <h1 id="reset-title" className="text-3xl font-bold tracking-tight">Nova Senha</h1>
                         <p className="text-muted-foreground">Crie uma senha forte para proteger sua conta.</p>
                     </div>
                     <ResetPasswordForm />

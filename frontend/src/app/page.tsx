@@ -225,12 +225,12 @@ export default function ServicesLandingPage() {
       {/* Header */}
       <Header />
 
-      {/* Hero Section */}
+      <main role="main" aria-labelledby="titulo-ecossistema">
       <section className="relative overflow-hidden py-20">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20" aria-hidden="true"></div>
         <div className="container mx-auto px-6 relative">
           <div className="text-center max-w-3xl mx-auto">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            <h2 id="titulo-ecossistema" className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
               Ecossistema de Serviços
             </h2>
             <p className="text-xl text-muted-foreground mb-8">
@@ -239,11 +239,11 @@ export default function ServicesLandingPage() {
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
               <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true"></div>
                 <span className="text-sm text-muted-foreground">{services.filter(s => s.status === "online").length} serviços online</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                <div className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true"></div>
                 <span className="text-sm text-muted-foreground">{categories.length - 1} categorias</span>
               </div>
             </div>
@@ -251,16 +251,16 @@ export default function ServicesLandingPage() {
         </div>
       </section>
 
-      {/* Services Grid */}
       <section className="container mx-auto px-6 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" role="list" aria-label="Lista de serviços disponíveis">
           {services.map((service) => (
-            <Card key={service.id} className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+            <li key={service.id} role="listitem">
+            <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className={`h-2 bg-gradient-to-r ${service.color} rounded-t-lg`}></div>
               <CardHeader className="pb-4">
                 <div className="flex items-start justify-between">
                   <div className={`p-3 rounded-lg bg-gradient-to-r ${service.color} text-white group-hover:scale-110 transition-transform`}>
-                    <service.icon className="h-6 w-6" />
+                    <service.icon className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <Badge variant={service.status === "online" ? "default" : "destructive"} className="text-xs">
                     {service.status === "online" ? "Online" : "Offline"}
@@ -289,44 +289,51 @@ export default function ServicesLandingPage() {
                   <Badge variant="outline" className="text-xs">
                     {service.category}
                   </Badge>
-                  <Link href={service.url} target={service.url.startsWith('http') ? "_blank" : undefined} rel={service.url.startsWith('http') ? "noopener noreferrer" : undefined}>
+                  <Link
+                    href={service.url}
+                    target={service.url.startsWith('http') ? "_blank" : undefined}
+                    rel={service.url.startsWith('http') ? "noopener noreferrer" : undefined}
+                    aria-label={`Acessar ${service.name}`}
+                  >
                     <Button
                       size="sm"
-                      className="group/btn"
+                      className="group/btn focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                       disabled={service.status !== "online"}
                     >
                       Acessar
-                      <ExternalLink className="h-3 w-3 ml-2 group-hover/btn:translate-x-1 transition-transform" />
+                      <ExternalLink className="h-3 w-3 ml-2 group-hover/btn:translate-x-1 transition-transform" aria-hidden="true" />
                     </Button>
                   </Link>
                 </div>
               </CardContent>
             </Card>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
+      </main>
 
       {/* Footer */}
-      <footer className="border-t bg-background/50">
+      <footer className="border-t bg-background/50" role="contentinfo" aria-label="Informações de status dos serviços">
         <div className="container mx-auto px-6 py-8">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
               Backbone Services - Todos os serviços em um único lugar
             </p>
-            <div className="flex justify-center gap-4 mt-4">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500"></div>
+            <ul className="flex justify-center gap-4 mt-4" role="list" aria-label="Legenda de status">
+              <li className="flex items-center gap-2" role="listitem">
+                <div className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true"></div>
                 <span className="text-xs text-muted-foreground">Online</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+              </li>
+              <li className="flex items-center gap-2" role="listitem">
+                <div className="h-2 w-2 rounded-full bg-yellow-500" aria-hidden="true"></div>
                 <span className="text-xs text-muted-foreground">Manutenção</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-red-500"></div>
+              </li>
+              <li className="flex items-center gap-2" role="listitem">
+                <div className="h-2 w-2 rounded-full bg-red-500" aria-hidden="true"></div>
                 <span className="text-xs text-muted-foreground">Offline</span>
-              </div>
-            </div>
+              </li>
+            </ul>
           </div>
         </div>
       </footer>

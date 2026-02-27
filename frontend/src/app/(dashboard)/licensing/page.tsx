@@ -6,10 +6,10 @@ import { api } from "@/lib/axios"
 import { Plan, License } from "@/types"
 import { PlanCard } from "@/features/licensing/plan-card"
 import { H2, P } from "@/components/ui/typography"
-import { motion } from "framer-motion"
 import { CheckoutModal } from "@/features/licensing/checkout-modal"
 import { SlideUp, FadeIn } from "@/components/ui/motion"
 import { Sparkles, ShieldCheck, Zap } from "lucide-react"
+import Image from "next/image"
 
 export default function LicensingPage() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
@@ -108,8 +108,8 @@ export default function LicensingPage() {
             <div className="flex items-center gap-12 relative z-10">
               <div className="flex -space-x-4">
                 {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="h-10 w-10 rounded-full border-2 border-background bg-muted flex items-center justify-center overflow-hidden">
-                    <img src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User" />
+                  <div key={i} className="h-10 w-10 rounded-full border-2 border-background bg-muted flex items-center justify-center overflow-hidden relative">
+                    <Image src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User" fill className="object-cover" sizes="40px" />
                   </div>
                 ))}
               </div>

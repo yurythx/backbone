@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/axios';
 import { toast } from 'sonner';
 import { Save, TestTube, CheckCircle, XCircle, Loader2, Server, Lock, Users, Settings } from 'lucide-react';
+import { Protected } from '@/components/auth/protected';
 
 interface LDAPConfig {
     id?: number;
@@ -85,9 +86,12 @@ export default function LDAPSettingsPage() {
 
             toast.success('Configuração salva com sucesso!');
             fetchConfig(); // Recarregar para pegar o ID se foi criação
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Erro ao salvar configuração:', error);
-            toast.error(error.response?.data?.detail || 'Erro ao salvar configuração');
+            const detail = typeof error === 'object' && error !== null && 'response' in error
+                ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+                : undefined
+            toast.error(detail || 'Erro ao salvar configuração');
         } finally {
             setSaving(false);
         }
@@ -114,9 +118,11 @@ export default function LDAPSettingsPage() {
             } else {
                 toast.error('Falha ao testar conexão');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Erro ao testar conexão:', error);
-            const message = error.response?.data?.message || 'Erro ao conectar com o servidor LDAP';
+            const message = typeof error === 'object' && error !== null && 'response' in error
+                ? (error as { response?: { data?: { message?: string } } }).response?.data?.message || 'Erro ao conectar com o servidor LDAP'
+                : 'Erro ao conectar com o servidor LDAP';
             setTestResult({
                 success: false,
                 message,
@@ -136,6 +142,7 @@ export default function LDAPSettingsPage() {
     }
 
     return (
+        <Protected requireStaff>
         <div className="container mx-auto py-8 px-4 max-w-4xl">
             {/* Header */}
             <div className="mb-8">
@@ -432,5 +439,6 @@ export default function LDAPSettingsPage() {
                 </div>
             </div>
         </div>
+        </Protected>
     );
 }

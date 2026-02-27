@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { SlideUp, FadeIn } from "@/components/ui/motion"
 import { H2, P } from "@/components/ui/typography"
-import { LineChart, BarChart, PieChart, Activity, TrendingUp, Users, Eye, Search, Sparkles, Lock } from "lucide-react"
+import { Activity, TrendingUp, Users, Eye, Sparkles, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -16,14 +16,14 @@ export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
         return (
             <Card className="border-dashed border-2 bg-muted/30 h-[500px] flex flex-col items-center justify-center text-center p-12">
                 <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-                    <Lock className="h-10 w-10 text-primary" />
+                    <Lock className="h-10 w-10 text-primary" aria-hidden="true" />
                 </div>
                 <H2 className="border-none mb-2">Insights Avançados</H2>
                 <P className="text-muted-foreground max-w-md mb-8">
                     Desbloqueie métricas profundas de engajamento, origem de audiência e performance de conteúdo com IA.
                 </P>
                 <Button size="lg" className="rounded-full shadow-lg shadow-primary/20 gap-2">
-                    <Sparkles className="h-4 w-4" />
+                    <Sparkles className="h-4 w-4" aria-hidden="true" />
                     Fazer Upgrade para Premium
                 </Button>
             </Card>
@@ -41,7 +41,7 @@ export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
                         </CardHeader>
                         <CardContent>
                             <div className="flex items-center gap-1 text-xs text-emerald-500 font-bold">
-                                <TrendingUp className="h-3 w-3" /> +5.2% vs semana passada
+                                <TrendingUp className="h-3 w-3" aria-hidden="true" /> +5.2% vs semana passada
                             </div>
                         </CardContent>
                     </Card>
@@ -55,7 +55,7 @@ export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
                         </CardHeader>
                         <CardContent>
                             <div className="flex items-center gap-1 text-xs text-emerald-500 font-bold">
-                                <TrendingUp className="h-3 w-3" /> +12s vs semana passada
+                                <TrendingUp className="h-3 w-3" aria-hidden="true" /> +12s vs semana passada
                             </div>
                         </CardContent>
                     </Card>
@@ -69,7 +69,7 @@ export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
                         </CardHeader>
                         <CardContent>
                             <div className="flex items-center gap-1 text-xs text-emerald-500 font-bold">
-                                <TrendingUp className="h-3 w-3" /> +1.1% vs semana passada
+                                <TrendingUp className="h-3 w-3" aria-hidden="true" /> +1.1% vs semana passada
                             </div>
                         </CardContent>
                     </Card>
@@ -85,7 +85,7 @@ export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
                                     <CardTitle className="text-lg">Origem do Tráfego</CardTitle>
                                     <CardDescription>De onde vêm seus leitores</CardDescription>
                                 </div>
-                                <Users className="h-5 w-5 text-muted-foreground" />
+                                <Users className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                             </div>
                         </CardHeader>
                         <CardContent className="pt-6">
@@ -119,7 +119,7 @@ export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
                                     <CardTitle className="text-lg">Performance de Artigos</CardTitle>
                                     <CardDescription>Top 5 mais engajados</CardDescription>
                                 </div>
-                                <Activity className="h-5 w-5 text-muted-foreground" />
+                                <Activity className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
@@ -135,7 +135,7 @@ export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
                                         <div className="text-sm font-medium truncate max-w-[200px]">{art.title}</div>
                                         <div className="flex items-center gap-4">
                                             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                                <Eye className="h-3 w-3" /> {art.views}
+                                                <Eye className="h-3 w-3" aria-hidden="true" /> {art.views}
                                             </div>
                                             <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">
                                                 {art.eng} Eng.

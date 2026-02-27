@@ -7,13 +7,16 @@ import logging
 from celery import shared_task
 from django.conf import settings
 from .models import WebhookSubscription
+from shared_kernel.sanitization import sanitize_url
+from urllib.parse import urlparse
+import ipaddress
 
 logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, max_retries=3)
 def dispatch_webhook(self, subscription_id, event_name, payload):
     try:
-        sub = WebhookSubscription.objects.get(pk=subscription_id, is_active=True)
+        sub = WebhookSubscription.all_objects.get(pk=subscription_id, is_active=True)
     except WebhookSubscription.DoesNotExist:
         return f"Subscription {subscription_id} not found or inactive"
 
@@ -38,15 +41,44 @@ def dispatch_webhook(self, subscription_id, event_name, payload):
             "User-Agent": "Backbone-Webhooks/1.0"
         }
 
+        # SSRF protection: validate URL and block private/loopback
+        safe_url = sanitize_url(sub.url, allowed_protocols=['http', 'https'])
+        if not safe_url:
+            return "Invalid webhook URL"
+        parsed = urlparse(safe_url)
+        host = parsed.hostname or ''
+        if host in ('localhost', '127.0.0.1'):
+            return "Webhook URL host not allowed"
+        try:
+            ip = ipaddress.ip_address(host) if host.replace('.', '').isdigit() else None
+            if ip and (ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local):
+                return "Webhook URL IP not allowed"
+        except ValueError:
+            pass
+
         response = requests.post(
-            sub.url,
+            safe_url,
             data=body,
             headers=headers,
-            timeout=10
+            timeout=10,
+            allow_redirects=True
         )
         
+        # Validate final URL after redirects
+        final_url = response.url or safe_url
+        final_parsed = urlparse(final_url)
+        final_host = final_parsed.hostname or ''
+        if final_host in ('localhost', '127.0.0.1'):
+            return "Webhook final URL host not allowed"
+        try:
+            fip = ipaddress.ip_address(final_host) if final_host.replace('.', '').isdigit() else None
+            if fip and (fip.is_private or fip.is_loopback or fip.is_reserved or fip.is_link_local):
+                return "Webhook final URL IP not allowed"
+        except ValueError:
+            pass
+
         response.raise_for_status()
-        return f"Webhook sent to {sub.url} for event {event_name}"
+        return f"Webhook sent to {safe_url} for event {event_name}"
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Error sending webhook to {sub.url}: {e}")
@@ -58,11 +90,7 @@ def trigger_webhooks(company, event_name, payload):
     Função utilitária para ser chamada em signals ou views.
     Encontra assinaturas ativas para o evento e empresa e dispara o Celery.
     """
-    subscriptions = WebhookSubscription.objects.filter(
-        company=company,
-        is_active=True,
-        events__contains=event_name # O Django orm lida bem com JSONField __contains para listas
-    )
-    
-    for sub in subscriptions:
-        dispatch_webhook.delay(sub.id, event_name, payload)
+    qs = WebhookSubscription.objects.filter(company=company, is_active=True)
+    for sub in qs:
+        if event_name in (sub.events or []):
+            dispatch_webhook.delay(sub.id, event_name, payload)

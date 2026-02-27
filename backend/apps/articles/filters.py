@@ -6,10 +6,10 @@ class ArticleFilter(filters.FilterSet):
     content = filters.CharFilter(lookup_expr='icontains')
     category = filters.NumberFilter(field_name='category__id')
     author = filters.NumberFilter(field_name='author__id')
-    is_published = filters.BooleanFilter()
+    status = filters.CharFilter()
     created_at_after = filters.DateTimeFilter(field_name='created_at', lookup_expr='gte')
     created_at_before = filters.DateTimeFilter(field_name='created_at', lookup_expr='lte')
 
     class Meta:
         model = Article
-        fields = ['category', 'author', 'is_published', 'title', 'content']
+        fields = ['category', 'author', 'status', 'title', 'content']

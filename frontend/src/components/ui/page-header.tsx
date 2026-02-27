@@ -32,8 +32,8 @@ export function PageHeader({
                             className="h-8 w-8 -ml-1 rounded-full hover:bg-muted"
                             asChild
                         >
-                            <Link href={backHref}>
-                                <ChevronLeft className="h-4 w-4" />
+                            <Link href={backHref} aria-label="Voltar">
+                                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                             </Link>
                         </Button>
                     )}

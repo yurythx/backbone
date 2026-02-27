@@ -10,6 +10,9 @@ User = get_user_model()
 
 class IntegrationFlowTest(TestCase):
     def setUp(self):
+        from django.core.cache import caches
+        for cache in caches.all():
+            cache.clear()
         self.client = APIClient()
         # Ensure the 'articles' module exists in the system (globally)
         self.article_module = Module.objects.create(
@@ -111,7 +114,6 @@ class IntegrationFlowTest(TestCase):
             "title": "Hello World",
             "slug": "hello-world",
             "content": "First post",
-            "is_published": True
         }
         response = self.client.post(
             '/api/articles/articles/?company_slug=tech-corp', 

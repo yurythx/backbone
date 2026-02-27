@@ -4,24 +4,38 @@ import Link from "next/link"
 import { Article } from "@/types"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CalendarDays, Clock } from "lucide-react"
+import { CalendarDays } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import Image from "next/image"
 
 interface PublicArticleCardProps {
     article: Article
+    showVisibilityBadge?: boolean
+    useDashboardPreview?: boolean
+    showStatusBadge?: boolean
 }
 
-export function PublicArticleCard({ article }: PublicArticleCardProps) {
+export function PublicArticleCard({ article, showVisibilityBadge = false, useDashboardPreview = false, showStatusBadge = false }: PublicArticleCardProps) {
+    const href = (useDashboardPreview && article.is_public === false)
+        ? { pathname: `/artigos/preview/${article.slug}` }
+        : { pathname: `/p/artigos/${article.slug}`, query: { company_slug: article.company_slug } }
+
     return (
-        <Link href={`/p/artigos/${article.slug}`}>
-            <Card className="h-full overflow-hidden hover:shadow-xl transition-all border border-primary/10 bg-background/95 backdrop-blur rounded-2xl">
+        <Link
+            href={href}
+            aria-label={`Ver artigo: ${article.title}`}
+            className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl"
+        >
+            <Card className="h-full overflow-hidden hover:shadow-xl transition-all border border-primary/10 bg-background/95 backdrop-blur rounded-2xl relative">
                 <div className="aspect-video relative overflow-hidden bg-muted rounded-t-2xl">
                     {article.image ? (
-                        <img
+                        <Image
                             src={article.image}
-                            alt={article.title}
-                            className="object-cover w-full h-full hover:scale-105 transition-transform duration-300"
+                            alt={article.title || "Imagem do artigo"}
+                            fill
+                            className="object-cover hover:scale-105 transition-transform duration-300"
+                            sizes="(max-width: 768px) 100vw, 50vw"
                         />
                     ) : (
                         <div className="flex items-center justify-center h-full text-muted-foreground bg-muted/50">
@@ -30,6 +44,30 @@ export function PublicArticleCard({ article }: PublicArticleCardProps) {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
                 </div>
+                {showVisibilityBadge && article.is_public === false && (
+                    <div className="absolute top-3 left-3 z-10">
+                        <Badge variant="outline" className="bg-background/80 backdrop-blur text-[10px] font-bold">Privado</Badge>
+                    </div>
+                )}
+                {showStatusBadge && article.status && (
+                    <div className="absolute top-3 right-3 z-10">
+                        <Badge
+                            variant="secondary"
+                            className={
+                                `text-[10px] font-bold ${
+                                  article.status === 'published' ? 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300' :
+                                  article.status === 'pending' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' :
+                                  article.status === 'draft' ? 'bg-slate-500/20 text-slate-700 dark:text-slate-300' :
+                                  'bg-rose-500/20 text-rose-700 dark:text-rose-300'
+                                }`
+                            }
+                        >
+                            {article.status === 'published' ? 'Publicado' :
+                             article.status === 'pending' ? 'Agendado' :
+                             article.status === 'draft' ? 'Rascunho' : 'Rejeitado'}
+                        </Badge>
+                    </div>
+                )}
                 <CardHeader className="p-5 space-y-2">
                     {article.category_name && (
                         <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-[10px]">
@@ -47,7 +85,7 @@ export function PublicArticleCard({ article }: PublicArticleCardProps) {
                 </CardContent>
                 <CardFooter className="p-5 pt-0 flex items-center justify-between text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                        <CalendarDays className="h-3 w-3" />
+                        <CalendarDays className="h-3 w-3" aria-hidden="true" />
                         {format(new Date(article.created_at), "dd 'de' MMM, yyyy", { locale: ptBR })}
                     </div>
                     <div className="flex items-center gap-1.5 text-primary font-semibold">

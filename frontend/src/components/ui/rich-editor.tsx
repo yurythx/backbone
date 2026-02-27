@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -30,7 +31,6 @@ import {
     Code
 } from 'lucide-react'
 import { MediaDialog } from "@/features/media/media-dialog"
-import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -47,58 +47,22 @@ interface RichEditorProps {
     className?: string
 }
 
-export function RichEditor({ content, onChange, placeholder, className }: RichEditorProps) {
-    const editor = useEditor({
-        extensions: [
-            StarterKit.configure({
-                heading: {
-                    levels: [1, 2, 3],
-                },
-            }),
-            Image.configure({
-                HTMLAttributes: {
-                    class: 'rounded-lg border border-border shadow-sm max-w-full h-auto my-4',
-                },
-            }),
-            TextAlign.configure({
-                types: ['heading', 'paragraph'],
-            }),
-            Placeholder.configure({
-                placeholder: placeholder || 'Comece a escrever a magia...',
-                emptyEditorClass: 'is-editor-empty before:text-muted-foreground before:content-[attr(data-placeholder)] before:float-left before:h-0 before:pointer-events-none',
-            }),
-            TextStyle,
-            Color,
-        ],
-        content: content,
-        onUpdate: ({ editor }) => {
-            onChange(editor.getHTML())
-        },
-        editorProps: {
-            attributes: {
-                class: 'prose prose-sm sm:prose-base dark:prose-invert max-w-none focus:outline-none min-h-[300px] px-4 py-4 scroll-smooth selection:bg-primary/20',
-            },
-        },
-        immediatelyRender: false,
-    })
+type ToolbarButtonProps = {
+    onClick: () => void
+    isActive?: boolean
+    icon: React.ComponentType<{ className?: string }>
+    tooltip: string
+    disabled?: boolean
+}
 
-    if (!editor) {
-        return null
-    }
-
-    const ToolbarButton = ({
-        onClick,
-        isActive,
-        icon: Icon,
-        tooltip,
-        disabled = false
-    }: {
-        onClick: () => void,
-        isActive?: boolean,
-        icon: any,
-        tooltip: string,
-        disabled?: boolean
-    }) => (
+function ToolbarButton({
+    onClick,
+    isActive,
+    icon: Icon,
+    tooltip,
+    disabled = false
+}: ToolbarButtonProps) {
+    return (
         <Tooltip>
             <TooltipTrigger asChild>
                 <Toggle
@@ -116,6 +80,54 @@ export function RichEditor({ content, onChange, placeholder, className }: RichEd
             </TooltipContent>
         </Tooltip>
     )
+}
+
+export function RichEditor({ content, onChange, placeholder, className }: RichEditorProps) {
+    const extensions = useMemo(() => [
+        StarterKit.configure({
+            heading: {
+                levels: [1, 2, 3],
+            },
+        }),
+        Underline,
+        Link.configure({
+            openOnClick: false,
+            autolink: true,
+            linkOnPaste: true,
+        }),
+        Image.configure({
+            HTMLAttributes: {
+                class: 'rounded-lg border border-border shadow-sm max-w-full h-auto my-4',
+            },
+        }),
+        TextAlign.configure({
+            types: ['heading', 'paragraph'],
+        }),
+        Placeholder.configure({
+            placeholder: placeholder || 'Comece a escrever a magia...',
+            emptyEditorClass: 'is-editor-empty before:text-muted-foreground before:content-[attr(data-placeholder)] before:float-left before:h-0 before:pointer-events-none',
+        }),
+        TextStyle,
+        Color,
+    ], [placeholder])
+
+    const editor = useEditor({
+        extensions,
+        content: content,
+        onUpdate: ({ editor }) => {
+            onChange(editor.getHTML())
+        },
+        editorProps: {
+            attributes: {
+                class: 'prose prose-sm sm:prose-base dark:prose-invert max-w-none focus:outline-none min-h-[300px] px-4 py-4 scroll-smooth selection:bg-primary/20',
+            },
+        },
+        immediatelyRender: false,
+    })
+
+    if (!editor) {
+        return null
+    }
 
     return (
         <TooltipProvider delayDuration={400}>

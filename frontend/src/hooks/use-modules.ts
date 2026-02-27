@@ -3,10 +3,10 @@ import { api } from '@/lib/axios'
 import { TenantModule } from '@/types'
 
 export function useModules() {
-    const { data: rawData, isLoading, error } = useQuery<any>({
+    const { data: rawData, isLoading, error } = useQuery<TenantModule[] | { results: TenantModule[] }>({
         queryKey: ['my-modules'],
         queryFn: async () => {
-            const res = await api.get<any>('/api/modules/my-modules/')
+            const res = await api.get<TenantModule[] | { results: TenantModule[] }>('/api/modules/my-modules/')
             return res.data
         },
         staleTime: 5 * 60 * 1000,
@@ -26,10 +26,9 @@ export function useModules() {
     const isModuleActive = (moduleCode: string): boolean => {
         if (!modules || modules.length === 0) return false
 
-        return modules.some((tm: any) => {
-            if (!tm || typeof tm !== 'object') return false
-            return tm.is_active === true && tm.module_code === moduleCode
-        })
+        return modules.some((tm: TenantModule) =>
+            tm && tm.is_active === true && tm.module_code === moduleCode
+        )
     }
 
     return {

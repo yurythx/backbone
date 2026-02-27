@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { useRouter } from "next/navigation"
 import { api } from "@/lib/axios"
 import { AuthResponse } from "@/types"
 import { useQuery } from "@tanstack/react-query"
@@ -27,7 +26,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Loader2, Building2, User, Lock, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
 
 const formSchema = z.object({
   username: z.string().min(2, {
@@ -52,7 +50,6 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onCompanyChange }: LoginFormProps) {
-  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,26 +62,33 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
     }
   })
 
+  const getInitialCompanySlug = () => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('companySlug') || ""
+    }
+    return ""
+  }
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       username: "",
       password: "",
-      companySlug: "",
+      companySlug: getInitialCompanySlug(),
     },
   })
 
+  // Synchronize branding when companies load if we have a slug
   useEffect(() => {
-    const savedCompany = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
-    if (savedCompany && companies) {
-      form.setValue('companySlug', savedCompany)
-      // Attempt to set initial branding if companies are loaded
-      const found = companies.find(c => c.slug === savedCompany)
-      if (found && onCompanyChange) {
+    const currentSlug = form.getValues('companySlug')
+    if (currentSlug && companies && onCompanyChange) {
+      const found = companies.find(c => c.slug === currentSlug)
+      if (found) {
         onCompanyChange(found)
       }
     }
-  }, [form, companies, onCompanyChange])
+  }, [companies, onCompanyChange, form])
+
 
   // Handle manual selection change
   const handleCompanyChange = (slug: string) => {
@@ -93,7 +97,7 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
     if (onCompanyChange) {
       onCompanyChange(company || null)
     }
-    
+
     // Update company context immediately to trigger theme reload
     localStorage.setItem('companySlug', slug)
     window.dispatchEvent(new Event('app-company-changed'))
@@ -122,17 +126,21 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
 
       // 5. Redirect and Force Reload
       toast.success("Login realizado com sucesso! Bem-vindo de volta.")
-      
+
       // Forçar reload completo para garantir que todos os contextos (Header, React Query, Theme)
       // sejam reidratados corretamente com o novo usuário logado.
       // Isso corrige o problema de "não carregar elementos" no primeiro login.
       window.location.href = '/'
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
 
       let message = "Ocorreu um erro inesperado. Tente novamente."
-      if (err.response) {
-        const status = err.response.status
+      const status = typeof err === 'object' && err !== null && 'response' in err
+        ? (err as { response?: { status?: number } }).response?.status
+        : undefined
+      const hasRequest = typeof err === 'object' && err !== null && 'request' in err
+
+      if (status) {
         if (status === 401) {
           message = "Usuário ou senha incorretos."
         } else if (status === 400) {
@@ -142,7 +150,7 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
         } else if (status === 403) {
           message = "Sua conta não tem permissão para acessar esta empresa."
         }
-      } else if (err.request) {
+      } else if (hasRequest) {
         message = "Sem conexão com o servidor. Verifique sua internet."
       }
 
@@ -152,7 +160,7 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
       })
 
       // Only clear company if it seems like a tenant issue (404/400)
-      if (err.response?.status === 404) {
+      if (status === 404) {
         localStorage.removeItem('companySlug')
       }
     } finally {
@@ -245,7 +253,7 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
           </div>
 
           {error && (
-            <div className="text-sm text-destructive font-medium bg-destructive/10 border border-destructive/20 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
+            <div className="text-sm text-destructive font-medium bg-destructive/10 border border-destructive/20 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1" role="alert" aria-live="assertive">
               <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
               {error}
             </div>
@@ -258,13 +266,13 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                <Loader2 className="mr-2 h-6 w-6 animate-spin" aria-hidden="true" />
                 Autenticando...
               </>
             ) : (
               <span className="flex items-center gap-2">
                 Acessar Portal
-                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
               </span>
             )}
           </Button>

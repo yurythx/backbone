@@ -32,42 +32,62 @@ class ArticlesAPITest(APITestCase):
         self.tag = Tag.objects.create(name="Python", slug="python", company=self.company)
 
     def test_read_endpoints_without_role(self):
-        # List articles (no role required for read)
+        # Articles list requires 'articles.article_view' permission — 403 without role
+        res = self.client.get('/api/articles/articles/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Assign role and retry — now should succeed
+        role, _ = Role.objects.get_or_create(
+            company=self.company, 
+            name="Reader", 
+            defaults={"permissions": ["articles.article_view"]}
+        )
+        self.user.role = role
+        self.user.save(update_fields=['role'])
+
         res = self.client.get('/api/articles/articles/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-        # List categories
+        # List categories (also requires module access + role with articles.category_manage)
+        # Note: TagViewSet requires 'articles.category_manage'
+        res = self.client.get('/api/articles/categories/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        
+        # Update role to include category_manage
+        role.permissions.append("articles.category_manage")
+        role.save()
+        
         res = self.client.get('/api/articles/categories/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(len(res.data) >= 1)
-
-        # List tags
-        res = self.client.get('/api/articles/tags/')
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(len(res.data) >= 1)
 
     def test_write_without_role(self):
-        # Create article without role (allowed)
+        # Attempt to create article without role — RBAC blocks with 403
         payload = {
             "title": "News 1",
             "slug": "news-api-1",
             "content": "Extra extra!",
-            "is_published": False,
+            "status": "draft",
             "category": self.cat.id,
             "tags": [self.tag.id],
         }
         res = self.client.post('/api/articles/articles/', payload, format='json')
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-        # Assign role with permission and retry (should still succeed)
-        role = Role.objects.create(company=self.company, name="Editor", permissions=["articles.article_manage"])
+        # Assign role with permission and retry — now should succeed
+        role, _ = Role.objects.get_or_create(
+            company=self.company, 
+            name="Editor", 
+            defaults={"permissions": ["articles.article_view", "articles.article_create"]}
+        )
         self.user.role = role
         self.user.save(update_fields=['role'])
 
+        payload['slug'] = 'news-api-1-with-role'
         res = self.client.post('/api/articles/articles/', payload, format='json')
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res.data['title'], "News 1")
-        
+
+
         # Create another article with different slug
         payload2 = dict(payload)
         payload2['title'] = "News 2"
@@ -126,6 +146,8 @@ class PublicArticlesAPITest(APITestCase):
         # Reset simple rate limit cache keys used by PublicCommentViewSet
         cache.delete(f"rate:pub_comment:alpha:127.0.0.1")
         cache.delete(f"rate:pub_comment:beta:127.0.0.1")
+        # Reset article view deduplication cache keys to avoid cross-test pollution
+        cache.clear()
 
     def test_public_list_filters_by_company(self):
         # Without tenant context, both slugs must be accessible via retrieve

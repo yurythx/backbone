@@ -23,9 +23,10 @@ interface ThemeContextType {
   };
   currentPalette: string;
   isLoading: boolean;
+  isPublicRoute: boolean; // Novo campo
   refreshConfig: () => Promise<void>;
-  updatePalette: (palette: string) => Promise<any>;
-  resetToTenantTheme: () => Promise<any>;
+  updatePalette: (palette: string) => Promise<void>;
+  resetToTenantTheme: () => Promise<void>;
 }
 
 const ThemeConfigContext = React.createContext<ThemeContextType | undefined>(undefined)
@@ -38,10 +39,21 @@ export function useTheme() {
   return context
 }
 
-import { getContrastColor, hexToRgb } from "@/lib/utils"
+import { getContrastColor } from "@/lib/utils"
+import type { TenantBranding, UserThemePreference } from "@/types"
 
 // ✅ NOVO: Componente interno para lidar com efeitos que dependem do contexto
-function ThemeEffects({ themeConfig }: { themeConfig: any }) {
+interface ThemeConfigShape {
+  currentPalette: string
+  isPublicRoute: boolean
+  tenantTheme: TenantBranding | null
+  userTheme: UserThemePreference | null
+  secondaryColor: string
+  backgroundColor: string
+  fontFamily: string
+  icon: string
+}
+function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
   const { resolvedTheme } = useNextTheme() // Agora funciona pois está dentro do Provider
 
   React.useEffect(() => {
@@ -49,7 +61,9 @@ function ThemeEffects({ themeConfig }: { themeConfig: any }) {
       const root = document.documentElement;
       root.setAttribute("data-palette", themeConfig.currentPalette)
 
-      const shouldUseTenantColor = themeConfig.userTheme?.use_tenant_theme !== false;
+      // Se for rota pública, força o uso da cor primária do tenant se definida
+      // Se for privada, respeita a lógica de fallback (já resolvida no hook useThemeConfig)
+      const shouldUseTenantColor = themeConfig.isPublicRoute || themeConfig.userTheme?.use_tenant_theme !== false;
 
       // Lógica de Cores Primárias
       if (shouldUseTenantColor && themeConfig.tenantTheme?.primary_color) {
@@ -144,6 +158,7 @@ export function ThemeProvider({
       socialLinks: themeConfig.socialLinks,
       currentPalette: themeConfig.currentPalette,
       isLoading: themeConfig.isLoading,
+      isPublicRoute: themeConfig.isPublicRoute, // Novo campo
       refreshConfig: themeConfig.refreshConfig,
       updatePalette: themeConfig.updatePalette,
       resetToTenantTheme: themeConfig.resetToTenantTheme,

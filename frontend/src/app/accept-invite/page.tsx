@@ -68,8 +68,11 @@ function AcceptInviteForm() {
             notify.success("Bem-vindo!", "Sua conta foi criada com sucesso.")
             setTimeout(() => router.push('/login'), 3000)
         },
-        onError: (error: any) => {
-            notify.error("Erro ao aceitar convite", error)
+        onError: (error: unknown) => {
+            const message = typeof error === 'object' && error !== null && 'response' in error
+                ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Falha ao aceitar convite'
+                : 'Falha ao aceitar convite'
+            notify.error("Erro ao aceitar convite", message)
         }
     })
 
@@ -79,14 +82,14 @@ function AcceptInviteForm() {
 
     if (isSuccess) {
         return (
-            <div className="text-center space-y-6 animate-in fade-in zoom-in duration-500">
+            <div className="text-center space-y-6 animate-in fade-in zoom-in duration-500" role="status" aria-live="polite" aria-label="Convite aceito">
                 <div className="h-20 w-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <ShieldCheck className="h-10 w-10 text-green-500" />
+                    <ShieldCheck className="h-10 w-10 text-green-500" aria-hidden="true" />
                 </div>
                 <h2 className="text-2xl font-bold">Bem-vindo(a) ao Backbone!</h2>
-                <p className="text-muted-foreground">Sua conta foi configurada. Redirecionando para o login...</p>
+                <p className="text-muted-foreground">Sua conta foi criada com sucesso. Redirecionando para o login...</p>
                 <Button asChild className="w-full rounded-xl h-12 shadow-lg shadow-primary/20">
-                    <Link href="/login">Fazer Login Agora <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                    <Link href="/login">Fazer Login Agora <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" /></Link>
                 </Button>
             </div>
         )
@@ -151,10 +154,10 @@ function AcceptInviteForm() {
                     )}
                 />
 
-                <Button type="submit" className="w-full h-12 rounded-xl text-lg font-bold shadow-lg shadow-primary/20" disabled={mutation.isPending}>
+                <Button type="submit" className="w-full h-12 rounded-xl text-lg font-bold shadow-lg shadow-primary/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" disabled={mutation.isPending}>
                     {mutation.isPending ? (
                         <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finalizando...
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Finalizando...
                         </>
                     ) : "Concluir Cadastro"}
                 </Button>
@@ -165,18 +168,18 @@ function AcceptInviteForm() {
 
 export default function AcceptInvitePage() {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4" role="main" aria-labelledby="accept-title">
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="w-full max-w-md bg-background rounded-3xl p-8 shadow-2xl space-y-8"
             >
-                <Suspense fallback={<div className="p-8 text-center text-muted-foreground animate-pulse">Carregando convite...</div>}>
+                <Suspense fallback={<div className="p-8 text-center text-muted-foreground animate-pulse" role="status" aria-live="polite" aria-label="Carregando convite">Carregando convite...</div>}>
                     <div className="space-y-2 text-center">
                         <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                            <UserPlus className="h-8 w-8 text-primary" />
+                            <UserPlus className="h-8 w-8 text-primary" aria-hidden="true" />
                         </div>
-                        <h1 className="text-3xl font-bold tracking-tight">Quase lá!</h1>
+                        <h1 id="accept-title" className="text-3xl font-bold tracking-tight">Quase lá!</h1>
                         <p className="text-muted-foreground">Complete seu perfil para acessar o Backbone.</p>
                     </div>
                     <AcceptInviteForm />

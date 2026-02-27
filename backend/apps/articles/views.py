@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions, status, filters, serializers, mixins
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import models
@@ -34,6 +35,8 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['published_at', 'created_at']
     ordering = ['-published_at']
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'public_articles'
     
     def get_queryset(self):
         """
@@ -79,7 +82,7 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
 )
 class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, HasModuleAccess, HasRolePermission]
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
     required_permission = 'articles.category_manage'
     module_code = 'articles'
     lookup_field = 'slug'
@@ -102,10 +105,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
         instance.delete()
     
     def get_permissions(self):
-        if self.request.method in permissions.SAFE_METHODS:
-            return [permissions.AllowAny()]
-        base = [permissions.IsAuthenticated(), HasModuleAccess()]
-        return base + [HasRolePermission()]
+        return [permissions.IsAuthenticated(), HasModuleAccess(), HasRolePermission()]
 
 @extend_schema_view(
     list=extend_schema(tags=['Articles']),
@@ -117,8 +117,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
 )
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, HasModuleAccess, HasRolePermission]
-    required_permission = 'articles.article_manage'
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
+    required_permission = 'articles.category_manage'
     module_code = 'articles'
     lookup_field = 'slug'
     pagination_class = None
@@ -140,10 +140,7 @@ class TagViewSet(viewsets.ModelViewSet):
         instance.delete()
     
     def get_permissions(self):
-        if self.request.method in permissions.SAFE_METHODS:
-            return [permissions.AllowAny()]
-        base = [permissions.IsAuthenticatedOrReadOnly(), HasModuleAccess()]
-        return base + [HasRolePermission()]
+        return [permissions.IsAuthenticated(), HasModuleAccess(), HasRolePermission()]
 
 @extend_schema_view(
     list=extend_schema(tags=['Articles']),
@@ -161,41 +158,27 @@ class TagViewSet(viewsets.ModelViewSet):
 class ArticleViewSet(viewsets.ModelViewSet):
     serializer_class = ArticleSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = 'articles.article_manage'
+    required_permission = 'articles.article_view' # Default for list/retrieve
     module_code = 'articles'
     filterset_class = ArticleFilter
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'title']
 
     def get_permissions(self):
-        """
-        Permite leitura para todos (incluindo não logados para endpoints públicos),
-        mas exige Role específica para escrita e ações admin.
-        """
-        # Se for GET (list ou retrieve) e não for endpoint de analytics, permite qualquer um (AllowAny)
-        # desde que seja uma rota pública. Mas como o ViewSet é protegido por padrão,
-        # vamos usar AllowAny apenas para GET, mas a query vai filtrar por empresa/publicado.
-        
-        if self.request.method in permissions.SAFE_METHODS:
-            # Atenção: Se usarmos AllowAny, o request.user pode ser AnonymousUser.
-            # O get_queryset precisa lidar com isso se filtrar por company do user.
-            # No caso público, a company deve vir do header ou slug do artigo.
-            return [permissions.AllowAny()]
-            
-        base = [permissions.IsAuthenticated(), HasModuleAccess()]
-        return base + [HasRolePermission()]
+        # Override to ensure we always use the latest classes
+        return [permissions.IsAuthenticated(), HasModuleAccess(), HasRolePermission()]
 
     def get_queryset(self):
         """
-        Retorna artigos baseado na autenticação:
-        - Usuário autenticado: artigos públicos de todos + artigos privados do seu tenant
-        - Usuário anônimo: apenas artigos públicos publicados
+        Retorna artigos do tenant atual do usuário autenticado.
+        Cross-tenant isolation: um usuário só pode ver artigos da sua própria empresa,
+        independente de is_public. Artigos públicos de outros tenants são acessíveis
+        apenas pelo PublicArticleViewSet (sem autenticação).
         """
-        # Usuário autenticado: públicos + privados da empresa
         if self.request.user.is_authenticated:
             user_company = self.request.company
             return Article.objects.filter(
-                models.Q(is_public=True) | models.Q(company=user_company)
+                company=user_company
             ).select_related('category', 'author', 'company').prefetch_related('tags').order_by('-created_at')
         
         # Usuário anônimo: apenas públicos publicados
@@ -212,9 +195,16 @@ class ArticleViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
+        self.required_permission = 'articles.article_create'
+        if not HasRolePermission().has_permission(self.request, self):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied("Sem permissão para criar artigos.")
+
         from shared_kernel.licensing import check_feature_limit
+        from apps.licensing.models import License
+        active_license = License.objects.filter(company=self.request.company, is_active=True).exists()
         can_add, limit, current = check_feature_limit(self.request.company, 'max_articles')
-        if not can_add:
+        if active_license and not can_add:
             from rest_framework.exceptions import ValidationError
             raise ValidationError(f"Limite de artigos atingido ({current}/{limit}). Faça um upgrade do seu plano.")
 
@@ -227,14 +217,26 @@ class ArticleViewSet(viewsets.ModelViewSet):
         serializer.instance = article
 
     def perform_update(self, serializer):
-        ArticleService.update_article(
+        self.required_permission = 'articles.article_edit'
+        if not HasRolePermission().has_permission(self.request, self):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied("Sem permissão para editar artigos.")
+
+        updated_article = ArticleService.update_article(
             user=self.request.user,
-            article=self.get_object(),
+            article=serializer.instance,  # reutiliza instance já carregada pelo DRF
             data=serializer.validated_data,
             image=self.request.FILES.get('image')
         )
+        # Atualiza o serializer.instance para que a resposta reflita os dados atualizados
+        serializer.instance = updated_article
 
     def perform_destroy(self, instance):
+        self.required_permission = 'articles.article_delete'
+        if not HasRolePermission().has_permission(self.request, self):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied("Sem permissão para excluir artigos.")
+
         ArticleService.delete_article(self.request.user, instance)
         instance.delete()
 
@@ -287,6 +289,11 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='publish')
     def publish(self, request, pk=None):
+        self.required_permission = 'articles.article_publish'
+        if not HasRolePermission().has_permission(request, self):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied("Sem permissão para publicar artigos.")
+
         article = self.get_object()
         try:
             ArticleService.publish_article(request.user, article)
@@ -297,8 +304,9 @@ class ArticleViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='reject')
     def reject(self, request, pk=None):
         article = self.get_object()
+        reason = request.data.get('reason', '')
         try:
-            ArticleService.reject_article(request.user, article)
+            ArticleService.reject_article(request.user, article, reason=reason)
             return Response({'status': 'rejected'})
         except ValueError as e:
             return Response({'error': str(e)}, status=400)
@@ -322,10 +330,15 @@ class ArticleViewSet(viewsets.ModelViewSet):
         total_views = ArticleView.objects.filter(company=company).count()
         
         # 2. Artigos mais vistos (Top 5)
-        most_viewed_qs = Article.objects.filter(company=company).annotate(
-            total_views=Count('views'),
-            views_last_30_days=Count('views', filter=Q(views__viewed_at__gte=thirty_days_ago))
-        ).order_by('-total_views')[:5]
+        most_viewed_qs = (
+            Article.objects.filter(company=company)
+            .annotate(
+                total_views=Count('views'),
+                views_last_30_days=Count('views', filter=Q(views__viewed_at__gte=thirty_days_ago)),
+                unique_visitors=Count('views__ip_address', distinct=True),
+            )
+            .order_by('-total_views')[:5]
+        )
         
         # 3. Visualizações por data (Últimos 15 dias)
         fifteen_days_ago = timezone.now().date() - timezone.timedelta(days=15)
@@ -362,7 +375,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         
         thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
-        article = Article.objects.filter(pk=pk).annotate(
+        article = Article.objects.filter(pk=pk, company=request.company).annotate(
             total_views=Count('views'),
             views_last_30_days=Count('views', filter=Q(views__viewed_at__gte=thirty_days_ago)),
             unique_visitors=Count('views__ip_address', distinct=True)
@@ -387,7 +400,8 @@ class ArticleViewSet(viewsets.ModelViewSet):
 )
 class CommentViewSet(viewsets.ModelViewSet):
     """
-    Gerencia comentários dos artigos.
+    Gerencia comentários dos artigos (painel interno).
+    Requer permissão articles.article_manage.
     """
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
@@ -401,6 +415,16 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company, author=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """
+        Aprova um comentário pendente de moderação.
+        """
+        comment = self.get_object()
+        comment.is_approved = True
+        comment.save(update_fields=['is_approved'])
+        return Response({'status': 'approved'})
 
 @extend_schema_view(
     list=extend_schema(tags=['Public Articles'], description='Lista comentários aprovados de um artigo público'),

@@ -10,7 +10,7 @@ User = get_user_model()
 class PagesAPITest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Pages Corp", slug="pages-corp")
-        self.user = User.all_objects.create_user(
+        self.user = User.objects.create_user(
             username="pagesuser",
             email="p@corp.com",
             password="pass",
@@ -27,7 +27,7 @@ class PagesAPITest(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data['results']), 0)
 
-        payload = {"title": "Home", "slug": "home", "content": "Welcome", "is_published": True}
+        payload = {"title": "Home", "slug": "home", "content": "Welcome", "status": "published"}
         create_res = self.client.post('/api/pages/', payload, format='json')
         self.assertEqual(create_res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(create_res.data['title'], "Home")
@@ -45,6 +45,7 @@ class PagesAPITest(APITestCase):
 
     def test_unique_slug_per_company(self):
         Page.objects.create(company=self.company, title="A", slug="about", content="")
-        payload = {"title": "About Us", "slug": "about", "content": "x", "is_published": True}
+        payload = {"title": "About Us", "slug": "about", "content": "x", "status": "published"}
         res = self.client.post('/api/pages/', payload, format='json')
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+

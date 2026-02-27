@@ -53,6 +53,21 @@ def send_push_notification(self, subscription_id, title, message, link=None, ico
         # Retry for other issues
         raise self.retry(exc=e, countdown=60)
 
+
+@shared_task
+def send_websocket_notification(group_name, message_payload):
+    """
+    Sends a notification message to a WebSocket group using Channels.
+    Offloaded to Celery to prevent blocking the main request-response cycle.
+    """
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+    
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(group_name, message_payload)
+    return f"WebSocket notification sent to {group_name}"
+
+
 def notify_user_push(user, title, message, link=None):
     """
     Utility to send push to all active subscriptions of a user.

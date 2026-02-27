@@ -12,12 +12,12 @@ export function useAuth() {
             try {
                 const res = await api.get<User>('/api/accounts/users/me/')
                 return res.data
-            } catch (err) {
+            } catch {
                 // If 401, maybe clear token? For now just return null
                 return null
             }
         },
-        staleTime: Infinity, // User data rarely changes during session
+        staleTime: 5 * 60 * 1000, // A9: revalida a cada 5 min (Infinity deixava permissões desatualizadas após troca de role)
         retry: false
     })
 

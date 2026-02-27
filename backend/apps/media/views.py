@@ -1,21 +1,33 @@
 from rest_framework import viewsets, permissions, parsers
 from .models import Media
 from .serializers import MediaSerializer
+from apps.module_manager.permissions import HasModuleAccess
+from apps.accounts.permissions import HasRolePermission
 
 class MediaViewSet(viewsets.ModelViewSet):
     queryset = Media.objects.all()
-    serializer_with_tenant = True # Assumed filter logic from BaseTenantModel/Middleware
+    serializer_with_tenant = True
     serializer_class = MediaSerializer
     parser_classes = (parsers.MultiPartParser, parsers.FormParser)
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
+    required_permission = 'media.media_view'
     pagination_class = None
 
     def get_queryset(self):
-        # The TenantMiddleware/BaseTenantModel usually handles this, 
-        # but explicit filtering is safer if not fully automated.
-        if hasattr(self.request.user, 'company_id'):
-            return self.queryset.filter(company_id=self.request.user.company_id)
-        return self.queryset.none()
+        if hasattr(self.request, 'company') and self.request.company:
+            return Media.objects.filter(company=self.request.company)
+        return Media.all_objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(company_id=self.request.user.company_id)
+        self.required_permission = 'media.media_upload'
+        if not HasRolePermission().has_permission(self.request, self):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied("Sem permissão para upload de mídia.")
+        serializer.save(company=self.request.company)
+
+    def perform_destroy(self, instance):
+        self.required_permission = 'media.media_delete'
+        if not HasRolePermission().has_permission(self.request, self):
+             from rest_framework.exceptions import PermissionDenied
+             raise PermissionDenied("Sem permissão para excluir mídia.")
+        instance.delete()

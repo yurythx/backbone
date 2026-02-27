@@ -32,15 +32,15 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
         if not api_key_obj.verify_key(key):
             raise exceptions.AuthenticationFailed('Chave de API incorreta.')
 
-        # Update usage metadata
-        api_key_obj.last_used_at = timezone.now()
-        api_key_obj.save(update_fields=['last_used_at'])
+        # Update usage metadata in background
+        from .tasks import update_api_key_last_used
+        update_api_key_last_used.delay(api_key_obj.id)
 
         # Set company in request for TenantMiddleware (if not already set)
-        # However, TenantMiddleware usually runs before Auth.
-        # So we ensure request.company is correctly set here too.
         request.company = api_key_obj.company
         
-        # We return a user and the auth object. 
-        # For Public API, we use the owner of the key as the user.
-        return (api_key_obj.company.slug, api_key_obj) # Returning company slug as 'user' for now, or a real user
+        # Return a virtual user object and the auth object.
+        from .models import APIKeyUser
+        user = APIKeyUser(api_key_obj.company, name=api_key_obj.name)
+        
+        return (user, api_key_obj)

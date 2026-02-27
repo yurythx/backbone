@@ -16,9 +16,18 @@ const palettes = [
 ]
 
 export function UserThemeSelector() {
-    const { currentPalette, updatePalette, resetToTenantTheme, isLoading } = useTheme()
+    const { 
+        currentPalette, 
+        updatePalette, 
+        resetToTenantTheme, 
+        isLoading, 
+        isPublicRoute 
+    } = useTheme()
 
-    if (isLoading) return <div>Carregando preferências...</div>
+    // Não exibir seletor em rotas públicas
+    if (isPublicRoute) return null;
+
+    if (isLoading) return <div role="status" aria-live="polite" aria-label="Carregando preferências de tema">Carregando preferências...</div>
 
     return (
         <div className="space-y-6">
@@ -29,11 +38,14 @@ export function UserThemeSelector() {
                 </P>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4" role="radiogroup" aria-label="Paletas de tema">
                 {palettes.map((palette) => (
                     <button
                         key={palette.id}
                         onClick={() => updatePalette(palette.id)}
+                        role="radio"
+                        aria-checked={currentPalette === palette.id}
+                        aria-label={palette.name}
                         className={cn(
                             "relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:bg-accent",
                             currentPalette === palette.id
@@ -48,7 +60,7 @@ export function UserThemeSelector() {
                         <span className="text-sm font-medium">{palette.name}</span>
                         {currentPalette === palette.id && (
                             <div className="absolute top-2 right-2 p-0.5 rounded-full bg-primary text-white">
-                                <Check className="h-3 w-3" />
+                                <Check className="h-3 w-3" aria-hidden="true" />
                             </div>
                         )}
                     </button>
@@ -63,7 +75,7 @@ export function UserThemeSelector() {
                     onClick={resetToTenantTheme}
                     className="gap-2"
                 >
-                    <RotateCcw className="h-4 w-4" />
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
                     Restaurar padrão da empresa
                 </Button>
             </div>

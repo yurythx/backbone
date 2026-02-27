@@ -26,8 +26,8 @@ export function EmptyState({
                 animate={{ scale: 1, opacity: 1 }}
                 className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6 relative"
             >
-                <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full" />
-                <Icon className="h-8 w-8 text-primary relative z-10" />
+        <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full" aria-hidden="true" />
+        <Icon className="h-8 w-8 text-primary relative z-10" aria-hidden="true" />
             </motion.div>
             <div className="max-w-xs space-y-2 mb-8">
                 <h3 className="text-xl font-bold tracking-tight">{title}</h3>

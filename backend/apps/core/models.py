@@ -137,8 +137,6 @@ class TenantEmailConfig(models.Model):
     
     # SECURITY: Encrypted password storage
     smtp_password_encrypted = models.BinaryField(blank=True, null=True, help_text="Senha SMTP criptografada")
-    # Legacy field - deprecated, use smtp_password_encrypted
-    smtp_password = models.CharField(max_length=255, blank=True, help_text="[DEPRECATED] Use set_smtp_password() instead")
     
     smtp_use_tls = models.BooleanField(default=True)
     from_email = models.EmailField(blank=True, help_text="E-mail remetente (ex: contato@empresa.com)")
@@ -153,10 +151,8 @@ class TenantEmailConfig(models.Model):
         from shared_kernel.encryption import encrypt_value
         if raw_password:
             self.smtp_password_encrypted = encrypt_value(raw_password)
-            self.smtp_password = ''  # Clear legacy field
         else:
             self.smtp_password_encrypted = b''
-            self.smtp_password = ''
 
     def get_smtp_password(self) -> str:
         """
@@ -171,16 +167,7 @@ class TenantEmailConfig(models.Model):
         if self.smtp_password_encrypted:
             return decrypt_value(self.smtp_password_encrypted)
         
-        # Fallback to legacy field (for backward compatibility during migration)
-        if self.smtp_password:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(
-                f"Company {self.company_id}: Using legacy unencrypted SMTP password. "
-                "Please re-save this configuration to encrypt the password."
-            )
-            return self.smtp_password
-        
+        # Fallback: no encrypted password
         return ''
 
     def __str__(self):

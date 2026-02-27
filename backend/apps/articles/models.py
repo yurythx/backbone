@@ -55,9 +55,12 @@ class Article(BaseTenantModel):
     tags = models.ManyToManyField(Tag, blank=True)
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
-    # Deprecating is_published in favor of status, but keeping for compatibility for now
-    is_published = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(
+        blank=True,
+        verbose_name="Motivo da Rejeição",
+        help_text="Preenchido pelo revisor ao rejeitar um artigo."
+    )
     
     # Visibility control
     is_public = models.BooleanField(
@@ -92,8 +95,20 @@ class Article(BaseTenantModel):
             models.Index(fields=['company', 'is_public', '-published_at'], name='article_tenant_pub_idx'),
         ]
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        # Garante que artigos públicos só possam existir com status publicado
+        if self.is_public and self.status != self.STATUS_PUBLISHED:
+            raise ValidationError({
+                'is_public': (
+                    'Um artigo só pode ser marcado como público quando estiver publicado. '
+                    f'Status atual: "{self.get_status_display()}".'
+                )
+            })
+
     def __str__(self):
         return self.title
+
 
 class ArticleView(BaseTenantModel):
     article = models.ForeignKey(Article, related_name='views', on_delete=models.CASCADE)

@@ -4,7 +4,7 @@ import * as React from "react"
 import { useDropzone } from "react-dropzone"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Camera, Loader2, X } from "lucide-react"
+import { Camera, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface AvatarUploadProps {

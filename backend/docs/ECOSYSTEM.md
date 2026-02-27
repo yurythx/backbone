@@ -1,6 +1,6 @@
 # Ecossistema Backend - Documentação Técnica
 
-Esta documentação fornece uma visão geral detalhada das principais ferramentas e serviços utilizados no backend do sistema SaaS BlackBone.
+Esta documentação fornece uma visão geral detalhada das principais ferramentas e serviços utilizados no backend do sistema SaaS Backbone.
 
 ## 📋 Índice
 
@@ -19,14 +19,14 @@ Esta documentação fornece uma visão geral detalhada das principais ferramenta
 O **Celery** é uma fila de tarefas distribuída focada em processamento em tempo real, mas que também suporta agendamento de tarefas. Ele permite que operações pesadas ou demoradas (como envio de emails, processamento de relatórios, redimensionamento de imagens) sejam executadas em segundo plano, sem bloquear a resposta da API para o usuário.
 
 ### Como funciona no nosso sistema?
-No BlackBone, o Celery está configurado para:
+No Backbone, o Celery está configurado para:
 - Usar o **Redis** como *Broker* (onde as mensagens das tarefas são guardadas) e *Backend* (onde os resultados são salvos).
 - Descobrir automaticamente tarefas definidas nos arquivos `tasks.py` dentro de cada app Django.
 
 **Arquivos de Configuração:**
 - `backend/config/celery.py`: Inicialização da aplicação Celery.
 - `backend/config/__init__.py`: Garante que o Celery carregue junto com o Django.
-- `backend/docker-compose.yml`: Define os serviços `celery_worker` (processa tarefas) e `celery_beat` (agendador).
+- `docker-compose.yml`: Define os serviços `celery_worker` (processa tarefas) e `celery_beat` (agendador).
 
 ### Comandos Úteis
 
@@ -73,7 +73,7 @@ Temos dois usos principais para o Redis:
 2.  **Cache do Django/Channels**: Utilizado para gerenciar sessões e, especificamente, para o **Daphne/Channels** (WebSockets) gerenciar as camadas de comunicação em tempo real (chat).
 
 **Serviço Docker:**
-- Nome: `redis` (dev) / `blackbone_redis_prod` (prod)
+- Nome: `redis`
 - Porta: `6379`
 
 ---
@@ -134,10 +134,10 @@ Usamos o MinIO para armazenar arquivos de mídia (uploads de usuários) e estát
 
 **Configuração Docker:**
 - **Serviço**: `minio` (Console em `:9001`, API em `:9000`).
-- **Bucket Automático**: O container `createbuckets` cria automaticamente o bucket `blackbone-media` ao iniciar.
-- **Acesso**:
+- **Bucket Automático**: O container `createbuckets` cria automaticamente o bucket configurado em variáveis de ambiente.
+- **Acesso (dev padrão)**:
     - Console: `http://localhost:9001`
-    - Usuário/Senha (Dev): `minioadmin` / `minioadmin`
+    - Usuário/Senha: `minioadmin` / `minioadmin`
 
 **Configuração Django (`settings.py`):**
 Utilizamos `django-storages` com `boto3` para conectar ao MinIO como se fosse o S3.
@@ -148,4 +148,4 @@ AWS_STORAGE_BUCKET_NAME = 'blackbone-media'
 
 ---
 
-**Observação**: Todas essas ferramentas já estão configuradas e integradas nos arquivos `docker-compose.yml` (desenvolvimento) e `docker-compose.prod.yml` (produção).
+**Observação**: Todas essas ferramentas já estão configuradas e integradas nos arquivos `docker-compose.yml` (desenvolvimento) e `docker-compose.prod.yml` (produção) na raiz do projeto.

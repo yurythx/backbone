@@ -10,7 +10,7 @@ class LicensingTests(TestCase):
         self.client = APIClient()
         self.company = Company.objects.create(name="Test Corp", slug="test-corp")
         self.user = User.objects.create_user(
-            username="admin", 
+            username="lic_admin", 
             email="admin@test.com", 
             password="password123", 
             company=self.company
@@ -25,9 +25,8 @@ class LicensingTests(TestCase):
     def test_list_plans(self):
         response = self.client.get('/api/licensing/plans/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # non-paginated
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['name'], "Pro Plan")
+        data = response.data['results'] if isinstance(response.data, dict) and 'results' in response.data else response.data
+        self.assertTrue(any(p['name'] == "Pro Plan" for p in data))
 
     def test_assign_license(self):
         # Assign license to company

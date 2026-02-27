@@ -26,6 +26,22 @@ class ArticleSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['company', 'created_at', 'updated_at', 'author']
 
+    def to_internal_value(self, data):
+        # Permite que a imagem seja uma string (URL/caminho) em vez de um arquivo
+        # Isso é necessário quando o usuário seleciona uma imagem da biblioteca de mídia
+        if 'image' in data and (isinstance(data['image'], str) or data['image'] is None):
+            mutable_data = data.copy()
+            image_val = mutable_data.pop('image', None)
+            
+            # Se for string vazia, trata como None
+            if image_val == "":
+                image_val = None
+                
+            res = super().to_internal_value(mutable_data)
+            res['image'] = image_val
+            return res
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
         # Sanitização de campos HTML e texto
         if 'content' in attrs and attrs['content']:
@@ -45,8 +61,21 @@ class ArticleSerializer(serializers.ModelSerializer):
             attrs['meta_keywords'] = sanitize_plain_text(attrs['meta_keywords'])
         
         # Validação específica para artigos públicos
-        if attrs.get('is_public', False):
-            # Artigos públicos devem ter conteúdo completo
+        is_public = attrs.get('is_public', False)
+        status_value = attrs.get('status', None)
+
+        if is_public:
+            # is_public=True só é permitido para artigos publicados
+            # (ao criar, status pode não vir no payload — só é relevante na edição)
+            if status_value is not None and status_value != Article.STATUS_PUBLISHED:
+                raise serializers.ValidationError({
+                    'is_public': (
+                        'Um artigo só pode ser marcado como público quando seu status for "Publicado". '
+                        f'Status atual: "{status_value}".'
+                    )
+                })
+
+            # Artigos públicos exigem conteúdo completo para SEO
             if not attrs.get('title'):
                 raise serializers.ValidationError({
                     'title': 'Artigos públicos devem ter título preenchido.'
@@ -59,8 +88,9 @@ class ArticleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'excerpt': 'Artigos públicos devem ter resumo preenchido para melhor SEO.'
                 })
-        
+
         return attrs
+
 
 class ArticlePublicSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
@@ -113,7 +143,7 @@ class CommentSerializer(serializers.ModelSerializer):
         return attrs
 
 class ArticleAnalyticsSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
+    id = serializers.IntegerField()
     title = serializers.CharField()
     slug = serializers.CharField()
     total_views = serializers.IntegerField()

@@ -33,7 +33,7 @@ export function ThemeToggle() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-9 w-9 relative overflow-hidden group glass-morphism border-0 transition-all">
+                <Button variant="outline" size="icon" className="h-9 w-9 relative overflow-hidden group glass-morphism border-0 transition-all" aria-label="Alternar tema">
                     <AnimatePresence mode="wait" initial={false}>
                         {theme === "light" ? (
                             <motion.div
@@ -43,7 +43,7 @@ export function ThemeToggle() {
                                 exit={{ y: -20, opacity: 0, rotate: 45 }}
                                 transition={{ duration: 0.2, ease: "easeInOut" }}
                             >
-                                <Sun className="h-4 w-4 text-orange-500" />
+                                <Sun className="h-4 w-4 text-orange-500" aria-hidden="true" />
                             </motion.div>
                         ) : theme === "dark" ? (
                             <motion.div
@@ -53,7 +53,7 @@ export function ThemeToggle() {
                                 exit={{ y: -20, opacity: 0, rotate: 45 }}
                                 transition={{ duration: 0.2, ease: "easeInOut" }}
                             >
-                                <Moon className="h-4 w-4 text-blue-400" />
+                                <Moon className="h-4 w-4 text-blue-400" aria-hidden="true" />
                             </motion.div>
                         ) : (
                             <motion.div
@@ -63,7 +63,7 @@ export function ThemeToggle() {
                                 exit={{ y: -20, opacity: 0, rotate: 45 }}
                                 transition={{ duration: 0.2, ease: "easeInOut" }}
                             >
-                                <Monitor className="h-4 w-4 text-muted-foreground" />
+                                <Monitor className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -76,30 +76,30 @@ export function ThemeToggle() {
                     className="flex items-center justify-between cursor-pointer"
                 >
                     <div className="flex items-center gap-2">
-                        <Sun className="h-4 w-4 text-orange-500" />
+                        <Sun className="h-4 w-4 text-orange-500" aria-hidden="true" />
                         <span>Claro</span>
                     </div>
-                    {theme === "light" && <Check className="h-3.5 w-3.5 text-primary" />}
+                    {theme === "light" && <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     onClick={() => setTheme("dark")}
                     className="flex items-center justify-between cursor-pointer"
                 >
                     <div className="flex items-center gap-2">
-                        <Moon className="h-4 w-4 text-blue-400" />
+                        <Moon className="h-4 w-4 text-blue-400" aria-hidden="true" />
                         <span>Escuro</span>
                     </div>
-                    {theme === "dark" && <Check className="h-3.5 w-3.5 text-primary" />}
+                    {theme === "dark" && <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     onClick={() => setTheme("system")}
                     className="flex items-center justify-between cursor-pointer"
                 >
                     <div className="flex items-center gap-2">
-                        <Monitor className="h-4 w-4 text-muted-foreground" />
+                        <Monitor className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                         <span>Sistema</span>
                     </div>
-                    {theme === "system" && <Check className="h-3.5 w-3.5 text-primary" />}
+                    {theme === "system" && <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

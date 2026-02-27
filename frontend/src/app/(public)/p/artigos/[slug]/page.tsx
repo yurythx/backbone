@@ -1,5 +1,3 @@
-import { api } from "@/lib/axios"
-import { Article } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, CalendarDays, User } from "lucide-react"
@@ -8,48 +6,62 @@ import { ptBR } from "date-fns/locale"
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import Image from 'next/image'
 
 interface Props {
     params: Promise<{ slug: string }>
+    searchParams?: Promise<{ company_slug?: string }>
 }
 
-async function getArticle(slug: string) {
+async function getArticle(slug: string, companySlug?: string) {
     try {
-        // In Server Components, we fetch directly. 
-        // Note: Using the internal API URL if in Docker, but here we assume NEX_PUBLIC_API_URL is reachable.
+        // Using public API endpoint that doesn't require authentication
         const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005';
-        
+
         // Ensure slug is clean
         const cleanSlug = encodeURIComponent(slug)
-        
-        // Log for debugging
-        console.log(`[PublicArticle] Fetching: ${apiUrl}/api/articles/articles/?slug=${cleanSlug}`)
-        
-        const res = await fetch(`${apiUrl}/api/articles/articles/?slug=${cleanSlug}`, {
-            next: { revalidate: 0 }, // Disable cache for debugging, or set low
+
+        // Optional tenant hint header for multi-tenant isolation
+        // No server-side, não temos acesso direto ao localStorage ou window
+        // Devemos confiar na variável de ambiente ou parâmetro de busca se disponível
+        const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
+        const effectiveCompany = companySlug || envCompany
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[PublicArticle] Fetching article: ${apiUrl}/api/articles/public/articles/${cleanSlug}/ (Company: ${effectiveCompany})`)
+        }
+
+        const qs = effectiveCompany ? `?company_slug=${encodeURIComponent(effectiveCompany)}` : ''
+        const res = await fetch(`${apiUrl}/api/articles/public/articles/${cleanSlug}/${qs}`, {
+            next: { revalidate: 300 }, // Cache for 5 minutes
             headers: {
-                // If the endpoint is protected, we might need a public alternative or an API key.
-                // Assuming /api/articles/articles/ is public for GET if permissions allow 'AllowAny' or similar
-                // But wait, the standard ViewSet might be protected.
-                // Let's check if we need a specific public endpoint or if the main one filters by public.
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...(effectiveCompany ? { 'X-Company-Slug': effectiveCompany } : {})
             }
         })
-        
+
         if (!res.ok) {
+            if (res.status === 404) {
+                console.warn(`[PublicArticle] Not found with tenant context: ${cleanSlug}. Retrying without context...`)
+                const retry = await fetch(`${apiUrl}/api/articles/public/articles/${cleanSlug}/`, {
+                    next: { revalidate: 300 },
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                if (!retry.ok) {
+                    console.warn(`[PublicArticle] Not found globally: ${cleanSlug}`)
+                    return null
+                }
+                const retryData = await retry.json()
+                return retryData || null
+            }
             console.error(`[PublicArticle] Failed to fetch article: ${res.status} ${res.statusText}`)
             return null
         }
-        
+
         const data = await res.json()
-        const articles = Array.isArray(data) ? data : (data.results || [])
-        
-        // Filter by slug client-side if API returns list (just to be safe)
-        const article = articles.find((a: any) => a.slug === slug) || articles[0]
-        
-        return article || null
-    } catch (error) {
-        console.error("Error fetching article for metadata:", error)
+        return data || null
+    } catch (e) {
+        console.error("Error fetching article for metadata:", e)
         return null
     }
 }
@@ -67,7 +79,7 @@ export async function generateMetadata(
     try {
         const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005';
         const brandingRes = await fetch(`${apiUrl}/api/core/branding/public_current/`, {
-            headers: { 'x-company-slug': article.company_slug || '' },
+            headers: { 'X-Company-Slug': article.company_slug || '' },
             next: { revalidate: 3600 }
         })
         if (brandingRes.ok) {
@@ -105,9 +117,10 @@ export async function generateMetadata(
     }
 }
 
-export default async function PublicArticleDetailPage({ params }: Props) {
+export default async function PublicArticleDetailPage({ params, searchParams }: Props) {
     const { slug } = await params
-    const article = await getArticle(slug)
+    const sp = searchParams ? await searchParams : undefined
+    const article = await getArticle(slug, sp?.company_slug)
 
     if (!article) {
         notFound()
@@ -142,7 +155,7 @@ export default async function PublicArticleDetailPage({ params }: Props) {
     }
 
     return (
-        <article className="max-w-4xl mx-auto py-10">
+        <article className="max-w-4xl mx-auto py-10" role="article" aria-labelledby="article-title">
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -151,10 +164,10 @@ export default async function PublicArticleDetailPage({ params }: Props) {
                 variant="ghost"
                 size="sm"
                 asChild
-                className="mb-8 p-0 hover:bg-transparent text-muted-foreground hover:text-primary transition-colors group"
+                className="mb-8 p-0 hover:bg-transparent text-muted-foreground hover:text-primary transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-md"
             >
-                <Link href="/p/artigos" className="flex items-center gap-2">
-                    <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                <Link href="/p/artigos" className="flex items-center gap-2" aria-label="Voltar para lista de artigos">
+                    <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
                     Voltar para artigos
                 </Link>
             </Button>
@@ -167,20 +180,20 @@ export default async function PublicArticleDetailPage({ params }: Props) {
                         </div>
                     )}
                     <div className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 opacity-70" />
+                        <CalendarDays className="h-4 w-4 opacity-70" aria-hidden="true" />
                         <span>{format(new Date(article.created_at), "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
                     </div>
                     {article.author_name && (
                         <div className="flex items-center gap-2">
                             <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                                <User className="h-3 w-3" />
+                                <User className="h-3 w-3" aria-hidden="true" />
                             </div>
                             <span className="font-medium text-foreground">{article.author_name}</span>
                         </div>
                     )}
                 </div>
 
-                <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-[1.1] text-foreground">
+                <h1 id="article-title" className="text-4xl md:text-6xl font-black tracking-tighter leading-[1.1] text-foreground">
                     {article.title}
                 </h1>
 
@@ -193,10 +206,12 @@ export default async function PublicArticleDetailPage({ params }: Props) {
 
             {imageUrl && (
                 <div className="aspect-[21/9] relative rounded-[32px] overflow-hidden mb-16 shadow-2xl shadow-primary/5 border border-primary/5">
-                    <img
+                    <Image
                         src={imageUrl}
-                        alt={article.title}
-                        className="object-cover w-full h-full hover:scale-105 transition-transform duration-700"
+                        alt={article.title || 'Imagem'}
+                        fill
+                        className="object-cover hover:scale-105 transition-transform duration-700"
+                        sizes="(max-width: 768px) 100vw, 75vw"
                     />
                 </div>
             )}
@@ -210,13 +225,18 @@ export default async function PublicArticleDetailPage({ params }: Props) {
             />
 
             <footer className="mt-20 pt-10 border-t border-border/50">
-                <div className="flex flex-wrap gap-2">
-                    {article.tags?.map((tag: any) => (
-                        <Badge key={tag.id} variant="outline" className="rounded-full px-4 py-1.5 bg-muted/30 hover:bg-primary/10 hover:text-primary transition-colors cursor-default border-none">
-                            #{tag.name}
-                        </Badge>
-                    ))}
-                </div>
+                <ul className="flex flex-wrap gap-2" role="list" aria-label="Tags do artigo">
+                    {Array.isArray(article.tags) && article.tags.map((tag: string | { name?: string }, idx: number) => {
+                        const label = typeof tag === 'string' ? tag : tag?.name
+                        return (
+                            <li key={idx} role="listitem">
+                                <Badge variant="outline" className="rounded-full px-4 py-1.5 bg-muted/30 hover:bg-primary/10 hover:text-primary transition-colors cursor-default border-none">
+                                    #{label}
+                                </Badge>
+                            </li>
+                        )
+                    })}
+                </ul>
             </footer>
         </article>
     )

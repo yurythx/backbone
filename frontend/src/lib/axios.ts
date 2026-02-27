@@ -12,13 +12,13 @@ export const api = axios.create({
 // Interface for the queue of failed requests
 interface FailedRequest {
   resolve: (token: string) => void;
-  reject: (error: any) => void;
+  reject: (error: unknown) => void;
 }
 
 let isRefreshing = false;
 let failedQueue: FailedRequest[] = [];
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
@@ -34,13 +34,15 @@ api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null;
+    const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG;
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    if (companySlug) {
-      config.headers['X-Company-Slug'] = companySlug;
+    const effectiveCompany = companySlug || envCompany || undefined;
+    if (effectiveCompany) {
+      config.headers['X-Company-Slug'] = effectiveCompany;
     }
 
     return config;

@@ -9,7 +9,7 @@ User = get_user_model()
 class MeRestrictedFieldsTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Me Corp", slug="me-corp")
-        self.user = User.all_objects.create_user(
+        self.user = User.objects.create_user(
             username="meuser",
             email="me@corp.com",
             password="pass",

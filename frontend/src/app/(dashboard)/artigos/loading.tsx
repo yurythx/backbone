@@ -2,7 +2,7 @@ import { Skeleton, TableSkeleton } from "@/components/ui/skeleton"
 
 export default function ArtigosLoading() {
     return (
-        <div className="h-full space-y-8">
+        <div className="h-full space-y-8" role="status" aria-live="polite" aria-label="Carregando artigos do dashboard">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div className="space-y-3">
                     <Skeleton className="h-10 w-72 rounded-2xl" />

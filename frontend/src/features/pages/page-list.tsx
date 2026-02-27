@@ -5,8 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Page } from "@/types"
 import { Button } from "@/components/ui/button"
-import { Plus, Pencil, Trash2, MoreHorizontal, Layout } from "lucide-react"
-import { format } from "date-fns"
+import { Plus, Pencil, Trash2, MoreHorizontal } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import {
@@ -25,10 +24,10 @@ interface PageListProps {
 export function PageList({ onEdit, onCreate }: PageListProps) {
     const queryClient = useQueryClient()
 
-    const { data: pages, isLoading } = useQuery({
+    const { data: pages, isLoading } = useQuery<Page[] | { results: Page[] }>({
         queryKey: ['pages'],
         queryFn: async () => {
-            const res = await api.get<any>('/api/pages/')
+            const res = await api.get<Page[] | { results: Page[] }>('/api/pages/')
             return res.data
         }
     })
@@ -71,15 +70,15 @@ export function PageList({ onEdit, onCreate }: PageListProps) {
                 return (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Abrir menu de ações">
                                 <span className="sr-only">Abrir menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
+                                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Ações</DropdownMenuLabel>
                             <DropdownMenuItem onClick={() => onEdit(page)}>
-                                <Pencil className="mr-2 h-4 w-4" /> Editar
+                                <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Editar
                             </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={() => {
@@ -87,7 +86,7 @@ export function PageList({ onEdit, onCreate }: PageListProps) {
                                 }}
                                 className="text-destructive"
                             >
-                                <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Excluir
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -97,17 +96,17 @@ export function PageList({ onEdit, onCreate }: PageListProps) {
     ]
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4" role={isLoading ? "status" : undefined} aria-live={isLoading ? "polite" : undefined} aria-label={isLoading ? "Carregando páginas" : undefined}>
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold tracking-tight">Páginas Institucionais</h2>
                 <Button onClick={onCreate}>
-                    <Plus className="mr-2 h-4 w-4" /> Nova Página
+                    <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Nova Página
                 </Button>
             </div>
 
             <DataTable
                 columns={columns}
-                data={pages || []}
+                data={Array.isArray(pages) ? pages : (pages?.results ?? [])}
                 isLoading={isLoading}
                 searchKey="title"
             />

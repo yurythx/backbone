@@ -68,6 +68,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             password=password,
             **validated_data
         )
+
+        # Se for o primeiro usuário da empresa, atribui papel de Administrador
+        user_count = User.all_objects.filter(company=company).count()
+        if user_count == 1:
+            from .services import AccountService
+            from .models import Role
+            # Garante que as roles existam
+            AccountService.ensure_default_roles(company)
+            try:
+                admin_role = Role.all_objects.get(name='Administrador', company=company)
+                user.role = admin_role
+                user.save(update_fields=['role'])
+            except Role.DoesNotExist:
+                pass
+                
         return user
 
 from apps.core.serializers import CompanySerializer # Ensure CompanySerializer is available
@@ -78,20 +93,49 @@ class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, min_length=6)
     avatar_url = serializers.SerializerMethodField()
     company = serializers.PrimaryKeyRelatedField(queryset=Company.objects.all(), required=False)
-    role = serializers.PrimaryKeyRelatedField(queryset=Role.all_objects.all(), required=False)
+    # A3: role filtrada pelo tenant do request — impede atribuir role de outro tenant
+    role = serializers.SerializerMethodField(read_only=False)
     # Explicitly define avatar to handle file uploads properly
     avatar = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_details', 'company', 'company_details', 'is_superuser', 'is_staff', 'avatar', 'avatar_url', 'password']
-        read_only_fields = ['id', 'company_details', 'role_details', 'avatar_url']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_details',
+                  'company', 'company_details', 'is_superuser', 'is_staff', 'avatar', 'avatar_url', 'password', 'status']
+        # I-A1: is_superuser e is_staff são read_only — não podem ser alterados via API
+        read_only_fields = ['id', 'company_details', 'role_details', 'avatar_url', 'is_superuser', 'is_staff']
         extra_kwargs = {
             'role': {'required': False},
             'company': {'required': False},
             'email': {'required': False},
             'username': {'required': False}
         }
+
+    def get_role(self, obj):
+        """Retorna o ID da role atual do usuário (para leitura no get_role field)."""
+        return obj.role_id
+
+    def to_internal_value(self, data):
+        """A3: Ao receber role como ID, valida que pertence ao mesmo tenant."""
+        result = super().to_internal_value(data)
+        role_id = data.get('role')
+        if role_id is not None:
+            from .models import Role
+            request = self.context.get('request')
+            company = getattr(request, 'company', None) if request else None
+            try:
+                if request and request.user.is_superuser:
+                    # Superusuário pode atribuir qualquer role
+                    role = Role.all_objects.get(pk=role_id)
+                elif company:
+                    # Usuários normais só podem atribuir roles do seu tenant
+                    role = Role.objects.filter(company=company).get(pk=role_id)
+                else:
+                    raise serializers.ValidationError({'role': 'Contexto de empresa inválido.'})
+                result['role'] = role
+            except Role.DoesNotExist:
+                raise serializers.ValidationError({'role': f'Papel de acesso inválido ou não pertence a esta empresa.'})
+        return result
 
     def get_avatar_url(self, obj):
         if obj.avatar:

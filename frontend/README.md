@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Backbone Frontend (Next.js)
 
-## Getting Started
-
-First, run the development server:
+## Como rodar
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse: http://localhost:3005
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Variáveis de Ambiente
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `NEXT_PUBLIC_API_URL` (ex.: http://localhost:8005)
+- `NEXT_PUBLIC_COMPANY_SLUG` (multi-tenant)
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (Web Push, opcional)
 
-## Learn More
+## Multi-tenant e Autenticação
 
-To learn more about Next.js, take a look at the following resources:
+- As requisições usam `Authorization: Bearer <token>` e header `X-Company-Slug`.
+- WebSockets exigem `?token=<access>&company_slug=<slug>` na URL.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Documentação
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Índice: ../docs/SYSTEM_OVERVIEW.md
+- Módulos: ../docs/MESSENGER.md, ../docs/ARTICLES.md, ../docs/NOTIFICATIONS.md, ../docs/MODULES.md, ../docs/PAGES.md
 
-## Deploy on Vercel
+## Push Notifications
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Service Worker em `public/sw.js`.
+- Gerenciamento de inscrição: `src/components/notifications/PushNotificationManager.tsx`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts úteis
+
+```bash
+npm run build
+npm run lint
+npm run api:generate
+```

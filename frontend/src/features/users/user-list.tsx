@@ -11,7 +11,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import { Plus, Edit, User as UserIcon, MoreVertical, Shield, Mail, Trash2, Clock, Building2 } from "lucide-react"
+import { Plus, Edit, User as UserIcon, MoreVertical, Shield, ShieldCheck, Mail, Trash2, Building2 } from "lucide-react"
 import { useState } from "react"
 import { UserForm } from "./user-form"
 import { InviteForm } from "./invite-form"
@@ -24,36 +24,55 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { User as UserType, Role as RoleType } from "@/types"
+import { useAuth } from "@/hooks/use-auth"
+import { usePermission } from "@/hooks/use-permission"
 
-export function UserList() {
+interface UserListProps {
+    onEdit?: (user: UserType) => void
+}
+
+export function UserList({ onEdit }: UserListProps) {
     const [isUserFormOpen, setIsUserFormOpen] = useState(false)
     const [isInviteFormOpen, setIsInviteFormOpen] = useState(false)
-    const [editingUser, setEditingUser] = useState<any>(null)
+    const [editingUser, setEditingUser] = useState<UserType | null>(null)
     const queryClient = useQueryClient()
+    // A8: obter usuário atual via hook (não localStorage)
+    const { user: currentUser } = useAuth()
+    // I-A4: verificar permissão RBAC para gerenciar equipe
+    const { hasPermission } = usePermission()
+    const canManageUsers = hasPermission('admin.user_manage')
 
-    const { data: users, isLoading: usersLoading } = useQuery({
+    interface Invite {
+        id: number
+        email: string
+        role_name: string
+        status: 'pending' | 'accepted' | 'expired' | 'canceled'
+    }
+
+    const { data: users } = useQuery<UserType[]>({
         queryKey: ['users'],
         queryFn: async () => {
-            const res = await api.get('/api/accounts/users/')
-            const data = res.data.results || res.data
+            const res = await api.get<UserType[] | { results: UserType[] }>('/api/accounts/users/')
+            const data = Array.isArray(res.data) ? res.data : (res.data.results || [])
             return Array.isArray(data) ? data : []
         }
     })
 
-    const { data: invites, isLoading: invitesLoading } = useQuery({
+    const { data: invites } = useQuery<Invite[]>({
         queryKey: ['invites'],
         queryFn: async () => {
-            const res = await api.get('/api/accounts/invitations/')
-            const data = res.data.results || res.data
+            const res = await api.get<Invite[] | { results: Invite[] }>('/api/accounts/invitations/')
+            const data = Array.isArray(res.data) ? res.data : (res.data.results || [])
             return Array.isArray(data) ? data : []
         }
     })
 
-    const { data: roles } = useQuery({
+    const { data: roles } = useQuery<RoleType[]>({
         queryKey: ['roles'],
         queryFn: async () => {
-            const res = await api.get('/api/accounts/roles/')
-            const data = res.data.results || res.data
+            const res = await api.get<RoleType[] | { results: RoleType[] }>('/api/accounts/roles/')
+            const data = Array.isArray(res.data) ? res.data : (res.data.results || [])
             return Array.isArray(data) ? data : []
         }
     })
@@ -85,7 +104,7 @@ export function UserList() {
         }
     })
 
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
+    const currentUserFormatted = currentUser
 
     return (
         <div className="space-y-6">
@@ -95,12 +114,17 @@ export function UserList() {
                     <p className="text-muted-foreground text-sm">Gerencie quem tem acesso ao dashboard da sua empresa.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={() => setIsInviteFormOpen(true)} className="rounded-xl border-primary/20 hover:bg-primary/5">
-                        <Mail className="mr-2 h-4 w-4" /> Convidar Membro
-                    </Button>
-                    <Button onClick={() => { setEditingUser(null); setIsUserFormOpen(true); }} className="shadow-lg shadow-primary/20 rounded-xl">
-                        <Plus className="mr-2 h-4 w-4" /> Adicionar Direto
-                    </Button>
+                    {/* I-A4: exibir botões de gerenciamento apenas para quem tem permissão */}
+                    {canManageUsers && (
+                        <>
+                            <Button variant="outline" onClick={() => setIsInviteFormOpen(true)} className="rounded-xl border-primary/20 hover:bg-primary/5">
+                                <Mail className="mr-2 h-4 w-4" aria-hidden="true" /> Convidar Membro
+                            </Button>
+                            <Button onClick={() => { setEditingUser(null); setIsUserFormOpen(true); }} className="shadow-lg shadow-primary/20 rounded-xl">
+                                <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Adicionar Direto
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -110,13 +134,13 @@ export function UserList() {
                         Membros Ativos ({safeUsers.length})
                     </TabsTrigger>
                     <TabsTrigger value="pending" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-6">
-                        Convites Pendentes ({safeInvites.filter((i: any) => i && i.status === 'pending').length})
+                        Convites Pendentes ({safeInvites.filter((i: Invite) => i && i.status === 'pending').length})
                     </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="active">
                     <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
-                        <Table>
+                        <Table aria-label="Tabela de usuários">
                             <TableHeader className="bg-muted/50">
                                 <TableRow>
                                     <TableHead className="py-4">Usuário</TableHead>
@@ -127,12 +151,12 @@ export function UserList() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {safeUsers.length > 0 ? safeUsers.map((user: any) => (
+                                {safeUsers.length > 0 ? safeUsers.map((user: UserType) => (
                                     <TableRow key={user.id} className="group hover:bg-muted/30 transition-colors">
                                         <TableCell className="py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border-2 border-background shadow-sm">
-                                                    <UserIcon className="h-5 w-5 text-primary" />
+                                                    <UserIcon className="h-5 w-5 text-primary" aria-hidden="true" />
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className="font-bold">{user.first_name} {user.last_name}</span>
@@ -142,19 +166,27 @@ export function UserList() {
                                         </TableCell>
                                         <TableCell className="text-sm">{user.email}</TableCell>
                                         <TableCell>
-                                            {user.role_details ? (
-                                                <Badge variant="outline" className="gap-1.5 border-primary/20 bg-primary/5 text-primary rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                                                    <Shield className="h-3 w-3" />
-                                                    {user.role_details.name}
-                                                </Badge>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground italic">Sem papel definido</span>
-                                            )}
+                                            <div className="flex flex-wrap gap-2">
+                                                {user.is_superuser && (
+                                                    <Badge variant="default" className="gap-1.5 bg-indigo-600 text-white border-none rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                        <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                                                        Superadmin
+                                                    </Badge>
+                                                )}
+                                                {user.role_details ? (
+                                                    <Badge variant="outline" className="gap-1.5 border-primary/20 bg-primary/5 text-primary rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                        <Shield className="h-3 w-3" aria-hidden="true" />
+                                                        {user.role_details.name}
+                                                    </Badge>
+                                                ) : !user.is_superuser && (
+                                                    <span className="text-xs text-muted-foreground italic">Sem papel definido</span>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             {user.company ? (
                                                 <Badge variant="secondary" className="gap-1.5 rounded-lg text-[10px] font-medium">
-                                                    <Building2 className="h-3 w-3" />
+                                                    <Building2 className="h-3 w-3" aria-hidden="true" />
                                                     {typeof user.company === 'object' ? user.company.name : `Empresa #${user.company}`}
                                                 </Badge>
                                             ) : (
@@ -164,24 +196,45 @@ export function UserList() {
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreVertical className="h-4 w-4" />
+                                                    <Button variant="ghost" size="icon" aria-label="Ações do usuário">
+                                                        <MoreVertical className="h-4 w-4" aria-hidden="true" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                                                    <DropdownMenuItem onClick={() => { setEditingUser(user); setIsUserFormOpen(true); }} className="cursor-pointer">
-                                                        <Edit className="mr-2 h-4 w-4 text-muted-foreground" /> Editar
-                                                    </DropdownMenuItem>
-                                                    {user.id !== currentUser.id && (
-                                                        <DropdownMenuItem 
+                                                    {/* I-A4: apenas quem tem permissão vê as ações */}
+                                                    {/* A6: Apenas superadmin edita superadmin */}
+                                                    {canManageUsers && (!user.is_superuser || currentUserFormatted?.is_superuser) && (
+                                                        <DropdownMenuItem
+                                                            onClick={() => {
+                                                                if (onEdit) {
+                                                                    onEdit(user)
+                                                                } else {
+                                                                    setEditingUser(user);
+                                                                    setIsUserFormOpen(true);
+                                                                }
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Edit className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" /> Editar
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {/* A8: comparar com ID do usuário atual (via useAuth, não localStorage) */}
+                                                    {/* A6: Apenas superadmin remove superadmin */}
+                                                    {canManageUsers && user.id !== currentUserFormatted?.id && (!user.is_superuser || currentUserFormatted?.is_superuser) && (
+                                                        <DropdownMenuItem
                                                             onClick={() => {
                                                                 if (confirm("Tem certeza que deseja remover este usuário? Esta ação não pode ser desfeita.")) {
                                                                     deleteUserMutation.mutate(user.id)
                                                                 }
-                                                            }} 
+                                                            }}
                                                             className="text-destructive focus:text-destructive cursor-pointer"
                                                         >
-                                                            <Trash2 className="mr-2 h-4 w-4" /> Remover
+                                                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Remover
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {(!canManageUsers || (user.is_superuser && !currentUserFormatted?.is_superuser)) && (
+                                                        <DropdownMenuItem disabled className="text-muted-foreground text-xs">
+                                                            Acesso Negado
                                                         </DropdownMenuItem>
                                                     )}
                                                 </DropdownMenuContent>
@@ -202,7 +255,7 @@ export function UserList() {
 
                 <TabsContent value="pending">
                     <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
-                        <Table>
+                        <Table aria-label="Tabela de convites">
                             <TableHeader className="bg-muted/50">
                                 <TableRow>
                                     <TableHead className="py-4">Email</TableHead>
@@ -212,7 +265,7 @@ export function UserList() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {safeInvites.map((invite: any) => (
+                                {safeInvites.map((invite: Invite) => (
                                     <TableRow key={invite.id} className="group hover:bg-muted/30 transition-colors">
                                         <TableCell className="py-4 font-medium">{invite.email}</TableCell>
                                         <TableCell>
@@ -228,13 +281,13 @@ export function UserList() {
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreVertical className="h-4 w-4" />
+                                                    <Button variant="ghost" size="icon" aria-label="Ações do convite">
+                                                        <MoreVertical className="h-4 w-4" aria-hidden="true" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-40 rounded-xl">
                                                     <DropdownMenuItem onClick={() => cancelInviteMutation.mutate(invite.id)} className="text-destructive focus:text-destructive cursor-pointer">
-                                                        <Trash2 className="mr-2 h-4 w-4" /> Cancelar Convite
+                                                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Cancelar Convite
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>

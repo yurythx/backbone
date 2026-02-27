@@ -27,7 +27,7 @@ interface AnalyticsChartProps {
 export function AnalyticsChart({ data, title, isLoading }: AnalyticsChartProps) {
     if (isLoading) {
         return (
-            <div className="glass-morphism p-6 rounded-3xl border shadow-sm h-full flex flex-col animate-pulse">
+            <div className="glass-morphism p-6 rounded-3xl border shadow-sm h-full flex flex-col animate-pulse" role="status" aria-live="polite" aria-label={`Carregando gráfico: ${title}`}>
                 <div className="h-6 w-1/3 bg-muted rounded-md mb-8" />
                 <div className="flex-1 bg-muted/20 rounded-2xl" />
             </div>
@@ -49,12 +49,12 @@ export function AnalyticsChart({ data, title, isLoading }: AnalyticsChartProps) 
                     <p className="text-xs text-muted-foreground mt-0.5 font-medium">Visualizações totais nos últimos 30 dias</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    <div className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Views</span>
                 </div>
             </div>
 
-            <div className="flex-1 min-h-[300px] w-full">
+            <div className="flex-1 min-h-[300px] w-full" role="img" aria-label={`Gráfico de ${title}`}>
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={sortedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>

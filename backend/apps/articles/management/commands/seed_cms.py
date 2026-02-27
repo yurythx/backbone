@@ -12,14 +12,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.WARNING('Starting CMS seeding...'))
 
-        companies = Company.objects.all()
+        companies = Company.objects.filter(slug='empresa-raiz')
         
         if not companies.exists():
-             self.stdout.write(self.style.WARNING('No companies found. Skipping seed.'))
+             self.stdout.write(self.style.ERROR('Company "Empresa Raiz" not found. Please ensure it exists before seeding.'))
              return
 
         for company in companies:
-            self.stdout.write(f'Processing Company: {company.name}')
+            self.stdout.write(f'Processing Company: {company.name} (Slug: {company.slug})')
             
             # Find a user to be the author
             author = User.objects.filter(company=company).first()
@@ -38,7 +38,7 @@ class Command(BaseCommand):
             created_categories = []
             for cat_data in categories_data:
                 try:
-                    cat, created = Category.objects.get_or_create(
+                    cat, created = Category.all_objects.get_or_create(
                         company=company,
                         slug=cat_data['slug'],
                         defaults={'name': cat_data['name']}
@@ -54,7 +54,7 @@ class Command(BaseCommand):
             created_tags = []
             for tag_name in tags_data:
                 try:
-                    tag, created = Tag.objects.get_or_create(
+                    tag, created = Tag.all_objects.get_or_create(
                         company=company,
                         slug=slugify(tag_name),
                         defaults={'name': tag_name}
@@ -137,7 +137,7 @@ class Command(BaseCommand):
                     cat = created_categories[article_data['cat_index']] if created_categories else None
                     
                     # Check if article exists by slug to avoid duplicates
-                    article, created = Article.objects.get_or_create(
+                    article, created = Article.all_objects.get_or_create(
                         company=company,
                         slug=slugify(article_data['title']),
                         defaults={
@@ -147,7 +147,6 @@ class Command(BaseCommand):
                             'category': cat,
                             'author': author,
                             'status': Article.STATUS_PUBLISHED,
-                            'is_published': True,
                             'published_at': timezone.now(),
                             # We can use the cover_image URL string here if the model supports storing it temporarily
                             # or if we extended it. Since we can't easily download, we will set it if the field allows or ignore.
@@ -188,9 +187,9 @@ class Command(BaseCommand):
         issues = []
         
         for company in companies:
-            cat_count = Category.objects.filter(company=company).count()
-            tag_count = Tag.objects.filter(company=company).count()
-            art_count = Article.objects.filter(company=company).count()
+            cat_count = Category.all_objects.filter(company=company).count()
+            tag_count = Tag.all_objects.filter(company=company).count()
+            art_count = Article.all_objects.filter(company=company).count()
             
             total_categories += cat_count
             total_tags += tag_count

@@ -13,6 +13,9 @@ User = get_user_model()
 @override_settings(CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}})
 class NotificationTests(APITestCase):
     def setUp(self):
+        from django.core.cache import caches
+        for cache in caches.all():
+            cache.clear()
         self.company = Company.objects.create(name="Notify Corp", slug="notify-corp")
         self.user1 = User.objects.create_user(
             username="user1", email="u1@corp.com", password="pass", company=self.company

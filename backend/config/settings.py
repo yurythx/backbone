@@ -24,6 +24,9 @@ if not SECRET_KEY:
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 
+import sys
+TESTING = 'test' in sys.argv or 'test_coverage' in sys.argv or '--test' in sys.argv
+
 INSTALLED_APPS = [
     "daphne",
     "django.contrib.admin",
@@ -37,6 +40,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "channels",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",  # JWT Blacklist — required for secure logout
     "drf_spectacular",
     "reversion", # Version control
     "storages",  # Django Storages
@@ -106,14 +110,17 @@ REST_FRAMEWORK = {
         # anon: unauthenticated requests (100 req/day for onboarding, public endpoints)
         'tenant': '1000/day', 
         'anon': '100/day',
+        # Scoped throttles
+        'link_preview': '15/min',
+        'public_articles': '60/min',
     }
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-    "ROTATE_REFRESH_TOKENS": False,
-    "BLACKLIST_AFTER_ROTATION": False,
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,          # Issue new refresh token on every refresh
+    "BLACKLIST_AFTER_ROTATION": True,       # Revoke the old refresh token after rotation
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
@@ -200,10 +207,19 @@ CORS_ALLOW_HEADERS = [
     "user-agent",
     "x-csrftoken",
     "x-requested-with",
-    "x-company-slug",
-    "X-Company-Slug",
-    "X-COMPANY-SLUG",
+    "x-company-slug",  # HTTP headers are case-insensitive; django-cors-headers normalises to lowercase
+    "x-request-id",
 ]
+
+# Allow credentials (cookies, Authorization headers) across origins
+CORS_ALLOW_CREDENTIALS = True
+
+# Expose these response headers to the browser (needed by frontend to read them)
+CORS_EXPOSE_HEADERS = [
+    "x-request-id",
+    "content-disposition",
+]
+
 
 # Static & Media Files
 STATIC_URL = "static/"
@@ -279,14 +295,21 @@ DATABASES = {
 }
 
 # Redis Channel Layer & Cache
-REDIS_URL = env("REDIS_URL", default=None)
+# Using logical DBs: 0 for Cache, 1 for Celery, 2 for Channels
+REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 
 if REDIS_URL:
+    # Ensure it doesn't end with a slash or DB number for easier appending
+    # If the URL already has a DB (e.g., /0), we strip it to get the base
+    import re
+    REDIS_BASE = re.sub(r'/[0-9]+$', '', REDIS_URL.rstrip('/'))
+
+    
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
-                "hosts": [REDIS_URL],
+                "hosts": [f"{REDIS_BASE}/2"],
             },
         },
     }
@@ -295,17 +318,43 @@ if REDIS_URL:
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": REDIS_URL,
+            "LOCATION": f"{REDIS_BASE}/0",
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "KEY_FUNCTION": "shared_kernel.utils.make_key_with_tenant",
             }
+        },
+        "tenants": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": f"{REDIS_BASE}/0",
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
         }
     }
-    
-    # Cache Session (Optional but recommended)
-    # SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-    # SESSION_CACHE_ALIAS = "default"
+
+    # In test mode, override Redis cache with in-memory cache
+    # This allows running tests locally without a Redis server.
+    # The CI pipeline has Redis via service container, so this only affects local dev.
+    if TESTING:
+        CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": "test-default",
+            },
+            "tenants": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": "test-tenants",
+            },
+        }
+        # Also use in-memory channel layer in tests (no Redis needed)
+        CHANNEL_LAYERS = {
+            "default": {
+                "BACKEND": "channels.layers.InMemoryChannelLayer"
+            }
+        }
+
+
 else:
     CHANNEL_LAYERS = {
         "default": {
@@ -317,6 +366,10 @@ else:
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "unique-snowflake",
+        },
+        "tenants": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "tenants-cache",
         }
     }
 
@@ -413,8 +466,9 @@ if SENTRY_DSN:
     )
 
 # Celery Configuration
-CELERY_BROKER_URL = REDIS_URL or "redis://localhost:6379/0"
-CELERY_RESULT_BACKEND = REDIS_URL or "redis://localhost:6379/0"
+# Use DB 1 for Celery
+CELERY_BROKER_URL = f"{REDIS_BASE}/1" if REDIS_URL else "redis://localhost:6379/1"
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -422,6 +476,13 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=DEBUG)
 CELERY_TASK_EAGER_PROPAGATES = env.bool("CELERY_TASK_EAGER_PROPAGATES", default=DEBUG)
 CELERY_TASK_IGNORE_RESULT = True
+
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-orphan-messenger-files': {
+        'task': 'apps.messenger.tasks.cleanup_orphan_chat_files',
+        'schedule': timedelta(days=1),
+    },
+}
 
 # Field Encryption (for sensitive data like SMTP passwords)
 # Generate key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

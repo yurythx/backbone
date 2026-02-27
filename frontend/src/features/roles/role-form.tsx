@@ -25,6 +25,7 @@ import {
 import { notify } from "@/lib/notifications"
 import { Shield, Lock, CheckCircle2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Role } from "@/types"
 
 const formSchema = z.object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres."),
@@ -32,17 +33,23 @@ const formSchema = z.object({
     permissions: z.array(z.string()),
 })
 
+interface Permission {
+    id: string
+    label: string
+    description?: string
+}
+
 interface RoleFormProps {
-    initialData?: any
+    initialData?: Role | null
     onSuccess: () => void
     onCancel: () => void
 }
 
 export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
-    const { data: availablePermissions = [], isLoading: isLoadingPermissions } = useQuery({
+    const { data: availablePermissions = [], isLoading: isLoadingPermissions } = useQuery<Permission[]>({
         queryKey: ['available-permissions'],
         queryFn: async () => {
-            const { data } = await api.get('/api/accounts/roles/permissions/')
+            const { data } = await api.get<Permission[]>('/api/accounts/roles/permissions/')
             return data
         }
     })
@@ -81,7 +88,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
         <div className="p-8 space-y-8">
             <DialogHeader>
                 <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                    <Shield className="h-6 w-6 text-primary" />
+                    <Shield className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <DialogTitle className="text-2xl font-bold">
                     {initialData ? "Editar Papel de Acesso" : "Criar Novo Papel"}
@@ -129,61 +136,65 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
 
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 border-b pb-2">
-                            <Lock className="h-4 w-4 text-primary" />
+                            <Lock className="h-4 w-4 text-primary" aria-hidden="true" />
                             <h4 className="text-sm font-bold">Permissões de Acesso</h4>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3">
-                            {isLoadingPermissions ? (
-                                <div className="flex flex-col gap-3">
-                                    {[1, 2, 3].map(i => (
-                                        <div key={i} className="h-20 rounded-2xl bg-muted/10 animate-pulse" />
-                                    ))}
-                                </div>
-                            ) : (
-                                availablePermissions.map((permission: any) => (
-                                    <FormField
-                                        key={permission.id}
-                                        control={form.control}
-                                        name="permissions"
-                                        render={({ field }) => (
-                                            <FormItem
-                                                className={cn(
-                                                    "flex flex-row items-center space-x-3 space-y-0 p-4 rounded-2xl border transition-all cursor-pointer hover:border-primary/50",
-                                                    field.value?.includes(permission.id) ? "bg-primary/5 border-primary/30" : "bg-muted/10 border-transparent"
-                                                )}
-                                                onClick={() => {
-                                                    const current = field.value || []
-                                                    const next = current.includes(permission.id)
-                                                        ? current.filter((id: string) => id !== permission.id)
-                                                        : [...current, permission.id]
-                                                    field.onChange(next)
-                                                }}
-                                            >
-                                                <FormControl>
+                        {isLoadingPermissions ? (
+                            <div className="flex flex-col gap-3" role="status" aria-live="polite" aria-label="Carregando permissões disponíveis">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="h-20 rounded-2xl bg-muted/10 animate-pulse" />
+                                ))}
+                            </div>
+                        ) : (
+                            <FormField
+                                control={form.control}
+                                name="permissions"
+                                render={({ field }) => {
+                                    const togglePermission = (permissionId: string) => {
+                                        const current = field.value || []
+                                        const next = current.includes(permissionId)
+                                            ? current.filter((id: string) => id !== permissionId)
+                                            : [...current, permissionId]
+                                        field.onChange(next)
+                                    }
+
+                                    return (
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {availablePermissions.map((permission) => (
+                                                <div
+                                                    key={permission.id}
+                                                    className={cn(
+                                                        "flex flex-row items-center space-x-3 space-y-0 p-4 rounded-2xl border transition-all cursor-pointer hover:border-primary/50",
+                                                        field.value?.includes(permission.id) ? "bg-primary/5 border-primary/30" : "bg-muted/10 border-transparent"
+                                                    )}
+                                                    onClick={() => togglePermission(permission.id)}
+                                                >
                                                     <Checkbox
                                                         checked={field.value?.includes(permission.id)}
-                                                        onCheckedChange={() => { }} 
-                                                        className="h-5 w-5 rounded-lg border-2"
+                                                        onCheckedChange={() => { }} // Row click handles it
+                                                        className="h-5 w-5 rounded-lg border-2 pointer-events-none"
                                                     />
-                                                </FormControl>
-                                                <div className="space-y-1">
-                                                    <FormLabel className="text-sm font-bold cursor-pointer">
-                                                        {permission.label}
-                                                    </FormLabel>
-                                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                                        {permission.description}
-                                                    </p>
+                                                    <div className="space-y-1">
+                                                        <FormLabel className="text-sm font-bold cursor-pointer">
+                                                            {permission.label}
+                                                        </FormLabel>
+                                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                                            {permission.description}
+                                                        </p>
+                                                    </div>
+                                                    {field.value?.includes(permission.id) && (
+                                                        <CheckCircle2 className="h-4 w-4 text-primary ml-auto" aria-hidden="true" />
+                                                    )}
                                                 </div>
-                                                {field.value?.includes(permission.id) && (
-                                                    <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
-                                                )}
-                                            </FormItem>
-                                        )}
-                                    />
-                                ))
-                            )}
-                        </div>
+                                            ))}
+                                        </div>
+                                    )
+                                }}
+                            />
+
+
+                        )}
                     </div>
 
                     <div className="flex justify-end gap-3 pt-6 sticky bottom-0 bg-background -mx-8 -mb-8 p-8 border-t">

@@ -28,21 +28,25 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 export function PushNotificationManager() {
+    const [mounted, setMounted] = useState(false);
     const [isSupported, setIsSupported] = useState(false);
     const [subscription, setSubscription] = useState<PushSubscription | null>(null);
 
     useEffect(() => {
-        if ('serviceWorker' in navigator && 'PushManager' in window) {
-            setIsSupported(true);
-            checkSubscription();
+        setMounted(true);
+        const supported = 'serviceWorker' in navigator && 'PushManager' in window;
+        setIsSupported(supported);
+
+        if (supported) {
+            navigator.serviceWorker.ready.then((registration) => {
+                registration.pushManager.getSubscription().then((sub) => {
+                    setSubscription(sub);
+                });
+            });
         }
     }, []);
 
-    async function checkSubscription() {
-        const registration = await navigator.serviceWorker.ready;
-        const sub = await registration.pushManager.getSubscription();
-        setSubscription(sub);
-    }
+    if (!mounted) return null;
 
     async function subscribe() {
         try {
@@ -60,10 +64,12 @@ export function PushNotificationManager() {
             });
 
             // Send to backend
-            const p256dh = btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('p256dh')!) as any));
-            const auth = btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('auth')!) as any));
+            const p256 = new Uint8Array(sub.getKey('p256dh')!)
+            const authKey = new Uint8Array(sub.getKey('auth')!)
+            const p256dh = btoa(String.fromCharCode(...Array.from(p256)))
+            const auth = btoa(String.fromCharCode(...Array.from(authKey)))
 
-            await api.post('/notifications/push-subscriptions/', {
+            await api.post('/api/notifications/push-subscriptions/', {
                 endpoint: sub.endpoint,
                 p256dh,
                 auth,
@@ -81,10 +87,10 @@ export function PushNotificationManager() {
 
     if (!isSupported) return null; // Don't show if not supported
     if (subscription) return null; // Don't show if already subscribed
-    
+
     // Check if VAPID key is configured, otherwise don't show the prompt
     if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.includes('PLACEHOLDER')) {
-        return null; 
+        return null;
     }
 
     return (

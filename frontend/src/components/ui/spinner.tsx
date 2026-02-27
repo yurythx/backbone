@@ -14,7 +14,7 @@ export function Spinner({ size = "default", className }: SpinnerProps) {
     }
 
     return (
-        <Loader2 className={cn("animate-spin text-muted-foreground", sizeClasses[size], className)} />
+    <Loader2 className={cn("animate-spin text-muted-foreground", sizeClasses[size], className)} aria-hidden="true" />
     )
 }
 
@@ -26,8 +26,8 @@ interface LoadingProps {
 
 export function Loading({ text = "Carregando...", size = "default", className }: LoadingProps) {
     return (
-        <div className={cn("flex items-center justify-center gap-2", className)}>
-            <Spinner size={size} />
+    <div className={cn("flex items-center justify-center gap-2", className)} role="status" aria-live="polite" aria-label={text || "Carregando"}>
+      <Spinner size={size} />
             {text && <span className="text-sm text-muted-foreground">{text}</span>}
         </div>
     )
@@ -36,10 +36,10 @@ export function Loading({ text = "Carregando...", size = "default", className }:
 // Full page loading
 export function PageLoading({ text = "Carregando..." }: { text?: string }) {
     return (
-        <div className="flex min-h-screen items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-                <Spinner size="lg" />
-                <p className="text-muted-foreground">{text}</p>
+    <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite" aria-label={text || "Carregando"}>
+      <div className="flex flex-col items-center gap-4">
+        <Spinner size="lg" />
+        <p className="text-muted-foreground">{text}</p>
             </div>
         </div>
     )
@@ -47,5 +47,5 @@ export function PageLoading({ text = "Carregando..." }: { text?: string }) {
 
 // Inline loading (for buttons, etc)
 export function InlineLoading({ className }: { className?: string }) {
-    return <Spinner size="sm" className={className} />
+  return <Spinner size="sm" className={className} />
 }

@@ -48,3 +48,30 @@ class APIKey(BaseTenantModel):
         if self.expires_at and self.expires_at < timezone.now():
             return False
         return True
+
+class APIKeyUser:
+    """
+    Objeto de usuário virtual para requisições autenticadas via API Key.
+    Garante compatibilidade com middlewares e permissões que esperam um objeto de usuário.
+    """
+    is_authenticated = True
+    is_staff = False
+    is_superuser = False
+    is_active = True
+    
+    def __init__(self, company, name="API Key User"):
+        self.company = company
+        self.username = f"api_key_{company.slug}"
+        self.name = name
+        self.pk = None
+        self.id = None
+
+    def __str__(self):
+        return f"APIKeyUser({self.company.slug})"
+
+    def has_perm(self, perm, obj=None):
+        # Implementação básica: API Keys por enquanto não têm permissões granulares de nível de objeto do Django Auth
+        return False
+
+    def has_module_perms(self, app_label):
+        return False

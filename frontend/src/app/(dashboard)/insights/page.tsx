@@ -23,8 +23,8 @@ export default function InsightsPage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-[60vh]">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex items-center justify-center h-[60vh]" role="status" aria-live="polite" aria-label="Carregando insights">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
             </div>
         )
     }
@@ -34,7 +34,7 @@ export default function InsightsPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-                        <TrendingUp className="h-8 w-8 text-primary" />
+                        <TrendingUp className="h-8 w-8 text-primary" aria-hidden="true" />
                         Insights de Engajamento
                     </h1>
                     <p className="text-muted-foreground mt-1">Análise profunda da performance do seu ecossistema.</p>

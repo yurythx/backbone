@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { Separator } from "@/components/ui/separator"
 import { motion } from "framer-motion"
+import Image from "next/image"
 
 const palettes = [
     { id: 'django-green', name: 'Django Green', color: '#0C4B33' },
@@ -88,7 +89,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                 title: "Sucesso!",
                 description: `${type === 'logo' ? 'Logo' : 'Ícone'} atualizado com sucesso.`,
             })
-        } catch (error) {
+        } catch {
             toast({
                 title: "Erro no upload",
                 description: "Não foi possível enviar a imagem. Tente novamente.",
@@ -115,7 +116,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                 title: "Configurações salvas",
                 description: "As alterações de branding e rodapé foram aplicadas.",
             })
-        } catch (error) {
+        } catch {
             toast({
                 title: "Erro ao salvar",
                 description: "Não foi possível salvar as configurações.",
@@ -134,7 +135,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                 className="space-y-1"
             >
                 <div className="flex items-center gap-2 mb-1">
-                    <Sparkles className="h-5 w-5 text-primary" />
+                    <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
                     <H3>Identidade Visual & White-label</H3>
                 </div>
                 <P className="text-muted-foreground text-sm max-w-2xl">
@@ -149,10 +150,12 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                     <div className="glass-morphism group relative flex flex-col items-center justify-center rounded-3xl p-10 border shadow-sm transition-all hover:border-primary/30 hover:shadow-primary/5">
                         <div className="h-32 w-full flex items-center justify-center mb-6">
                             {logo ? (
-                                <img src={logo} alt="Logo preview" className="max-h-full max-w-full object-contain filter drop-shadow-md" />
+                                <div className="relative h-24 w-full">
+                                    <Image src={logo} alt="Logo preview" fill className="object-contain drop-shadow-md" sizes="(max-width: 768px) 100vw, 50vw" />
+                                </div>
                             ) : (
                                 <div className="h-20 w-20 rounded-2xl bg-primary/5 flex items-center justify-center border-2 border-dashed border-primary/20">
-                                    <Upload className="h-8 w-8 text-primary/40" />
+                                    <Upload className="h-8 w-8 text-primary/40" aria-hidden="true" />
                                 </div>
                             )}
                         </div>
@@ -166,7 +169,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                         />
                         <Button variant="outline" size="sm" asChild disabled={isUploading} className="rounded-xl font-bold">
                             <label htmlFor="logo-upload" className="cursor-pointer">
-                                {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" /> : <Upload className="h-4 w-4 mr-2" aria-hidden="true" />}
                                 Substituir Logo
                             </label>
                         </Button>
@@ -180,9 +183,9 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                         <div className="h-32 w-full flex items-center justify-center mb-6">
                             <div className="h-20 w-20 rounded-2xl bg-primary/5 p-4 flex items-center justify-center border-2 border-dashed border-primary/20 ring-4 ring-background shadow-xl">
                                 {icon ? (
-                                    <img src={icon} alt="Icon preview" className="h-full w-full object-contain" />
+                                    <Image src={icon} alt="Icon preview" width={80} height={80} className="object-contain" />
                                 ) : (
-                                    <Globe className="h-8 w-8 text-primary/40" />
+                                    <Globe className="h-8 w-8 text-primary/40" aria-hidden="true" />
                                 )}
                             </div>
                         </div>
@@ -196,7 +199,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                         />
                         <Button variant="outline" size="sm" asChild disabled={isUploading} className="rounded-xl font-bold">
                             <label htmlFor="icon-upload" className="cursor-pointer">
-                                {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" /> : <Upload className="h-4 w-4 mr-2" aria-hidden="true" />}
                                 Substituir Ícone
                             </label>
                         </Button>
@@ -235,7 +238,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                             <span className="text-[10px] font-bold uppercase tracking-wider">{palette.name}</span>
                             {selectedPalette === palette.id && (
                                 <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-primary flex items-center justify-center">
-                                    <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                                    <Check className="h-2.5 w-2.5 text-primary-foreground" aria-hidden="true" />
                                 </div>
                             )}
                         </button>
@@ -267,7 +270,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
 
                     <div className="space-y-2">
                         <Label className="font-bold text-xs uppercase flex items-center gap-2">
-                            <Facebook className="h-3 w-3 text-blue-600" /> Facebook
+                            <Facebook className="h-3 w-3 text-blue-600" aria-hidden="true" /> Facebook
                         </Label>
                         <Input
                             placeholder="https://facebook.com/empresa"
@@ -278,7 +281,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                     </div>
                     <div className="space-y-2">
                         <Label className="font-bold text-xs uppercase flex items-center gap-2">
-                            <Instagram className="h-3 w-3 text-pink-500" /> Instagram
+                            <Instagram className="h-3 w-3 text-pink-500" aria-hidden="true" /> Instagram
                         </Label>
                         <Input
                             placeholder="https://instagram.com/empresa"
@@ -289,7 +292,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                     </div>
                     <div className="space-y-2">
                         <Label className="font-bold text-xs uppercase flex items-center gap-2">
-                            <Linkedin className="h-3 w-3 text-blue-700" /> LinkedIn
+                            <Linkedin className="h-3 w-3 text-blue-700" aria-hidden="true" /> LinkedIn
                         </Label>
                         <Input
                             placeholder="https://linkedin.com/company/empresa"
@@ -300,7 +303,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                     </div>
                     <div className="space-y-2">
                         <Label className="font-bold text-xs uppercase flex items-center gap-2">
-                            <Twitter className="h-3 w-3 text-sky-400" /> Twitter (X)
+                            <Twitter className="h-3 w-3 text-sky-400" aria-hidden="true" /> Twitter (X)
                         </Label>
                         <Input
                             placeholder="https://twitter.com/empresa"
@@ -313,12 +316,12 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
             </div>
 
             {!isOnboarding && (
-                <div className="flex justify-end pt-8 sticky bottom-0 bg-background border-t mt-4 -mx-6 px-6 py-4">
+                <div className="flex justify-end pt-8 sticky bottom-0 bg-background border-t mt-4 -mx-6 px-6 py-4" role={isUploading ? "status" : undefined} aria-live={isUploading ? "polite" : undefined} aria-label={isUploading ? "Processando alterações de branding" : undefined}>
                     <Button variant="ghost" className="mr-4 rounded-xl font-bold" onClick={() => refreshConfig()}>
                         Restaurar Originais
                     </Button>
                     <Button size="lg" onClick={handleSaveBranding} disabled={isUploading} className="rounded-xl font-bold shadow-lg shadow-primary/20 px-10">
-                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" /> : <Check className="h-4 w-4 mr-2" aria-hidden="true" />}
                         Salvar Branding
                     </Button>
                 </div>

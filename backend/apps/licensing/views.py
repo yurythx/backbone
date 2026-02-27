@@ -20,7 +20,8 @@ class FeatureViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Feature.objects.all().order_by('id')
     serializer_class = FeatureSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None
+    from config.pagination import DefaultPagination
+    pagination_class = DefaultPagination
 
 @extend_schema_view(
     list=extend_schema(tags=['Licensing']),
@@ -33,7 +34,8 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Plan.objects.all().order_by('price')
     serializer_class = PlanSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None
+    from config.pagination import DefaultPagination
+    pagination_class = DefaultPagination
 
 @extend_schema_view(
     list=extend_schema(tags=['Licensing']),
@@ -51,7 +53,8 @@ class LicenseViewSet(viewsets.ModelViewSet):
     """
     serializer_class = LicenseSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None
+    from config.pagination import DefaultPagination
+    pagination_class = DefaultPagination
 
     def get_queryset(self):
         # Retorna apenas a licença da empresa atual

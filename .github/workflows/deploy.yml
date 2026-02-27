@@ -1,0 +1,108 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    # Tag-based deploy: git tag v1.2.3 && git push --tags
+    tags:
+      - "v*.*.*"
+
+  # Manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'deploy' to confirm production deployment"
+        required: true
+
+jobs:
+  # Guard: manual trigger must confirm
+  guard:
+    name: Deployment guard
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.confirm == 'deploy'
+    steps:
+      - name: Confirm deploy
+        run: echo "Deployment confirmed for ${{ github.sha }}"
+
+  deploy:
+    name: Deploy to production server
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: production  # Requires reviewer approval in GitHub settings
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set APP_VERSION
+        id: version
+        run: |
+          # Use git tag if available, otherwise short SHA
+          VERSION=${GITHUB_REF_NAME:-$(git rev-parse --short HEAD)}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Deploying version: ${VERSION}"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -e
+
+            echo "=== Backbone Deploy ==="
+            echo "Version: ${{ steps.version.outputs.version }}"
+            echo "Commit: ${{ github.sha }}"
+            echo "By: ${{ github.actor }}"
+
+            # Navigate to project
+            cd ${{ secrets.DEPLOY_PATH || '/opt/backbone' }}
+
+            # Pull latest code
+            git pull origin main
+
+            # Export version for docker compose
+            export APP_VERSION=${{ steps.version.outputs.version }}
+
+            # Build and restart services (zero-downtime approach)
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml build --no-cache backend frontend
+
+            # Run migrations before swapping containers
+            docker compose -f docker-compose.prod.yml run --rm backend \
+              python manage.py migrate --no-input
+
+            # Bring up new containers (Docker restarts only changed services)
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Health check: wait for backend to respond
+            echo "Waiting for backend health check..."
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8000/api/core/health/ > /dev/null; then
+                echo "Backend is healthy!"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "Backend did not become healthy in time!"
+                exit 1
+              fi
+              sleep 2
+            done
+
+            # Cleanup old images
+            docker image prune -f
+
+            echo "=== Deploy complete! ==="
+
+      - name: Notify success
+        if: success()
+        run: |
+          echo "::notice title=Deploy Success::Version ${{ steps.version.outputs.version }} deployed successfully"
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "::error title=Deploy Failed::Deployment of ${{ steps.version.outputs.version }} FAILED. Check logs."

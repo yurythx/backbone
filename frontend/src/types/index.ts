@@ -10,14 +10,16 @@ export interface User {
   id: number;
   username: string;
   email: string;
-  firstName?: string;
-  lastName?: string;
+  first_name?: string;
+  last_name?: string;
   groups: string[];
   role?: number;
   role_details?: Role;
   is_superuser?: boolean;
   avatar?: string | null;
   avatar_url?: string | null;
+  status: 'online' | 'busy' | 'offline';
+  company?: number | Company;
 }
 
 export interface Contact {
@@ -29,6 +31,7 @@ export interface Contact {
   is_staff: boolean;
   avatar_url?: string | null;
   last_seen?: string | null;
+  status: 'online' | 'busy' | 'offline';
 }
 
 export interface MessageReaction {
@@ -64,12 +67,27 @@ export interface Message {
   } | null;
 }
 
+export interface ConversationPreference {
+  is_muted: boolean
+  is_pinned: boolean
+}
+
 export interface Conversation {
   id: number;
-  participants: Contact[];
+  /** List of participant user IDs (raw ManyToMany). */
+  participants: number[];
+  /** List of participant usernames, returned by get_participants_list in serializer. */
+  participants_list?: string[];
+  title?: string | null;
+  is_group?: boolean;
   last_message?: Message;
+  unread_count?: number;
   created_at: string;
   updated_at: string;
+  /** User-specific mute/pin settings, backed by ConversationPreference model. */
+  preference?: ConversationPreference;
+  /** Full participant contact objects (populated in frontend only when available). */
+  participants_details?: Contact[];
 }
 
 export interface TenantBranding {
@@ -113,11 +131,9 @@ export interface Company {
   domain?: string;
   onboarding_completed: boolean;
   onboarding_step: number;
-  branding: {
-    primaryColor?: string;
-    logoUrl?: string;
-  };
   theme_branding?: TenantBranding;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AuthResponse {
@@ -143,10 +159,10 @@ export interface Article {
   slug: string;
   content: string;
   excerpt?: string;
-  is_published: boolean;
   is_public?: boolean; // Visibility control: public (true) or private (false)
   published_at?: string;
   status: 'draft' | 'pending' | 'published' | 'rejected';
+
   author: number; // ID
   category: number | null; // ID
   tags: number[]; // IDs
@@ -191,7 +207,7 @@ export interface Module {
   code: string;
   name: string;
   description: string;
-  is_global: boolean;
+  is_default: boolean; // M3: campo correto (is_global não existe no model)
 }
 
 export interface TenantModule {
@@ -201,17 +217,18 @@ export interface TenantModule {
   module_name: string; // From serializer
   module_details?: Module; // If expanded
   is_active: boolean;
-  config: any;
+  config?: Record<string, unknown> | null;
 }
 export interface Page {
   id: number;
   title: string;
   slug: string;
   content: string;
-  is_active: boolean;
+  status: 'draft' | 'published';
   company: string; // UUID
   created_at: string;
   updated_at: string;
+
   meta_title?: string;
   meta_description?: string;
   meta_keywords?: string;

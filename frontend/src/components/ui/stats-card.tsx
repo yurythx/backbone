@@ -30,15 +30,15 @@ export function StatsCard({
 }: StatsCardProps) {
     if (isLoading) {
         return (
-            <div className={cn("glass p-6 rounded-3xl border h-full flex flex-col justify-between", className)}>
+            <div className={cn("glass p-6 rounded-3xl border h-full flex flex-col justify-between", className)} role="status" aria-live="polite" aria-label="Carregando estatísticas">
                 <div className="flex justify-between items-center mb-4">
-                    <Skeleton className="h-12 w-12 rounded-2xl" />
-                    <Skeleton className="h-6 w-16 rounded-full" />
+                    <Skeleton className="h-12 w-12 rounded-2xl" aria-hidden="true" />
+                    <Skeleton className="h-6 w-16 rounded-full" aria-hidden="true" />
                 </div>
                 <div className="space-y-2">
-                    <Skeleton className="h-4 w-1/2" />
-                    <Skeleton className="h-8 w-2/3" />
-                    <Skeleton className="h-3 w-1/3 mt-2" />
+                    <Skeleton className="h-4 w-1/2" aria-hidden="true" />
+                    <Skeleton className="h-8 w-2/3" aria-hidden="true" />
+                    <Skeleton className="h-3 w-1/3 mt-2" aria-hidden="true" />
                 </div>
             </div>
         )
@@ -53,14 +53,14 @@ export function StatsCard({
         >
             <div className="flex items-center justify-between mb-4">
                 <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center transition-colors group-hover:bg-primary/20">
-                    <Icon className="h-6 w-6 text-primary" />
+                    <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 {trend && (
                     <div className={cn(
                         "flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full",
                         trend.isPositive ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
                     )}>
-                        {trend.isPositive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                        {trend.isPositive ? <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /> : <ArrowDownRight className="h-3.5 w-3.5" aria-hidden="true" />}
                         {trend.value}%
                     </div>
                 )}

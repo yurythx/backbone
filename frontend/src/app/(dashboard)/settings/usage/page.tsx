@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, FileText, HardDrive, AlertTriangle } from "lucide-react"
+import { Protected } from "@/components/auth/protected"
 
 interface UsageMetric {
     current: number
@@ -22,7 +23,7 @@ interface UsageData {
     }
 }
 
-function UsageCard({ title, icon: Icon, metric }: { title: string, icon: any, metric: UsageMetric }) {
+function UsageCard({ title, icon: Icon, metric }: { title: string, icon: React.ComponentType<{ className?: string }>, metric: UsageMetric }) {
     if (!metric) return null
 
     const percentage = metric.limit === -1 ? 0 : Math.min((metric.current / metric.limit) * 100, 100)
@@ -32,7 +33,7 @@ function UsageCard({ title, icon: Icon, metric }: { title: string, icon: any, me
         <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
+                <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </CardHeader>
             <CardContent>
                 <div className="text-2xl font-bold">{metric.current}</div>
@@ -41,7 +42,7 @@ function UsageCard({ title, icon: Icon, metric }: { title: string, icon: any, me
                 </div>
                 {!isUnlimited && (
                     <div className="space-y-1">
-                        <Progress value={percentage} className={percentage > 90 ? "bg-red-200" : ""} />
+                        <Progress value={percentage} className={percentage > 90 ? "bg-red-200" : ""} aria-label={`Uso de ${title.toLowerCase()}`} />
                         <p className="text-[10px] text-right text-muted-foreground">{percentage.toFixed(0)}% usado</p>
                     </div>
                 )}
@@ -61,7 +62,7 @@ export default function UsagePage() {
     })
 
     if (isLoading) {
-        return <div className="p-8 text-center">Carregando métricas de uso...</div>
+        return <div className="p-8 text-center" role="status" aria-live="polite" aria-label="Carregando métricas de uso">Carregando métricas de uso...</div>
     }
 
     if (error || !data) {
@@ -69,7 +70,7 @@ export default function UsagePage() {
         return (
             <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
                 <div className="p-4 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30">
-                    <AlertTriangle className="h-8 w-8" />
+                    <AlertTriangle className="h-8 w-8" aria-hidden="true" />
                 </div>
                 <h2 className="text-xl font-semibold">Nenhuma licença ativa encontrada</h2>
                 <p className="text-muted-foreground max-w-md">
@@ -80,6 +81,7 @@ export default function UsagePage() {
     }
 
     return (
+        <Protected requireStaff>
         <div className="space-y-8 max-w-5xl mx-auto p-6">
             <div className="flex items-center justify-between">
                 <div>
@@ -126,5 +128,6 @@ export default function UsagePage() {
                 </CardContent>
             </Card>
         </div>
+        </Protected>
     )
 }

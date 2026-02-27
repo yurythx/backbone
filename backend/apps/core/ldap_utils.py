@@ -5,11 +5,12 @@ Usa ldap3 (pura Python, cross-platform).
 from ldap3 import Server, Connection, ALL, SUBTREE
 from ldap3.core.exceptions import LDAPException, LDAPBindError
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
 
-def test_ldap_connection(config):
+def test_ldap_connection(config, include_metrics: bool = False):
     """
     Testa conexão LDAP com a configuração fornecida.
     
@@ -35,21 +36,21 @@ def test_ldap_connection(config):
         return False, "❌ Bind Password não configurado. Configure a senha do Bind DN."
     
     try:
-        # Configurar servidor
         use_ssl = config.server_uri.startswith('ldaps://')
-        server = Server(config.server_uri, get_info=ALL, use_ssl=use_ssl)
-        
-        # Tentar conectar
+        tls_validated = False
+        server = Server(config.server_uri, get_info=ALL, use_ssl=use_ssl, connect_timeout=10)
         logger.info(f"Testing LDAP connection to {config.server_uri}")
-        
-        # Bind com credenciais administrativas
         try:
-            conn = Connection(
-                server,
-                user=config.bind_dn,
-                password=bind_password,
-                auto_bind=True
-            )
+            start_tls = (not use_ssl) and getattr(config, 'use_tls', False)
+            conn = Connection(server, user=config.bind_dn, password=bind_password, auto_bind=False)
+            t0 = time.perf_counter()
+            if start_tls:
+                conn.open()
+                tls_validated = bool(conn.start_tls())
+            elif use_ssl:
+                tls_validated = True
+            conn.bind()
+            bind_ms = int((time.perf_counter() - t0) * 1000)
         except LDAPBindError:
             return False, (
                 "❌ Credenciais do Bind DN inválidas.\n\n"
@@ -63,14 +64,25 @@ def test_ldap_connection(config):
         
         # Testar busca na base de usuários
         try:
-            conn.search(
-                search_base=config.user_search_base,
-                search_filter='(objectClass=*)',
-                search_scope=SUBTREE,
-                size_limit=1
-            )
+            retries = 2
+            delay = 0.3
+            t1 = time.perf_counter()
+            for attempt in range(retries + 1):
+                try:
+                    conn.search(
+                        search_base=config.user_search_base,
+                        search_filter='(objectClass=*)',
+                        search_scope=SUBTREE,
+                        size_limit=1
+                    )
+                    break
+                except LDAPException:
+                    if attempt < retries:
+                        time.sleep(delay * (attempt + 1))
+                        continue
+                    raise
+            search_ms = int((time.perf_counter() - t1) * 1000)
         except LDAPException as e:
-            conn.unbind()
             return False, (
                 f"❌ Erro ao buscar em '{config.user_search_base}':\n\n"
                 f"{str(e)}\n\n"
@@ -79,7 +91,6 @@ def test_ldap_connection(config):
         
         # Verificar filtro de busca
         if '%(user)s' not in config.user_search_filter:
-            conn.unbind()
             return False, (
                 "❌ Filtro de busca inválido.\n\n"
                 "O filtro deve conter '%(user)s' como placeholder para o username.\n"
@@ -92,14 +103,15 @@ def test_ldap_connection(config):
         # Testar grupo obrigatório se configurado
         if config.require_group:
             try:
+                t2 = time.perf_counter()
                 conn.search(
                     search_base=config.require_group,
                     search_filter='(objectClass=*)',
                     search_scope=SUBTREE,
                     size_limit=1
                 )
+                group_ms = int((time.perf_counter() - t2) * 1000)
             except LDAPException as e:
-                conn.unbind()
                 return False, (
                     f"❌ Grupo obrigatório não encontrado:\n\n"
                     f"DN: {config.require_group}\n"
@@ -107,10 +119,28 @@ def test_ldap_connection(config):
                     "Verifique se o DN do grupo está correto."
                 )
         
-        conn.unbind()
+        # Testar existência do grupo admin se configurado
+        if getattr(config, 'admin_group_dn', ''):
+            try:
+                conn.search(
+                    search_base=config.admin_group_dn,
+                    search_filter='(objectClass=*)',
+                    search_scope=SUBTREE,
+                    size_limit=1
+                )
+            except LDAPException as e:
+                return False, (
+                    f"❌ Grupo administrativo não encontrado:\n\n"
+                    f"DN: {config.admin_group_dn}\n"
+                    f"Erro: {str(e)}\n\n"
+                    "Verifique se o DN do grupo está correto."
+                )
         
-        # Sucesso!
-        tls_status = "Sim" if config.use_tls or use_ssl else "Não"
+        try:
+            conn.unbind()
+        except Exception:
+            pass
+        tls_status = "LDAPS" if use_ssl else ("StartTLS" if getattr(config, 'use_tls', False) else "None")
         
         success_msg = (
             "✅ Conexão LDAP estabelecida com sucesso!\n\n"
@@ -121,9 +151,20 @@ def test_ldap_connection(config):
         )
         
         if config.require_group:
-            success_msg += f"\nGrupo Obrigatório: ✓ Validado"
+            success_msg += "\nGrupo Obrigatório: ✓ Validado"
         
-        return True, success_msg
+        if include_metrics:
+            info = {
+                "tls": tls_status,
+                "bind_ms": bind_ms,
+                "search_ms": search_ms,
+            }
+            if config.require_group:
+                info["group_ms"] = group_ms
+            info["tls_validated"] = tls_validated
+            return True, success_msg, info
+        else:
+            return True, success_msg
         
     except LDAPException as e:
         error_msg = str(e).lower()

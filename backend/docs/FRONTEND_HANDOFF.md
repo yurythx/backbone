@@ -77,15 +77,15 @@ O sistema possui rastreamento permanente de status online/offline.
 #### Enviar Mensagem (REST)
 - **POST** `/api/messenger/conversations/<id>/send_message/`
 - **Body**: `{ "content": "Olá!" }`
-- **Nota**: O envio via REST dispara eventos no WebSocket, mas mensagens também podem ser enviadas via WS (a definir na implementação futura). Por enquanto, use REST para enviar e WS para receber.
+- **Nota**: O envio é via REST. O backend dispara eventos pelo WebSocket para entrega em tempo real. Não enviar mensagens via WS.
 
 ### 3.4 WebSockets (Real-time)
 
 **URL Base**: `ws://<host>/ws/`
-**Autenticação**: Passar token na Query String: `?token=<access_token>`
+**Autenticação**: Passar token na Query String: `?token=<access_token>` e `company_slug=<slug>`
 
 #### A. Canal de Presença (Global da Empresa)
-- **URL**: `ws/presence/`
+- **URL**: `ws/presence/?token=<access_token>&company_slug=<slug>`
 - **Função**: Receber atualizações de quem entrou/saiu.
 - **Eventos Recebidos**:
   ```json
@@ -98,7 +98,7 @@ O sistema possui rastreamento permanente de status online/offline.
 - **Lógica Front**: Ao receber este evento, atualizar o ícone de status na lista de contatos.
 
 #### B. Canal de Chat (Por Conversa)
-- **URL**: `ws/chat/<room_name>/` (Onde `room_name` é geralmente `chat_<conversation_id>`)
+- **URL**: `ws/chat/<conversation_id>/?token=<access_token>&company_slug=<slug>`
 - **Função**: Receber mensagens em tempo real.
 - **Eventos Recebidos**:
   ```json
@@ -150,7 +150,7 @@ interface PresenceEvent {
 
 ## 5. OpenAPI Schema
 
-Um arquivo completo da especificação da API foi gerado em `docs/schema.yaml`. Você pode importá-lo no Postman ou usar geradores de código (como `openapi-typescript-codegen`) para criar os serviços do frontend automaticamente.
+Um arquivo completo da especificação da API foi gerado em `backend/docs/schema.yaml`. Você pode importá-lo no Postman ou usar geradores de código (como `openapi-typescript-codegen`) para criar os serviços do frontend automaticamente.
 
 ---
 
@@ -233,7 +233,8 @@ await api.post(`/api/messenger/messages/${messageId}/mark_read/`)
 
 ```ts
 const token = localStorage.getItem('access_token')
-const ws = new WebSocket(`ws://localhost:8000/ws/chat/${conversationId}/?token=${token}`)
+const company = localStorage.getItem('company_slug') || 'default'
+const ws = new WebSocket(`ws://localhost:8000/ws/chat/${conversationId}/?token=${token}&company_slug=${company}`)
 
 ws.onopen = () => {
   console.log('WS connected')

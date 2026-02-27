@@ -10,6 +10,9 @@ from shared_kernel.tenant_context import set_current_company
 
 class SecuritySuiteTest(TestCase):
     def setUp(self):
+        from django.core.cache import caches
+        for cache in caches.all():
+            cache.clear()
         # Setup Tenants
         self.company_a = Company.objects.create(name="Company A", slug="comp-a")
         self.company_b = Company.objects.create(name="Company B", slug="comp-b")
@@ -17,6 +20,19 @@ class SecuritySuiteTest(TestCase):
         # Setup Users
         self.user_a = User.objects.create_user(username="user_a", password="password", company=self.company_a)
         self.user_b = User.objects.create_user(username="user_b", password="password", company=self.company_b)
+
+        # Iniciar roles e atribuir Admin para ambos
+        from apps.accounts.services import AccountService
+        from apps.accounts.models import Role
+        
+        AccountService.ensure_default_roles(self.company_a)
+        AccountService.ensure_default_roles(self.company_b)
+        
+        self.user_a.role = Role.all_objects.get(name='Administrador', company=self.company_a)
+        self.user_a.save()
+        
+        self.user_b.role = Role.all_objects.get(name='Administrador', company=self.company_b)
+        self.user_b.save()
 
         # Setup Clients
         self.client_a = APIClient()

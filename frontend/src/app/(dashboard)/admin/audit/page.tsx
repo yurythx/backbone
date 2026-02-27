@@ -13,15 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import {
-    History,
-    Search,
-    Filter,
-    User as UserIcon,
-    Activity,
-    Database,
-    Info
-} from "lucide-react"
+import { History, Search, Filter, Activity, Database, Info } from "lucide-react"
 import { useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -32,6 +24,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Protected } from "@/components/auth/protected"
 
 export default function AuditPage() {
     const [searchTerm, setSearchTerm] = useState("")
@@ -66,13 +59,14 @@ export default function AuditPage() {
     }
 
     return (
+        <Protected requireStaff>
         <div className="max-w-6xl mx-auto py-8 space-y-8">
             <SlideUp>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1">
                         <h1 className="text-4xl font-black tracking-tight flex items-center gap-4 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
                             <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 shadow-inner">
-                                <History className="h-8 w-8 text-primary" />
+                                <History className="h-8 w-8 text-primary" aria-hidden="true" />
                             </div>
                             Logs de Auditoria
                         </h1>
@@ -84,21 +78,23 @@ export default function AuditPage() {
             <SlideUp delay={0.1}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 relative group">
-                        <div className="absolute inset-0 bg-primary/5 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                        <div className="absolute inset-0 bg-primary/5 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" aria-hidden="true" />
                         <Input
                             placeholder="Pesquisar por recurso, ID ou usuário..."
                             className="pl-11 h-14 rounded-2xl bg-card/50 backdrop-blur-md border border-border/50 shadow-sm focus-visible:ring-primary/20 transition-all text-base"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            aria-label="Pesquisar logs de auditoria"
                         />
                     </div>
                     <div className="relative group">
-                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" aria-hidden="true" />
                         <select
                             className="w-full h-14 pl-11 pr-4 rounded-2xl bg-card/50 backdrop-blur-md border border-border/50 shadow-sm appearance-none focus:ring-2 focus:ring-primary/20 text-sm font-bold cursor-pointer transition-all"
                             value={actionFilter}
                             onChange={(e) => setActionFilter(e.target.value)}
+                            aria-label="Filtrar por ação"
                         >
                             <option value="all">Todas as Ações</option>
                             <option value="create">Criação (Create)</option>
@@ -113,7 +109,7 @@ export default function AuditPage() {
             <FadeIn delay={0.3}>
                 <div className="rounded-[2.5rem] border border-border/50 bg-card/30 backdrop-blur-xl overflow-hidden shadow-2xl relative">
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
-                    <Table>
+                    <Table aria-label="Tabela de logs de auditoria">
                         <TableHeader>
                             <TableRow className="border-border/50 hover:bg-transparent bg-muted/20">
                                 <TableHead className="py-6 pl-10 font-bold text-foreground">Evento</TableHead>
@@ -124,7 +120,7 @@ export default function AuditPage() {
                                 <TableHead className="text-right pr-10 font-bold text-foreground">Detalhes</TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody>
+                        <TableBody role={isLoading ? "status" : undefined} aria-live={isLoading ? "polite" : undefined} aria-label={isLoading ? "Carregando logs" : undefined}>
                             {isLoading ? (
                                 Array.from({ length: 5 }).map((_, i) => (
                                     <TableRow key={i} className="border-border/50">
@@ -139,12 +135,22 @@ export default function AuditPage() {
                                         </TableCell>
                                     </TableRow>
                                 ))
-                            ) : safeLogs.map((log: any) => (
+                            ) : safeLogs.map((log: {
+                                id: number
+                                action: string
+                                user_name?: string
+                                user_email?: string
+                                resource: string
+                                resource_id: string | number
+                                ip_address?: string | null
+                                created_at: string
+                                details?: unknown
+                              }) => (
                                 <TableRow key={log.id} className="group hover:bg-primary/5 transition-all border-border/30">
                                     <TableCell className="py-6 pl-10">
                                         <div className="flex items-center gap-4">
                                             <div className="h-12 w-12 rounded-2xl bg-background border border-border/50 flex items-center justify-center shadow-premium group-hover:scale-110 transition-transform">
-                                                <Activity className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                <Activity className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" />
                                             </div>
                                             {getActionBadge(log.action)}
                                         </div>
@@ -160,7 +166,7 @@ export default function AuditPage() {
                                     <TableCell>
                                         <div className="flex items-center gap-3">
                                             <div className="p-1.5 rounded-lg bg-primary/10">
-                                                <Database className="h-4 w-4 text-primary" />
+                                                <Database className="h-4 w-4 text-primary" aria-hidden="true" />
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-xs font-black uppercase tracking-widest opacity-60">Recurso</span>
@@ -178,16 +184,16 @@ export default function AuditPage() {
                                         {format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
                                     </TableCell>
                                     <TableCell className="text-right pr-10">
-                                        <TooltipProvider>
+                                            <TooltipProvider>
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl bg-background/90 hover:bg-primary/10 border border-transparent hover:border-primary/20 shadow-sm transition-all">
-                                                        <Info className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl bg-background/90 hover:bg-primary/10 border border-transparent hover:border-primary/20 shadow-sm transition-all" aria-label="Ver detalhes do evento">
+                                                            <Info className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" />
                                                     </Button>
                                                 </TooltipTrigger>
                                                 <TooltipContent className="max-w-[400px] p-0 rounded-2xl border border-border/50 shadow-2xl overflow-hidden">
                                                     <div className="bg-primary/10 p-3 border-b border-border/50 flex items-center gap-2">
-                                                        <Activity className="h-4 w-4 text-primary" />
+                                                            <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
                                                         <span className="text-xs font-black uppercase tracking-widest">Detalhes do Evento</span>
                                                     </div>
                                                     <pre className="p-4 text-[11px] bg-card font-mono text-foreground/80 leading-relaxed overflow-auto max-h-[300px]">
@@ -204,7 +210,7 @@ export default function AuditPage() {
                     {!isLoading && safeLogs.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
                             <div className="p-6 rounded-full bg-muted/20">
-                                <History className="h-12 w-12 text-muted-foreground/30" />
+                                <History className="h-12 w-12 text-muted-foreground/30" aria-hidden="true" />
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold">Nenhum rastro encontrado</h3>
@@ -215,5 +221,6 @@ export default function AuditPage() {
                 </div>
             </FadeIn>
         </div>
+        </Protected>
     )
 }

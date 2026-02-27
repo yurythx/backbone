@@ -4,22 +4,34 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from apps.core.models import Company
 from apps.accounts.models import Role, Invitation
+from apps.licensing.models import Plan, Feature, PlanFeature, License
 
 User = get_user_model()
 
 class InvitationFlowTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Invite Corp", slug="invite-corp")
-        self.user = User.all_objects.create_user(
+        # Role com permissão admin.user_manage (necessária após I-A3)
+        self.admin_role = Role.objects.create(
+            company=self.company,
+            name="Admin",
+            permissions=["admin.user_manage"]
+        )
+        self.user = User.objects.create_user(
             username="inviter",
             email="i@corp.com",
             password="pass",
-            company=self.company
+            company=self.company,
+            role=self.admin_role
         )
         self.client.force_authenticate(user=self.user)
         self.client.credentials(HTTP_X_COMPANY_SLUG='invite-corp')
 
         self.role = Role.objects.create(company=self.company, name="Member")
+        plan = Plan.objects.create(name="Test Plan", price="0.00")
+        feat = Feature.objects.create(code="max_users", name="Max Users")
+        PlanFeature.objects.create(plan=plan, feature=feat, value="100")
+        License.objects.create(company=self.company, plan=plan, is_active=True)
 
     def test_invitation_expired_on_accept(self):
         # Create invitation

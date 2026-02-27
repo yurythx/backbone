@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { MessageSquare, User, Trash2, Send } from "lucide-react"
+import { MessageSquare, Trash2, Send, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     Sheet,
@@ -18,7 +18,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { useAuth } from "@/hooks/use-auth"
 
 interface Comment {
     id: number
@@ -37,12 +38,19 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
     const queryClient = useQueryClient()
     const [isOpen, setIsOpen] = React.useState(false)
     const [content, setContent] = React.useState("")
+    const { user } = useAuth()
+
+    // Bug 10: verifica permissão antes de exibir o formulário de criação
+    const canManageComments = !!(
+        user?.is_superuser ||
+        user?.role_details?.permissions?.includes('articles.article_manage')
+    )
 
     const { data: comments, isLoading } = useQuery({
         queryKey: ['article-comments', articleId],
         queryFn: async () => {
-            const res = await api.get<Comment[]>(`/api/articles/comments/?article=${articleId}`)
-            return Array.isArray(res.data) ? res.data : (res.data as any).results || []
+            const res = await api.get<Comment[] | { results: Comment[] }>(`/api/articles/comments/?article=${articleId}`)
+            return Array.isArray(res.data) ? res.data : (res.data.results || [])
         },
         enabled: isOpen
     })
@@ -84,7 +92,7 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
-                    <MessageSquare className="h-4 w-4" />
+                    <MessageSquare className="h-4 w-4" aria-hidden="true" />
                     Comentários
                 </Button>
             </SheetTrigger>
@@ -98,22 +106,30 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
 
                 <div className="flex flex-col h-full pb-20">
                     <div className="mt-6 mb-4">
-                        <form onSubmit={handleSubmit} className="flex gap-2">
-                            <Textarea
-                                placeholder="Adicione um comentário..."
-                                value={content}
-                                onChange={(e) => setContent(e.target.value)}
-                                className="resize-none min-h-[80px]"
-                            />
-                            <Button type="submit" size="icon" className="h-[80px] w-[80px]" disabled={createMutation.isPending}>
-                                <Send className="h-4 w-4" />
-                            </Button>
-                        </form>
+                        {/* Bug 10: formulário visível apenas para quem tem permissão article_manage */}
+                        {canManageComments ? (
+                            <form onSubmit={handleSubmit} className="flex gap-2">
+                                <Textarea
+                                    placeholder="Adicione um comentário..."
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
+                                    className="resize-none min-h-[80px]"
+                                />
+                                <Button type="submit" size="icon" className="h-[80px] w-[80px]" disabled={createMutation.isPending} aria-label="Enviar comentário">
+                                    <Send className="h-4 w-4" aria-hidden="true" />
+                                </Button>
+                            </form>
+                        ) : (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 rounded-lg border border-dashed">
+                                <Lock className="h-4 w-4 shrink-0" />
+                                <span>Você não tem permissão para adicionar comentários.</span>
+                            </div>
+                        )}
                     </div>
 
                     <ScrollArea className="flex-1 pr-4 -mr-4 h-full">
                         {isLoading ? (
-                            <div className="text-center py-4 text-muted-foreground">Carregando...</div>
+                            <div className="text-center py-4 text-muted-foreground" role="status" aria-live="polite">Carregando...</div>
                         ) : comments?.length === 0 ? (
                             <div className="text-center py-4 text-muted-foreground">Nenhum comentário ainda.</div>
                         ) : (
@@ -136,8 +152,9 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
                                                     size="icon"
                                                     className="h-6 w-6 text-muted-foreground hover:text-destructive"
                                                     onClick={() => deleteMutation.mutate(comment.id)}
+                                                    aria-label="Excluir comentário"
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                                                 </Button>
                                             </div>
                                             <p className="text-sm text-foreground/90 whitespace-pre-wrap">{comment.content}</p>

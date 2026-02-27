@@ -1,8 +1,8 @@
 "use client"
 
 import Image from "next/image"
-import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
+import { useState } from "react"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
@@ -39,13 +39,13 @@ const formSchema = z.object({
   content: z.string().min(10, "O conteúdo deve ter pelo menos 10 caracteres."),
   excerpt: z.string().optional(),
   category: z.string().optional(),
-  is_published: z.boolean(),
-  is_public: z.boolean().default(false),
+  // is_published removido (M6) — o status é o campo canônico, controlado pelos botões de fluxo
+  is_public: z.boolean(),
   image: z.string().optional(),
   meta_title: z.string().max(70, "O título SEO deve ter menos de 70 caracteres.").optional(),
   meta_description: z.string().max(160, "A descrição SEO deve ter menos de 160 caracteres.").optional(),
   meta_keywords: z.string().optional(),
-  tags: z.array(z.number()).default([]),
+  tags: z.array(z.number()),
 })
 
 interface ArticleFormProps {
@@ -57,34 +57,35 @@ interface ArticleFormProps {
 export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormProps) {
   const queryClient = useQueryClient()
 
-  const { data: categories } = useQuery({
+  const { data: categories } = useQuery<Category[]>({
     queryKey: ['categories'],
     queryFn: async () => {
-      const res = await api.get<any>('/api/articles/categories/')
-      return Array.isArray(res.data) ? res.data : res.data.results || []
+      const res = await api.get<Category[] | { results: Category[] }>('/api/articles/categories/')
+      const data = Array.isArray(res.data) ? res.data : res.data.results || []
+      return Array.isArray(data) ? data : []
     }
   })
 
-  const { data: allTags } = useQuery({
+  const { data: allTags } = useQuery<Tag[]>({
     queryKey: ['tags'],
     queryFn: async () => {
-      const res = await api.get<any>('/api/articles/tags/')
-      return Array.isArray(res.data) ? res.data : res.data.results || []
+      const res = await api.get<Tag[] | { results: Tag[] }>('/api/articles/tags/')
+      const data = Array.isArray(res.data) ? res.data : res.data.results || []
+      return Array.isArray(data) ? data : []
     }
   })
 
   const [lockSlug, setLockSlug] = useState(!initialData)
 
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema) as any,
+    resolver: zodResolver(formSchema),
     defaultValues: {
       title: initialData?.title || "",
       slug: initialData?.slug || "",
       content: initialData?.content || "",
       excerpt: initialData?.excerpt || "",
       category: initialData?.category ? String(initialData.category) : undefined,
-      is_published: initialData?.is_published || false,
-      is_public: (initialData as any)?.is_public || false,
+      is_public: initialData?.is_public || false,
       image: initialData?.image || "",
       meta_title: initialData?.meta_title || "",
       meta_description: initialData?.meta_description || "",
@@ -93,15 +94,26 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
     },
   })
 
-  // Auto-generate slug from title
-  useEffect(() => {
-    if (lockSlug && !initialData) {
-      const title = form.watch("title")
-      if (title) {
-        form.setValue("slug", slugify(title))
-      }
+  // Bug 6: useWatch para preview do Google reativo em tempo real
+  const watchedMetaTitle = useWatch({ control: form.control, name: "meta_title" })
+  const watchedMetaDescription = useWatch({ control: form.control, name: "meta_description" })
+  const watchedSlug = useWatch({ control: form.control, name: "slug" })
+
+  const [previewTitle, setPreviewTitle] = useState(form.getValues("title"))
+  const [previewContent, setPreviewContent] = useState(form.getValues("content"))
+  const [previewExcerpt, setPreviewExcerpt] = useState(form.getValues("excerpt"))
+  const [previewImage, setPreviewImage] = useState(form.getValues("image"))
+  const [previewCategoryId, setPreviewCategoryId] = useState(form.getValues("category"))
+  const [previewTags, setPreviewTags] = useState<number[]>(form.getValues("tags") || [])
+
+  const handleTitleChange = (value: string) => {
+    form.setValue("title", value)
+    setPreviewTitle(value)
+    // Bug 5: quando lockSlug=false (modo criação), gera slug automaticamente
+    if (!lockSlug) {
+      form.setValue("slug", slugify(value))
     }
-  }, [form.watch("title"), lockSlug, initialData, form])
+  }
 
   const reviewMutation = useMutation({
     mutationFn: async ({ action, id }: { action: 'submit' | 'publish' | 'reject', id: number }) => {
@@ -117,8 +129,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       notify.success(messages[variables.action], "Status atualizado.")
       if (onSuccess) onSuccess()
     },
-    onError: (error: any) => {
-      notify.error("Falha na operação", error)
+    onError: (error: unknown) => {
+      notify.error("Falha na operação", error instanceof Error ? error.message : String(error))
     }
   })
 
@@ -140,8 +152,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       notify.success(initialData ? "Artigo atualizado" : "Artigo criado", "As alterações foram salvas com sucesso.")
       onSuccess()
     },
-    onError: (error: any) => {
-      notify.error("Falha ao salvar artigo", error)
+    onError: (error: unknown) => {
+      notify.error("Falha ao salvar artigo", error instanceof Error ? error.message : String(error))
     }
   })
 
@@ -156,8 +168,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       if (data.keywords) form.setValue("meta_keywords", data.keywords)
       notify.success("Sugestões de SEO geradas!", "As tags foram preenchidas por IA.")
     },
-    onError: (error: any) => {
-      notify.error("Falha ao gerar sugestões SEO", error)
+    onError: (error: unknown) => {
+      notify.error("Falha ao gerar sugestões SEO", error instanceof Error ? error.message : String(error))
     }
   })
 
@@ -221,11 +233,11 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
           <div className="flex-1 sm:flex-initial">
             <PreviewDialog
               type="article"
-              title={form.watch("title")}
-              content={form.watch("content")}
-              excerpt={form.watch("excerpt")}
-              image={form.watch("image")}
-              categoryName={categories?.find((c: Category) => String(c.id) === form.watch("category"))?.name}
+              title={previewTitle}
+              content={previewContent}
+              excerpt={previewExcerpt}
+              image={previewImage}
+              categoryName={categories?.find((c: Category) => String(c.id) === previewCategoryId)?.name}
               date={new Date().toLocaleDateString('pt-BR')}
             />
           </div>
@@ -246,7 +258,12 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                 <FormItem>
                   <FormLabel className="text-base font-semibold">Título Principal</FormLabel>
                   <FormControl>
-                    <Input placeholder="Título do artigo" className="text-xl font-bold h-12 px-4 shadow-sm" {...field} />
+                    <Input
+                      placeholder="Título do artigo"
+                      className="text-xl font-bold h-12 px-4 shadow-sm"
+                      value={field.value}
+                      onChange={(e) => handleTitleChange(e.target.value)}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -262,7 +279,10 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   <FormControl>
                     <RichEditor
                       content={field.value}
-                      onChange={field.onChange}
+                      onChange={(val) => {
+                        field.onChange(val)
+                        setPreviewContent(val)
+                      }}
                       placeholder="Comece a escrever sua história..."
                     />
                   </FormControl>
@@ -301,18 +321,31 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   <div className="font-sans">
                     <div className="flex items-center gap-2 mb-1">
                       <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] text-gray-500 overflow-hidden">
-                        {form.watch("image") ? <img src={form.watch("image")} className="h-full w-full object-cover" /> : <Globe className="h-4 w-4" />}
+                        {previewImage ? (
+                          <Image
+                            src={previewImage || ""}
+                            alt="Pré-visualização"
+                            width={28}
+                            height={28}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Globe className="h-4 w-4" />
+                        )}
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm text-gray-800 dark:text-gray-200 leading-tight">Seu Site</span>
-                        <span className="text-xs text-gray-500 leading-tight">{`https://seusite.com/blog/${form.watch("slug") || 'slug-do-artigo'}`}</span>
+                        {/* Bug 6: usa watchedSlug reativo */}
+                        <span className="text-xs text-gray-500 leading-tight">{`https://seusite.com/blog/${watchedSlug || 'slug-do-artigo'}`}</span>
                       </div>
                     </div>
                     <h3 className="text-xl text-[#1a0dab] dark:text-[#8ab4f8] hover:underline cursor-pointer truncate font-medium">
-                      {form.watch("meta_title") || form.watch("title") || "Título do Artigo"}
+                      {/* Bug 6: usa watchedMetaTitle que é reativo em tempo real */}
+                      {watchedMetaTitle || previewTitle || "Título do Artigo"}
                     </h3>
                     <p className="text-sm text-[#4d5156] dark:text-[#bdc1c6] line-clamp-2 mt-1">
-                      {form.watch("meta_description") || form.watch("excerpt") || "A descrição do seu artigo aparecerá aqui nos resultados de busca..."}
+                      {/* Bug 6: usa watchedMetaDescription reativo */}
+                      {watchedMetaDescription || previewExcerpt || "A descrição do seu artigo aparecerá aqui nos resultados de busca..."}
                     </p>
                   </div>
                 </div>
@@ -385,25 +418,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="is_published"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          className="h-5 w-5"
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="text-sm font-bold">Ativar Publicação</FormLabel>
-                        <p className="text-xs text-muted-foreground">O artigo ficará disponível imediatamente.</p>
-                      </div>
-                    </FormItem>
-                  )}
-                />
+                {/* M6: controle de publicação unificado nos botões de fluxo (Submit/Approve/Reject) */}
 
                 <FormField
                   control={form.control}
@@ -411,7 +426,13 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Categoria</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={(val) => {
+                          field.onChange(val)
+                          setPreviewCategoryId(val)
+                        }}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger className="h-11 bg-background">
                             <SelectValue placeholder="Selecione..." />
@@ -430,6 +451,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   )}
                 />
 
+                {/* Bug 5: Slug - lockSlug=false = auto-gerado ao digitar; lockSlug=true = editável manualmente */}
                 <FormField
                   control={form.control}
                   name="slug"
@@ -443,18 +465,19 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                           size="sm"
                           className="h-6 w-6 p-0"
                           onClick={() => setLockSlug(!lockSlug)}
-                          title={lockSlug ? "Desbloquear edição manual" : "Bloquear e gerar automaticamente"}
+                          title={!lockSlug ? "Bloquear (ativa geração automática)" : "Desbloquear para edição manual"}
                         >
-                          {lockSlug ? <Lock className="h-3 w-3" /> : <LinkIcon className="h-3 w-3" />}
+                          {/* Bug 5: Lock agora significa "bloqueado para edição" = geração automática ativa */}
+                          {!lockSlug ? <Lock className="h-3 w-3 text-primary" /> : <LinkIcon className="h-3 w-3" />}
                         </Button>
                       </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input
                             placeholder="slug-do-artigo"
-                            className={`h-11 bg-background font-mono text-sm ${lockSlug ? 'opacity-80' : ''}`}
+                            className={`h-11 bg-background font-mono text-sm ${!lockSlug ? 'opacity-80' : ''}`}
                             {...field}
-                            readOnly={lockSlug}
+                            readOnly={!lockSlug}
                           />
                         </div>
                       </FormControl>
@@ -467,19 +490,18 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tags</FormLabel>
                   <div className="flex flex-wrap gap-2">
                     {allTags?.map((tag: Tag) => {
-                      const isSelected = form.watch("tags").includes(tag.id)
+                      const isSelected = previewTags.includes(tag.id)
                       return (
                         <Badge
                           key={tag.id}
                           variant={isSelected ? "default" : "outline"}
                           className={`cursor-pointer transition-all hover:scale-105 ${isSelected ? 'shadow-md shadow-primary/20' : 'hover:bg-primary/5'}`}
                           onClick={() => {
-                            const current = form.getValues("tags")
-                            if (isSelected) {
-                              form.setValue("tags", current.filter(id => id !== tag.id))
-                            } else {
-                              form.setValue("tags", [...current, tag.id])
-                            }
+                            setPreviewTags(prev => {
+                              const next = isSelected ? prev.filter(id => id !== tag.id) : [...prev, tag.id]
+                              form.setValue("tags", next)
+                              return next
+                            })
                           }}
                         >
                           {tag.name}
@@ -498,10 +520,10 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
               </div>
 
               <div className="p-6 rounded-2xl bg-muted/30 border space-y-4">
-                {form.watch("image") ? (
+                {previewImage ? (
                   <div className="relative aspect-video rounded-xl overflow-hidden border shadow-inner group">
                     <Image
-                      src={form.watch("image") || ""}
+                      src={previewImage || ""}
                       alt="Preview"
                       fill
                       className="object-cover transition-transform group-hover:scale-105"
@@ -511,7 +533,10 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                         variant="destructive"
                         size="sm"
                         className="h-8 rounded-full"
-                        onClick={() => form.setValue("image", "")}
+                        onClick={() => {
+                          form.setValue("image", "")
+                          setPreviewImage("")
+                        }}
                       >
                         <X className="h-4 w-4 mr-1" /> Remover
                       </Button>
@@ -519,7 +544,10 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   </div>
                 ) : (
                   <MediaDialog
-                    onSelect={(url) => form.setValue("image", url)}
+                    onSelect={(url) => {
+                      form.setValue("image", url)
+                      setPreviewImage(url)
+                    }}
                     trigger={
                       <div className="aspect-video flex flex-col items-center justify-center border-2 border-dashed rounded-xl cursor-pointer hover:bg-muted/50 hover:border-primary/50 transition-all group">
                         <div className="h-12 w-12 rounded-full bg-primary/5 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -549,7 +577,11 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                       <Textarea
                         placeholder="Escreva um breve resumo atrativo..."
                         className="h-32 resize-none rounded-2xl bg-muted/30 border p-4"
-                        {...field}
+                        value={field.value}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          setPreviewExcerpt(e.currentTarget.value)
+                        }}
                       />
                     </FormControl>
                     <FormDescription className="text-xs">Aparece na listagem de posts.</FormDescription>

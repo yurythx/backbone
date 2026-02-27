@@ -1,9 +1,9 @@
 from django.utils.text import slugify
+from django.utils import timezone
 from .models import Article, Category, Tag
 from apps.core.models import AuditLog
 from shared_kernel.audit import log_create, log_update, log_delete
 from apps.webhooks.tasks import trigger_webhooks
-from apps.notifications.tasks import notify_user_push
 from apps.accounts.models import User
 
 class ArticleService:
@@ -13,10 +13,25 @@ class ArticleService:
         Creates an article with audit logging and automatic slug generation if missing.
         """
         import reversion
+        from django.conf import settings
 
         with reversion.create_revision():
             tags_data = data.pop('tags', [])
-            
+            # Handle image as URL/path string in payload
+            image_path = None
+            if 'image' in data and isinstance(data.get('image'), str):
+                url = (data.pop('image') or '').strip()
+                if url:
+                    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+                    if url.startswith(media_url):
+                        image_path = url[len(media_url):].lstrip('/')
+                    elif '://' in url:
+                        idx = url.find('/media/')
+                        if idx != -1:
+                            image_path = url[idx+1:]  # 'media/...'
+                    else:
+                        image_path = url
+
             # Auto-slug if not provided
             if not data.get('slug'):
                 data['slug'] = slugify(data.get('title', ''))
@@ -28,26 +43,31 @@ class ArticleService:
                 candidate = f"{base_slug}-{index}"
                 index += 1
             data['slug'] = candidate
-                
+
             article = Article.objects.create(
                 company=company,
                 author=user,
                 **data
             )
-            
+
             if tags_data:
                 article.tags.set(tags_data)
-                
+
+            # Prefer uploaded file; fallback to string path if available
             if image:
                 article.image = image
+                article.save()
+            elif image_path:
+                # Assign path string relative to storage
+                article.image.name = image_path.lstrip('/')
                 article.save()
 
             reversion.set_user(user)
             reversion.set_comment(f"Created by {user.username}")
-            
+
         from types import SimpleNamespace
         log_create(user, "Article", article, request=SimpleNamespace(company=company))
-        
+
         trigger_webhooks(company, 'article.created', {
             'id': str(article.id),
             'title': article.title,
@@ -62,10 +82,25 @@ class ArticleService:
         Updates an article and logs the change.
         """
         import reversion
-        
+        from django.conf import settings
+
         with reversion.create_revision():
             tags_data = data.pop('tags', None)
-            
+            # Normalize possible image URL/path provided in data
+            image_path = None
+            if 'image' in data and isinstance(data.get('image'), str):
+                url = (data.pop('image') or '').strip()
+                if url:
+                    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+                    if url.startswith(media_url):
+                        image_path = url[len(media_url):].lstrip('/')
+                    elif '://' in url:
+                        idx = url.find('/media/')
+                        if idx != -1:
+                            image_path = url[idx+1:]
+                    else:
+                        image_path = url
+
             # If status is being updated, ensure valid transition
             new_status = data.get('status')
             if new_status and new_status != article.status:
@@ -74,21 +109,23 @@ class ArticleService:
 
             for attr, value in data.items():
                 setattr(article, attr, value)
-                
+
             if tags_data is not None:
                 article.tags.set(tags_data)
-                
+
             if image:
                 article.image = image
-                
+            elif image_path:
+                article.image.name = image_path.lstrip('/')
+
             article.save()
-            
+
             reversion.set_user(user)
             reversion.set_comment(f"Updated by {user.username}")
-            
+
         from types import SimpleNamespace
         log_update(user, "Article", article, request=SimpleNamespace(company=article.company))
-        
+
         trigger_webhooks(article.company, 'article.updated', {
             'id': str(article.id),
             'title': article.title,
@@ -101,7 +138,7 @@ class ArticleService:
     def submit_for_review(user, article):
         if article.status != Article.STATUS_DRAFT:
              raise ValueError("Only drafts can be submitted for review")
-        
+
         return ArticleService.update_article(user, article, {'status': Article.STATUS_PENDING})
 
     @staticmethod
@@ -114,12 +151,14 @@ class ArticleService:
         if article.status not in [Article.STATUS_PENDING, Article.STATUS_DRAFT]:
              raise ValueError("Only pending or draft articles can be published")
 
-        article = ArticleService.update_article(user, article, {
-            'status': Article.STATUS_PUBLISHED, 
-            'is_published': True,
-            'published_at':  article.published_at or __import__('django.utils.timezone', fromlist=['now']).now()
-        })
-        
+        update_data = {
+            'status': Article.STATUS_PUBLISHED,
+        }
+        if not article.published_at:
+            update_data['published_at'] = timezone.now()
+
+        article = ArticleService.update_article(user, article, update_data)
+
         trigger_webhooks(article.company, 'article.published', {
             'id': str(article.id),
             'title': article.title,
@@ -127,15 +166,13 @@ class ArticleService:
             'url': f"/artigos/{article.slug}"
         })
 
-        # Notificar todos os usuários da empresa via Push
-        active_users = User.objects.filter(company=article.company, is_active=True)
-        for target_user in active_users:
-            notify_user_push(
-                target_user, 
-                title=f"Novo Artigo: {article.title}", 
-                message=article.excerpt or "Confira a nova publicação!",
-                link=f"/artigos/{article.slug}"
-            )
+        # Bug 3: notificações push via Celery (não bloqueia o worker)
+        try:
+            from apps.articles.tasks import notify_article_published
+            notify_article_published.delay(article.id)
+        except Exception:
+            # Fallback síncrono se Celery não estiver disponível
+            _notify_users_sync(article)
 
         return article
 
@@ -144,8 +181,11 @@ class ArticleService:
         if article.status != Article.STATUS_PENDING:
              raise ValueError("Only pending articles can be rejected")
 
-        # Optionally store rejection reason in a separate model/field or log
-        return ArticleService.update_article(user, article, {'status': Article.STATUS_REJECTED})
+        # M3: rejection_reason agora é salvo no modelo
+        update_data = {'status': Article.STATUS_REJECTED}
+        if reason:
+            update_data['rejection_reason'] = reason
+        return ArticleService.update_article(user, article, update_data)
 
     @staticmethod
     def delete_article(user, article):
@@ -153,27 +193,40 @@ class ArticleService:
         Deletes an article and logs the removal.
         """
         log_delete(user, "Article", article)
-        
+
         company = article.company
         article_data = {
             'id': str(article.id),
             'title': article.title
         }
-        
+
         article.delete()
-        
+
         trigger_webhooks(company, 'article.deleted', article_data)
 
     @staticmethod
     def record_view(user, article, ip_address=None):
         from .models import ArticleView
-        
+        from django.core.cache import cache
+
+        # M1: Deduplicação — evita registrar múltiplas views do mesmo IP/usuário em 1h
+        # Best-effort: se o cache não estiver disponível, registra a view normalmente
+        try:
+            user_key = f"user:{user.id}" if user and user.is_authenticated else f"ip:{ip_address}"
+            cache_key = f"article_view:{article.id}:{user_key}"
+            if cache.get(cache_key):
+                return  # view já registrada recentemente, ignora
+            cache.set(cache_key, True, timeout=3600)  # 1 hora de cooldown
+        except Exception:
+            pass  # cache indisponível — prossegue com o registro
+
         ArticleView.objects.create(
             company=article.company,
             article=article,
             user=user if user and user.is_authenticated else None,
             ip_address=ip_address
         )
+
 
     @staticmethod
     def revert_to_version(user, article, version_id):
@@ -182,24 +235,46 @@ class ArticleService:
         """
         import reversion
         from reversion.models import Version
-        
+        from django.contrib.contenttypes.models import ContentType
+
         try:
             version = Version.objects.get(pk=version_id)
         except Version.DoesNotExist:
             raise ValueError("Version not found")
-            
-        # Verify the version belongs to the object (sanity check)
-        if str(version.object_id) != str(article.id) and version.object_id != article.id:
-             # Reversion stores object_id as string usually, but depends on PK type
-             raise ValueError("Version does not belong to this article")
+
+        # Bug 4: valida content_type E object_id para garantir segurança
+        article_ct = ContentType.objects.get_for_model(Article)
+        if version.content_type_id != article_ct.id:
+            raise ValueError("Version does not belong to an Article")
+        if str(version.object_id) != str(article.id):
+            raise ValueError("Version does not belong to this article")
 
         with reversion.create_revision():
-            version.revision.revert()
-            article.refresh_from_db() # Reload to get the reverted state
-            
+            version.revert()  # Bug 4: reverte apenas esta versão, não todo o revision
+            article.refresh_from_db()
+
             reversion.set_user(user)
             reversion.set_comment(f"Reverted to version from {version.revision.date_created}")
-            
+
         from types import SimpleNamespace
         log_update(user, "Article", article, request=SimpleNamespace(company=article.company), changes={"reverted_to_version": version_id})
         return article
+
+
+def _notify_users_sync(article):
+    """Fallback síncrono para notificações — usado apenas quando Celery não está disponível."""
+    try:
+        from apps.notifications.tasks import notify_user_push
+        active_users = User.objects.filter(company=article.company, is_active=True)
+        for target_user in active_users:
+            try:
+                notify_user_push(
+                    target_user,
+                    title=f"Novo Artigo: {article.title}",
+                    message=article.excerpt or "Confira a nova publicação!",
+                    link=f"/artigos/{article.slug}"
+                )
+            except Exception:
+                pass
+    except Exception:
+        pass

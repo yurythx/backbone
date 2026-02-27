@@ -15,11 +15,6 @@ self.addEventListener('push', function (event) {
     }
 }); // Closing brace added here
 
-self.addEventListener('fetch', function(event) {
-  // Pass-through: não intercepta nada, apenas permite que a requisição siga
-  return; 
-});
-
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
     event.waitUntil(

@@ -88,7 +88,7 @@ export function CompanyForm() {
 
   if (isLoading) {
     return (
-      <Card className="border-none shadow-none bg-transparent">
+      <Card className="border-none shadow-none bg-transparent" role="status" aria-live="polite" aria-label="Carregando configurações da empresa">
         <CardHeader className="px-0">
           <Skeleton className="h-8 w-1/3 mb-2" />
           <Skeleton className="h-4 w-1/2" />
@@ -113,7 +113,7 @@ export function CompanyForm() {
       <CardHeader className="px-0">
         <div className="flex items-center gap-3 mb-2">
           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <Building2 className="h-5 w-5 text-primary" />
+            <Building2 className="h-5 w-5 text-primary" aria-hidden="true" />
           </div>
           <div>
             <CardTitle className="text-2xl">Perfil da Organização</CardTitle>
@@ -126,7 +126,7 @@ export function CompanyForm() {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-2xl">
             <div className="space-y-6 p-6 border rounded-2xl bg-muted/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-5">
-                <Building2 className="h-24 w-24" />
+                <Building2 className="h-24 w-24" aria-hidden="true" />
               </div>
 
               <FormField
@@ -151,7 +151,7 @@ export function CompanyForm() {
                     <FormLabel className="font-bold">Domínio Personalizado</FormLabel>
                     <FormControl>
                       <div className="relative group">
-                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
                         <Input placeholder="app.suaempresa.com" className="pl-10 h-11 bg-background" {...field} />
                       </div>
                     </FormControl>
@@ -166,7 +166,7 @@ export function CompanyForm() {
 
             <div className="space-y-6 p-6 border rounded-2xl bg-primary/5 relative overflow-hidden">
               <h3 className="text-sm font-bold flex items-center gap-2">
-                <Palette className="h-4 w-4 text-primary" />
+                <Palette className="h-4 w-4 text-primary" aria-hidden="true" />
                 Branding e Cores
               </h3>
 
@@ -200,9 +200,9 @@ export function CompanyForm() {
 
             <Button type="submit" size="lg" className="px-8 shadow-lg shadow-primary/20" disabled={mutation.isPending}>
               {mutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Save className="mr-2 h-4 w-4" />
+                <Save className="mr-2 h-4 w-4" aria-hidden="true" />
               )}
               Salvar Alterações
             </Button>

@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label"
 import { CreditCard, ShieldCheck, Loader2, CheckCircle2 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "@/hooks/use-toast"
-import { Badge } from "@/components/ui/badge"
+import Image from "next/image"
 
 interface CheckoutModalProps {
     plan: Plan | null
@@ -90,7 +90,7 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                             <DialogHeader>
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                                        <CreditCard className="h-5 w-5" />
+                                        <CreditCard className="h-5 w-5" aria-hidden="true" />
                                     </div>
                                     <div>
                                         <DialogTitle className="text-xl font-black uppercase tracking-tighter">Finalizar Upgrade</DialogTitle>
@@ -121,7 +121,13 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                                                 readOnly
                                             />
                                             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" className="h-4 opacity-50" alt="Visa" />
+                                                <Image
+                                                    src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg"
+                                                    alt="Visa"
+                                                    width={16}
+                                                    height={16}
+                                                    className="opacity-50"
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -138,7 +144,7 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                                 </div>
 
                                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground bg-muted/30 p-2 rounded-lg justify-center">
-                                    <ShieldCheck className="h-3 w-3 text-green-500" />
+                                    <ShieldCheck className="h-3 w-3 text-green-500" aria-hidden="true" />
                                     Ambiente seguro com criptografia de ponta a ponta
                                 </div>
                             </div>
@@ -162,11 +168,14 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             className="p-12 flex flex-col items-center justify-center text-center space-y-6"
+                            role="status"
+                            aria-live="polite"
+                            aria-label="Processando pagamento"
                         >
                             <div className="relative">
-                                <Loader2 className="h-16 w-16 text-primary animate-spin" />
+                                <Loader2 className="h-16 w-16 text-primary animate-spin" aria-hidden="true" />
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                    <CreditCard className="h-6 w-6 text-primary/50" />
+                                    <CreditCard className="h-6 w-6 text-primary/50" aria-hidden="true" />
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -184,7 +193,7 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                             className="p-12 flex flex-col items-center justify-center text-center space-y-6"
                         >
                             <div className="h-20 w-20 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
-                                <CheckCircle2 className="h-12 w-12 text-green-500" />
+                                <CheckCircle2 className="h-12 w-12 text-green-500" aria-hidden="true" />
                             </div>
                             <div className="space-y-2">
                                 <h3 className="text-2xl font-black uppercase tracking-tighter text-green-500">Sucesso Absoluto!</h3>

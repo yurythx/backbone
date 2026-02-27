@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Count
 from django.db.models.functions import TruncDate
 from datetime import timedelta
+from django.http import HttpResponse
 from apps.articles.models import Article, Category, ArticleView
 
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -13,6 +14,14 @@ from .models import Company, AuditLog, LDAPConfig
 from .serializers import (
     CompanySerializer, AuditLogSerializer, DashboardStatsSerializer, LDAPConfigSerializer
 )
+
+class IsSuperUser(permissions.BasePermission):
+    """
+    Permissão que permite acesso apenas a superusuários globais.
+    is_staff não é suficiente.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_superuser)
 
 @extend_schema_view(
     list=extend_schema(tags=['Core']),
@@ -131,7 +140,13 @@ class CompanyViewSet(viewsets.ModelViewSet):
     # Permitir criação pública para onboarding inicial? 
     # Ou restringir? Vamos permitir AllowAny no create e IsAuthenticated no resto.
     def get_permissions(self):
-        if self.action in ['create', 'public_list']:
+        if self.action == 'create':
+            if not self.request.user.is_authenticated:
+                return [permissions.AllowAny()]
+            return [IsSuperUser()]
+        if self.action in ['destroy', 'update', 'partial_update']:
+            return [permissions.IsAuthenticated(), IsSuperUser()]
+        if self.action == 'public_list':
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
@@ -185,7 +200,7 @@ class DashboardStatsView(generics.GenericAPIView):
         # Datetime helpers
         now = timezone.now()
         thirty_days_ago = now - timedelta(days=30)
-        sixty_days_ago = now - timedelta(days=60)
+        # sixty_days_ago is not used; removed to satisfy lint
 
         # 1. Analytics de Visualizações (Série Temporal)
         views_history = (
@@ -238,7 +253,7 @@ class DashboardStatsView(generics.GenericAPIView):
                 },
                 "articles": {
                     "total": total_articles,
-                    "published": Article.objects.filter(company=company, is_published=True).count(),
+                    "published": Article.objects.filter(company=company, status=Article.STATUS_PUBLISHED).count(),
                     "growth": round((new_articles_month / (total_articles - new_articles_month) * 100) if (total_articles - new_articles_month) > 0 else 100, 1)
                 },
                 "messages": {
@@ -297,8 +312,6 @@ class SitemapView(generics.GenericAPIView):
                 "priority": 0.5
             })
 
-from django.http import HttpResponse
-
 class RobotsView(generics.GenericAPIView):
     """
     Endpoint para robots.txt.
@@ -353,7 +366,12 @@ class LDAPConfigViewSet(viewsets.ModelViewSet):
         
         from .ldap_utils import test_ldap_connection
         
-        success, message = test_ldap_connection(config)
+        result = test_ldap_connection(config, include_metrics=True)
+        if isinstance(result, tuple) and len(result) == 3:
+            success, message, info = result
+        else:
+            success, message = result
+            info = {}
         
         # Atualizar status do teste no banco
         config.last_test_status = 'success' if success else 'failed'
@@ -361,9 +379,34 @@ class LDAPConfigViewSet(viewsets.ModelViewSet):
         config.last_test_at = timezone.now()
         config.save(update_fields=['last_test_status', 'last_test_message', 'last_test_at'])
         
-        return Response({
+        use_ssl = config.server_uri.startswith('ldaps://')
+        tls = "LDAPS" if use_ssl else ("StartTLS" if getattr(config, 'use_tls', False) else "None")
+        payload = {
             'success': success,
             'message': message,
             'tested_at': config.last_test_at,
-            'status': config.last_test_status
-        }, status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST)
+            'status': config.last_test_status,
+            'tls': tls,
+        }
+        if getattr(config, 'require_group', None):
+            payload['require_group'] = config.require_group
+            payload['require_group_validated'] = bool(success)
+        if info:
+            payload['tls_validated'] = info.get('tls_validated')
+            payload['metrics'] = {
+                'bind_ms': info.get('bind_ms'),
+                'search_ms': info.get('search_ms'),
+                'group_ms': info.get('group_ms'),
+            }
+            # Persistir mensagem enriquecida com métricas para histórico
+            bind_ms = info.get('bind_ms')
+            search_ms = info.get('search_ms')
+            group_ms = info.get('group_ms')
+            tls = info.get('tls')
+            tls_val = info.get('tls_validated')
+            metrics_txt = f" | tempos: bind={bind_ms}ms, search={search_ms}ms" + (f", group={group_ms}ms" if group_ms is not None else "")
+            tls_txt = f" | TLS={tls}, validated={'sim' if tls_val else 'não'}"
+            config.last_test_message = f"{message}{metrics_txt}{tls_txt}"
+            config.save(update_fields=['last_test_message'])
+        
+        return Response(payload, status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST)

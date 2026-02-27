@@ -40,7 +40,7 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string
 }
 
-export function DataTable<TData, TValue>({
+function DataTableInner<TData, TValue>({
   columns,
   data,
   isLoading = false,
@@ -74,6 +74,23 @@ export function DataTable<TData, TValue>({
     },
   })
 
+  const onSearchChange = React.useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (!searchKey) return
+      const col = table.getColumn(searchKey)
+      if (col) col.setFilterValue(event.target.value)
+    },
+    [table, searchKey]
+  )
+
+  const toggleColumnVisibility = React.useCallback(
+    (id: string, value: boolean) => {
+      const col = table.getColumn(id)
+      if (col) col.toggleVisibility(!!value)
+    },
+    [table]
+  )
+
   return (
     <div className="w-full space-y-4">
       {/* Filters and Search */}
@@ -83,18 +100,18 @@ export function DataTable<TData, TValue>({
             <Input
               placeholder={searchPlaceholder}
               value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
-              onChange={(event) =>
-                table.getColumn(searchKey)?.setFilterValue(event.target.value)
-              }
+              onChange={onSearchChange}
               className="max-w-sm"
+              role="searchbox"
+              aria-label={searchPlaceholder || "Filtrar resultados"}
             />
           </div>
         )}
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
-              Columns <ChevronDown className="ml-2 h-4 w-4" />
+            <Button variant="outline" className="ml-auto" aria-label="Alternar colunas visíveis">
+              Columns <ChevronDown className="ml-2 h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -102,14 +119,13 @@ export function DataTable<TData, TValue>({
               .getAllColumns()
               .filter((column) => column.getCanHide())
               .map((column) => {
+                const isVisible = column.getIsVisible()
                 return (
                   <DropdownMenuCheckboxItem
                     key={column.id}
                     className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) =>
-                      column.toggleVisibility(!!value)
-                    }
+                    checked={isVisible}
+                    onCheckedChange={(value) => toggleColumnVisibility(column.id, !!value)}
                   >
                     {column.id}
                   </DropdownMenuCheckboxItem>
@@ -121,7 +137,7 @@ export function DataTable<TData, TValue>({
 
       {/* Table Content */}
       <div className="rounded-md border bg-card">
-        <Table>
+        <Table aria-label="Tabela de resultados">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -147,9 +163,9 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading data...
+                  <div className="flex items-center justify-center gap-2 text-muted-foreground" role="status" aria-live="polite" aria-label="Carregando dados da tabela">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Carregando dados...
                   </div>
                 </TableCell>
               </TableRow>
@@ -175,7 +191,7 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  <div role="status" aria-live="polite">Nenhum resultado.</div>
                 </TableCell>
               </TableRow>
             )}
@@ -195,6 +211,7 @@ export function DataTable<TData, TValue>({
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
+            aria-label="Página anterior"
           >
             Previous
           </Button>
@@ -203,6 +220,7 @@ export function DataTable<TData, TValue>({
             size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
+            aria-label="Próxima página"
           >
             Next
           </Button>
@@ -210,4 +228,8 @@ export function DataTable<TData, TValue>({
       </div>
     </div>
   )
+}
+
+export function DataTable<TData, TValue>(props: DataTableProps<TData, TValue>) {
+  return <DataTableInner {...props} />
 }

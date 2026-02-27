@@ -25,7 +25,7 @@ Backend API: http://localhost:8005
 Admin: http://localhost:8005/admin
 ```
 
-**Default Credentials**: See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)
+Docs index: see [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)
 
 ---
 
@@ -46,7 +46,7 @@ Admin: http://localhost:8005/admin
 
 ### 👥 User Management
 - **JWT Authentication**: Secure token-based auth
-- **LDAP Authentication**: Multi-tenant LDAP integration ([docs/ldap](docs/ldap))
+- **LDAP Authentication**: Multi-tenant LDAP integration
 - **Role-Based Access Control (RBAC)**: Granular permissions
 - **User Invitations**: Team collaboration
 - **Onboarding System**: Guided setup for new tenants
@@ -117,11 +117,14 @@ backbone/
 │   │   ├── components/     # Reusable UI components
 │   │   ├── features/       # Feature-specific code
 │   │   └── lib/            # Utilities & configs
-├── docs/                   # Documentation
-│   ├── GETTING_STARTED.md  # Setup guide
-│   ├── ARCHITECTURE.md     # System architecture
-│   ├── DEPLOY_CLOUDFLARE.md # Production deployment
-│   └── TESTING_GUIDE.md    # Testing strategies
+├── docs/                   # Documentation (product-focused)
+│   ├── SYSTEM_OVERVIEW.md
+│   ├── MULTI_TENANT_CHEATSHEET.md
+│   ├── MESSENGER.md
+│   ├── ARTICLES.md
+│   ├── NOTIFICATIONS.md
+│   ├── MODULES.md
+│   └── PAGES.md
 ├── scripts/                # Utilities (backup, restore)
 └── docker-compose.yml      # Local development
 ```
@@ -130,13 +133,14 @@ backbone/
 
 ## 📚 Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Getting Started](docs/GETTING_STARTED.md) | Installation & setup |
-| [Architecture](docs/ARCHITECTURE.md) | System design overview |
-| [Deployment](DEPLOY_CLOUDFLARE.md) | Production deployment guide |
-| [Testing](docs/TESTING_GUIDE.md) | Testing strategies |
-| [Contributing](docs/CONTRIBUTING.md) | Contribution guidelines |
+- Index: [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)
+- Multi-tenant cheatsheet: [docs/MULTI_TENANT_CHEATSHEET.md](docs/MULTI_TENANT_CHEATSHEET.md)
+- Modules:
+  - [docs/MESSENGER.md](docs/MESSENGER.md)
+  - [docs/ARTICLES.md](docs/ARTICLES.md)
+  - [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)
+  - [docs/MODULES.md](docs/MODULES.md)
+  - [docs/PAGES.md](docs/PAGES.md)
 
 ---
 
@@ -200,7 +204,7 @@ npm run test:e2e
 
 ### Production (Automated Script)
 
-For a quick and automated deployment on a VPS (Ubuntu/Debian), use the included `deploy.sh` script.
+For a quick and automated deployment on a VPS (Ubuntu/Debian), use the script at `scripts/deploy.sh`.
 
 1. **Configure Environment**:
    Copy the example config and fill in your details:
@@ -224,26 +228,18 @@ For a quick and automated deployment on a VPS (Ubuntu/Debian), use the included 
    - Seed initial data
 
 ### Production (Manual / Cloudflare Tunnel)
-See [DEPLOY_CLOUDFLARE.md](DEPLOY_CLOUDFLARE.md) for detailed instructions on manual deployment or using Cloudflare Tunnels.
+See [ops/DEPLOY_CLOUDFLARE.md](ops/DEPLOY_CLOUDFLARE.md) for detailed instructions on manual deployment or using Cloudflare Tunnels.
 
 ```bash
-# Build production images
 docker-compose -f docker-compose.prod.yml build
-
-
-# Deploy
 docker-compose -f docker-compose.prod.yml up -d
-
-# Configure Cloudflare Tunnel
-cloudflared tunnel create backbone
-# Follow guide for routing configuration
 ```
 
 ---
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for contribution guidelines.
+Contributions are welcome. Please open an issue or submit a pull request with clear description and rationale.
 
 ---
 

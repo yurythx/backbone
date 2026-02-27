@@ -11,9 +11,15 @@ export const notify = {
         })
     },
 
-    error: (message: string, error?: any) => {
+    error: (message: string, error?: unknown) => {
         // Trata erros comuns de API se necessário
-        const description = error?.response?.data?.detail || error?.message || "Ocorreu um erro inesperado."
+        const description = (() => {
+            if (typeof error === 'object' && error !== null) {
+                const err = error as { response?: { data?: { detail?: string } }; message?: string }
+                return err.response?.data?.detail || err.message || "Ocorreu um erro inesperado."
+            }
+            return "Ocorreu um erro inesperado."
+        })()
 
         toast.error(message, {
             description,
@@ -32,7 +38,7 @@ export const notify = {
         })
     },
 
-    promise: (promise: Promise<any>, messages: { loading: string; success: string; error: string }) => {
+    promise: (promise: Promise<unknown>, messages: { loading: string; success: string; error: string }) => {
         return toast.promise(promise, {
             loading: messages.loading,
             success: messages.success,

@@ -3,8 +3,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import {
-    BarChart,
-    Bar,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -22,20 +20,33 @@ export function ArticleAnalytics() {
     const { data, isLoading } = useQuery({
         queryKey: ['article-analytics'],
         queryFn: async () => {
-            const res = await api.get('/api/articles/articles/analytics/')
-            return res.data
+            try {
+                const res = await api.get('/api/articles/articles/analytics/')
+                return res.data ?? {}
+            } catch {
+                return {}
+            }
         }
     })
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center p-20">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex items-center justify-center p-20" role="status" aria-live="polite">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
             </div>
         )
     }
 
-    const { total_articles, total_views, most_viewed, views_by_date } = data
+    const safe = (data ?? {}) as {
+        total_articles?: unknown
+        total_views?: unknown
+        most_viewed?: unknown
+        views_by_date?: unknown
+    }
+    const total_articles = Number.isFinite(Number(safe.total_articles)) ? Number(safe.total_articles) : 0
+    const total_views = Number.isFinite(Number(safe.total_views)) ? Number(safe.total_views) : 0
+    const most_viewed = Array.isArray(safe.most_viewed) ? safe.most_viewed as Array<{ id: number; title: string; slug: string; total_views: number; views_last_30_days: number }> : []
+    const views_by_date = Array.isArray(safe.views_by_date) ? safe.views_by_date as Array<{ date: string; count: number }> : []
 
     return (
         <div className="space-y-6">
@@ -48,7 +59,7 @@ export function ArticleAnalytics() {
                                 <h3 className="text-3xl font-bold mt-1">{total_articles}</h3>
                             </div>
                             <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                                <FileText className="h-6 w-6" />
+                                <FileText className="h-6 w-6" aria-hidden="true" />
                             </div>
                         </div>
                     </CardContent>
@@ -62,7 +73,7 @@ export function ArticleAnalytics() {
                                 <h3 className="text-3xl font-bold mt-1">{total_views.toLocaleString()}</h3>
                             </div>
                             <div className="h-12 w-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-                                <Eye className="h-6 w-6" />
+                                <Eye className="h-6 w-6" aria-hidden="true" />
                             </div>
                         </div>
                     </CardContent>
@@ -79,7 +90,7 @@ export function ArticleAnalytics() {
                                 <p className="text-[10px] text-muted-foreground mt-1">Views por artigo</p>
                             </div>
                             <div className="h-12 w-12 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-500">
-                                <TrendingUp className="h-6 w-6" />
+                                <TrendingUp className="h-6 w-6" aria-hidden="true" />
                             </div>
                         </div>
                     </CardContent>
@@ -90,7 +101,7 @@ export function ArticleAnalytics() {
                 <Card className="glass-morphism lg:col-span-1">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Calendar className="h-5 w-5 text-primary" />
+                            <Calendar className="h-5 w-5 text-primary" aria-hidden="true" />
                             Tendência de Visualizações
                         </CardTitle>
                         <CardDescription>Visualizações nos últimos 15 dias</CardDescription>
@@ -108,7 +119,13 @@ export function ArticleAnalytics() {
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                                     <XAxis
                                         dataKey="date"
-                                        tickFormatter={(date) => format(new Date(date), 'dd/MM')}
+                                        tickFormatter={(date) => {
+                                            try {
+                                                return format(new Date(date), 'dd/MM')
+                                            } catch {
+                                                return String(date)
+                                            }
+                                        }}
                                         stroke="#888888"
                                         fontSize={12}
                                         tickLine={false}
@@ -143,14 +160,14 @@ export function ArticleAnalytics() {
                 <Card className="glass-morphism lg:col-span-1 min-h-[400px]">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <TrendingUp className="h-5 w-5 text-green-500" />
+                            <TrendingUp className="h-5 w-5 text-green-500" aria-hidden="true" />
                             Conteúdos em Destaque
                         </CardTitle>
                         <CardDescription>Artigos com maior volume de tráfego</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-6 mt-4">
-                            {most_viewed.map((article: any, index: number) => (
+                            {most_viewed.map((article: { id: number; title: string; slug: string; total_views: number; views_last_30_days: number }, index: number) => (
                                 <div key={article.id || `article-${index}`} className="flex items-center justify-between group">
                                     <div className="flex items-center gap-4">
                                         <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center text-xs font-bold group-hover:bg-primary/20 transition-colors">

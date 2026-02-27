@@ -3,27 +3,16 @@
 import { useNotifications, Notification } from "@/hooks/use-notifications-v2"
 import { SlideUp, FadeIn } from "@/components/ui/motion"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import {
-    Bell,
-    MessageSquare,
-    ShieldCheck,
-    Info,
-    CheckCircle2,
-    Trash2,
-    Calendar,
-    ChevronRight,
-    Search,
-    Filter
-} from "lucide-react"
+import { Bell, MessageSquare, ShieldCheck, CheckCircle2, Calendar, ChevronRight, Search } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { useState } from "react"
-import Link from "next/link"
 import { Input } from "@/components/ui/input"
+import { useRouter } from "next/navigation"
 
 export default function NotificationsPage() {
-    const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications()
+    const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications({ showToasts: false })
+    const router = useRouter()
     const [filter, setFilter] = useState<'all' | 'message' | 'system' | 'approval'>('all')
     const [search, setSearch] = useState('')
 
@@ -35,6 +24,43 @@ export default function NotificationsPage() {
             (n.message || '').toLowerCase().includes(search.toLowerCase())
         return matchesType && matchesSearch
     })
+
+    const openFromNotification = (n: Notification) => {
+        try {
+            if (n.notification_type === 'message') {
+                let convId: string | null = null
+                let messageId: string | null = null
+                let createdAt: string | null = null
+                if (n.link) {
+                    const url = new URL(n.link, window.location.origin)
+                    convId = url.searchParams.get('conversation')
+                    messageId = url.searchParams.get('message_id') || url.searchParams.get('message') || url.searchParams.get('mid')
+                    createdAt = url.searchParams.get('created_at') || url.searchParams.get('ts') || n.created_at
+                }
+                if (messageId) {
+                    try {
+                        localStorage.setItem('focusMessageId', String(messageId))
+                    } catch {}
+                }
+                if (createdAt) {
+                    try {
+                        localStorage.setItem('focusMessageCreatedAt', createdAt)
+                    } catch {}
+                }
+                if (convId) {
+                    router.push(`/messenger?conversation=${convId}`)
+                } else if (n.link) {
+                    router.push(n.link)
+                } else {
+                    router.push(`/messenger`)
+                }
+                return
+            }
+            if (n.link) router.push(n.link)
+        } catch {
+            if (n.link) router.push(n.link)
+        }
+    }
 
     const getIcon = (type: string) => {
         switch (type) {
@@ -111,13 +137,17 @@ export default function NotificationsPage() {
                             <div key={i} className="h-24 rounded-3xl bg-muted/20 animate-pulse border border-border/50" />
                         ))
                     ) : filteredNotifications.length > 0 ? (
-                        filteredNotifications.map((n) => (
+                        filteredNotifications.map((n: Notification) => (
                             <div
                                 key={n.id}
                                 className={`group relative p-6 rounded-[2rem] border transition-all duration-300 ${n.is_read
                                     ? 'bg-card/30 border-border/30 opacity-70'
                                     : 'bg-card/80 border-primary/20 shadow-xl shadow-primary/5 active:scale-[0.98]'
                                     }`}
+                                onClick={() => {
+                                    markAsRead(n.id)
+                                    openFromNotification(n)
+                                }}
                             >
                                 <div className="flex items-start gap-6">
                                     <div className={`h-14 w-14 rounded-2xl flex items-center justify-center border shadow-inner transition-transform group-hover:scale-110 ${n.is_read ? 'bg-muted/10 border-border/50' : 'bg-primary/10 border-primary/30'
@@ -146,10 +176,13 @@ export default function NotificationsPage() {
 
                                         <div className="flex items-center gap-4 pt-2">
                                             {n.link && (
-                                                <Button variant="link" asChild className="p-0 h-auto text-xs font-bold text-primary hover:no-underline">
-                                                    <Link href={n.link} className="flex items-center gap-1">
-                                                        Acessar recurso <ChevronRight className="h-3 w-3" />
-                                                    </Link>
+                                                <Button variant="link" className="p-0 h-auto text-xs font-bold text-primary hover:no-underline"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        markAsRead(n.id)
+                                                        openFromNotification(n)
+                                                    }}>
+                                                    Acessar recurso <ChevronRight className="h-3 w-3" />
                                                 </Button>
                                             )}
                                             {!n.is_read && (

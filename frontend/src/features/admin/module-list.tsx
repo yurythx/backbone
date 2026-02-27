@@ -5,87 +5,75 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Module, TenantModule } from "@/types"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Loader2, Box } from "lucide-react"
+import { Box } from "lucide-react"
 
 export function ModuleList() {
   const queryClient = useQueryClient()
 
-  // 1. Fetch all available modules
-  const { data: allModules, isLoading: isLoadingAll } = useQuery({
+  // 1. Busca todos os módulos disponíveis (resposta paginada)
+  const { data: allModulesData, isLoading: isLoadingAll } = useQuery({
     queryKey: ['modules'],
     queryFn: async ({ signal }) => {
-      const res = await api.get<Module[]>('/api/modules/available/', { signal })
-      return res.data
+      // Bug M1: backend retorna { count, results } — não um array plano
+      const res = await api.get<{ results: Module[] } | Module[]>('/api/modules/available/', { signal })
+      const data = res.data
+      return Array.isArray(data) ? data : (data as { results: Module[] }).results || []
     },
     retry: 1,
     refetchOnWindowFocus: false,
     staleTime: 30_000,
   })
+  const allModules: Module[] = allModulesData ?? []
 
-  // 2. Fetch active modules for tenant
-  const { data: tenantModules, isLoading: isLoadingTenant } = useQuery({
+  // 2. Busca módulos ativos para o tenant (resposta paginada ou lista)
+  const { data: tenantModulesData, isLoading: isLoadingTenant } = useQuery({
     queryKey: ['my-modules'],
     queryFn: async ({ signal }) => {
-      const res = await api.get<TenantModule[]>('/api/modules/my-modules/', { signal })
-      return res.data
+      const res = await api.get<{ results: TenantModule[] } | TenantModule[]>('/api/modules/my-modules/', { signal })
+      const data = res.data
+      return Array.isArray(data) ? data : (data as { results: TenantModule[] }).results || []
     },
     retry: 1,
     refetchOnWindowFocus: false,
     staleTime: 30_000,
   })
+  const tenantModules: TenantModule[] = tenantModulesData ?? []
 
   // 3. Toggle Mutation
   const toggleMutation = useMutation({
-    mutationFn: async ({ code, isActive }: { code: string, isActive: boolean }) => {
-      // Logic:
-      // If turning ON: Call activate endpoint
-      // If turning OFF: Update existing TenantModule is_active=False
-
+    mutationFn: async ({ moduleId, code, name, isActive }: { moduleId: number, code: string, name: string, isActive: boolean }) => {
       if (isActive) {
         await api.post('/api/modules/my-modules/activate/', { module_code: code })
       } else {
-        // Need to find the ID of the tenant module to update
-        // This logic assumes we have the ID. 
-        // For simplicity in this MVP, let's assume the activate endpoint handles toggle or we just use it to ensure it's ON.
-        // But to turn OFF, we need PATCH /api/modules/my-modules/{id}/ { is_active: false }
-
-        // Let's find the tenant module ID from local cache
-        const tm = tenantModules?.find(tm => {
-          // We need to match by module ID. 
-          // The 'allModules' has the code and ID (implicit).
-          // This is tricky because `allModules` from API might just have code/name/desc.
-          // Let's assume we can match by code if we had module details in tenantModules.
-          // The backend TenantModuleSerializer might return module ID.
-
-          // Let's refetch to be safe or rely on what we have.
-          // Wait, TenantModule has `module` (ID).
-          // We need to map Module Code -> Module ID.
-          const mod = allModules?.find(m => m.code === code)
-          return mod && tm.module === (mod as any).id // Assuming 'id' exists on Module interface in backend, though I defined it as code...
-          // Let's check backend serializer. ModuleSerializer usually has ID.
-        })
-
-        if (tm) {
-          await api.patch(`/api/modules/my-modules/${tm.id}/`, { is_active: false })
+        // Bug M2: encontra o TenantModule pelo module ID (não pelo code)
+        const tm = tenantModules.find(tm => tm.module === moduleId)
+        if (!tm) {
+          throw new Error(`Módulo "${name}" não encontrado na lista do tenant.`)
         }
+        await api.patch(`/api/modules/my-modules/${tm.id}/`, { is_active: false })
       }
+      return { name, isActive }
     },
-    onSuccess: () => {
+    onSuccess: ({ name, isActive }) => {
+      // MM2: invalida ambas as queries para garantir sincronismo
       queryClient.invalidateQueries({ queryKey: ['my-modules'] })
-      toast.success("Module updated")
+      queryClient.invalidateQueries({ queryKey: ['modules'] })
+      // MM1: toast com nome do módulo
+      toast.success(isActive ? `Módulo "${name}" ativado` : `Módulo "${name}" desativado`)
     },
-    onError: () => {
-      toast.error("Failed to update module")
+    onError: (err: Error) => {
+      // MM1: mensagem de erro com nome do módulo
+      toast.error(err.message || "Falha ao atualizar módulo")
     }
   })
 
   if (isLoadingAll || isLoadingTenant) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" role="status" aria-live="polite" aria-label="Carregando módulos disponíveis">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="rounded-xl border bg-card text-card-foreground shadow-sm h-32 p-6 flex flex-col justify-between">
             <div className="flex justify-between items-center">
@@ -104,10 +92,10 @@ export function ModuleList() {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {(Array.isArray(allModules) ? allModules : (allModules as any)?.results || []).map((module: any) => {
+      {(Array.isArray(allModules) ? allModules : []).map((module: Module) => {
         // Check if active
-        const activeList = Array.isArray(tenantModules) ? tenantModules : (tenantModules as any)?.results || []
-        const isActive = activeList.some((tm: any) => tm.module === module.id && tm.is_active)
+        const activeList = Array.isArray(tenantModules) ? tenantModules : []
+        const isActive = activeList.some((tm: TenantModule) => tm.module === module.id && tm.is_active)
 
         return (
           <Card key={module.code} className={isActive ? "border-primary" : ""}>
@@ -115,21 +103,23 @@ export function ModuleList() {
               <CardTitle className="text-base font-medium">
                 {module.name}
               </CardTitle>
-              {module.is_global ? (
-                <Badge variant="secondary">Global</Badge>
+              {/* M3: is_default (correto) em vez de is_global que não existe no model */}
+              {module.is_default ? (
+                <Badge variant="secondary">Padrão</Badge>
               ) : (
                 <Switch
                   checked={isActive}
                   onCheckedChange={(checked) =>
-                    toggleMutation.mutate({ code: module.code, isActive: checked })
+                    toggleMutation.mutate({ moduleId: module.id, code: module.code, name: module.name, isActive: checked })
                   }
                   disabled={toggleMutation.isPending}
+                  aria-label={`${isActive ? 'Desativar' : 'Ativar'} módulo ${module.name}`}
                 />
               )}
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-2">
-                <Box className="w-4 h-4" />
+                <Box className="w-4 h-4" aria-hidden="true" />
                 <span>{module.description}</span>
               </div>
             </CardContent>

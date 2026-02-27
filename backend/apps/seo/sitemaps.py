@@ -32,7 +32,7 @@ class PageSitemap(Sitemap):
         self.company = company
 
     def items(self):
-        qs = Page.objects.filter(is_published=True)
+        qs = Page.objects.filter(status=Page.STATUS_PUBLISHED)
         if self.company:
             qs = qs.filter(company=self.company)
         return qs

@@ -24,15 +24,15 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Using company: {company.name}'))
 
         # Get first user or create admin
-        user = User.objects.filter(company=company).first()
+        user = User.all_objects.filter(company=company).first()
         if not user:
-            user, created = User.objects.get_or_create(
+            user, created = User.all_objects.get_or_create(
                 username='admin',
+                company=company,
                 defaults={
                     'email': 'admin@test.com',
                     'first_name': 'Admin',
                     'last_name': 'User',
-                    'company': company,
                     'is_staff': True,
                     'is_superuser': True
                 }

@@ -1,0 +1,63 @@
+# Page snapshot
+
+```yaml
+- generic:
+  - generic [ref=e5] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e6]:
+      - img [ref=e7]
+    - generic [ref=e10]:
+      - button "Open issues overlay" [ref=e11]:
+        - generic [ref=e12]:
+          - generic [ref=e13]: "0"
+          - generic [ref=e14]: "1"
+        - generic [ref=e15]: Issue
+      - button "Collapse issues badge" [ref=e16]:
+        - img [ref=e17]
+  - main:
+    - generic:
+      - generic:
+        - generic:
+          - generic: B
+        - heading [level=2]: Bem-vindo
+        - paragraph: Sua plataforma centralizada de gestão modular. Selecione sua empresa para começar.
+    - generic:
+      - generic:
+        - generic:
+          - heading [level=1]: Acesso ao Sistema
+          - paragraph: Selecione sua empresa e insira suas credenciais
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - combobox [expanded]:
+                  - generic:
+                    - img
+                    - generic: Escolha sua empresa
+                  - img
+                - combobox
+              - generic:
+                - generic:
+                  - generic:
+                    - img
+                    - textbox:
+                      - /placeholder: Nome de usuário
+                - generic:
+                  - generic:
+                    - img
+                    - textbox:
+                      - /placeholder: Sua senha secreta
+              - button:
+                - generic:
+                  - text: Acessar Portal
+                  - img
+  - generic:
+    - heading [level=3]: Deseja receber notificações?
+    - paragraph: Fique por dentro de novas mensagens e artigos em tempo real.
+    - generic:
+      - button: Ativar
+      - button: Agora não
+  - status "Notificações":
+    - region "Notifications alt+T"
+  - alert
+  - listbox [active] [ref=e19]
+```

@@ -16,12 +16,12 @@ import {
     Monitor,
     Clock,
     User,
-    Tag,
-    X
+    Tag
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import Image from "next/image"
 
 interface PreviewDialogProps {
     title: string
@@ -57,8 +57,8 @@ export function PreviewDialog({
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button variant="outline" type="button" className="group">
-                    <Eye className="h-4 w-4 mr-2 group-hover:text-primary transition-colors" />
+                <Button variant="outline" type="button" className="group" aria-label="Visualizar conteúdo">
+                    <Eye className="h-4 w-4 mr-2 group-hover:text-primary transition-colors" aria-hidden="true" />
                     Visualizar
                 </Button>
             </DialogTrigger>
@@ -66,7 +66,7 @@ export function PreviewDialog({
                 <DialogHeader className="p-4 border-b bg-background/95 backdrop-blur-md sticky top-0 z-50 flex flex-row items-center justify-between">
                     <div>
                         <DialogTitle className="text-lg font-bold flex items-center gap-2">
-                            <Eye className="h-5 w-5 text-primary" />
+                            <Eye className="h-5 w-5 text-primary" aria-hidden="true" />
                             Preview do Conteúdo
                         </DialogTitle>
                         <p className="text-xs text-muted-foreground mt-0.5">Veja como seu {type === 'article' ? 'artigo' : 'página'} será exibido para seus leitores.</p>
@@ -78,24 +78,27 @@ export function PreviewDialog({
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => setDevice('mobile')}
+                            aria-label="Modo mobile"
                         >
-                            <Smartphone className="h-4 w-4" />
+                            <Smartphone className="h-4 w-4" aria-hidden="true" />
                         </Button>
                         <Button
                             variant={device === 'tablet' ? "secondary" : "ghost"}
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => setDevice('tablet')}
+                            aria-label="Modo tablet"
                         >
-                            <Tablet className="h-4 w-4" />
+                            <Tablet className="h-4 w-4" aria-hidden="true" />
                         </Button>
                         <Button
                             variant={device === 'desktop' ? "secondary" : "ghost"}
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => setDevice('desktop')}
+                            aria-label="Modo desktop"
                         >
-                            <Monitor className="h-4 w-4" />
+                            <Monitor className="h-4 w-4" aria-hidden="true" />
                         </Button>
                     </div>
                 </DialogHeader>
@@ -113,19 +116,19 @@ export function PreviewDialog({
                                             <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                                                 {categoryName && (
                                                     <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
-                                                        <Tag className="h-3 w-3" />
+                                                        <Tag className="h-3 w-3" aria-hidden="true" />
                                                         {categoryName}
                                                     </div>
                                                 )}
                                                 {date && (
                                                     <div className="flex items-center gap-1.5">
-                                                        <Clock className="h-3.5 w-3.5" />
+                                                        <Clock className="h-3.5 w-3.5" aria-hidden="true" />
                                                         <span>{date}</span>
                                                     </div>
                                                 )}
                                                 {authorName && (
                                                     <div className="flex items-center gap-1.5">
-                                                        <User className="h-3.5 w-3.5" />
+                                                        <User className="h-3.5 w-3.5" aria-hidden="true" />
                                                         <span>Por {authorName}</span>
                                                     </div>
                                                 )}
@@ -144,7 +147,13 @@ export function PreviewDialog({
 
                                         {image && (
                                             <div className="aspect-[21/9] relative rounded-2xl overflow-hidden mb-12 shadow-inner border">
-                                                <img src={image} alt={title} className="object-cover w-full h-full hover:scale-105 transition-transform duration-700" />
+                                                <Image
+                                                    src={image}
+                                                    alt={title || 'Imagem'}
+                                                    fill
+                                                    className="object-cover hover:scale-105 transition-transform duration-700"
+                                                    sizes="(max-width: 768px) 100vw, 75vw"
+                                                />
                                             </div>
                                         )}
 

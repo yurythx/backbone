@@ -38,7 +38,7 @@ A comunicação em tempo real é realizada via WebSockets utilizando Django Chan
 
 Devido a limitações de clientes WebSocket em enviar headers customizados no handshake inicial (browser API), a autenticação é realizada via **Query Parameter**.
 
-*   **Endpoint URL**: `ws://<host>/ws/chat/<conversation_id>/?token=<access_token>`
+*   **Endpoint URL**: `ws://<host>/ws/chat/<conversation_id>/?token=<access_token>&company_slug=<slug>`
 
 **Parâmetros:**
 *   `conversation_id`: ID numérico da conversa.
@@ -120,6 +120,6 @@ Arquivos de mídia são armazenados com prefixo da empresa para evitar colisão 
 
 - [ ] Garantir que o interceptor HTTP injete o header `X-Company-Slug` em **todas** as requisições autenticadas.
 - [ ] Implementar lógica de Refresh Token transparente (axios interceptors).
-- [ ] No WebSocket, passar o token via query param na URL de conexão.
+- [ ] No WebSocket, passar o token e `company_slug` via query param na URL de conexão.
 - [ ] Tratar erro 403 globalmente para identificar módulos desativados.
 - [ ] Exibir mensagens de erro amigáveis para Rate Limit (429).

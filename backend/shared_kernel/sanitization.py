@@ -3,6 +3,7 @@ Input sanitization utilities
 Prevents XSS, SQL injection, and other injection attacks
 """
 import bleach
+from bleach.css_sanitizer import CSSSanitizer
 import html
 import re
 from django.utils.html import strip_tags
@@ -53,11 +54,13 @@ def sanitize_html(text: str, allowed_tags: list = None, allowed_attributes: dict
     tags = allowed_tags if allowed_tags is not None else ALLOWED_RICH_TEXT_TAGS
     attrs = allowed_attributes if allowed_attributes is not None else ALLOWED_RICH_TEXT_ATTRIBUTES
     
+    css_cleaner = CSSSanitizer(allowed_css_properties=None, allowed_svg_properties=None)
     return bleach.clean(
         text,
         tags=tags,
         attributes=attrs,
         protocols=ALLOWED_PROTOCOLS,
+        css_sanitizer=css_cleaner,
         strip=True
     )
 

@@ -45,7 +45,7 @@ class AccountsAuthFlowTest(APITestCase):
     @patch('apps.accounts.services.AccountService.request_password_reset', return_value=True)
     def test_password_reset_request(self, mock_request):
         # Create user
-        user = User.all_objects.create_user(username="resetuser", email="reset@corp.com", password="pass", company=self.company)
+        user = User.objects.create_user(username="resetuser", email="reset@corp.com", password="pass", company=self.company)
         res = self.client.post('/api/accounts/password-reset/', {"email": "reset@corp.com"}, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 

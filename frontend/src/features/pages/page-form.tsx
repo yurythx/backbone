@@ -1,6 +1,6 @@
 "use client"
 
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
@@ -23,7 +23,7 @@ import { RichEditor } from "@/components/ui/rich-editor"
 import { PreviewDialog } from "@/components/cms/preview-dialog"
 import { Loader2, ArrowLeft, Layout, Globe, Sparkles, CheckCircle2 } from "lucide-react"
 import { notify } from "@/lib/notifications"
-import { cn } from "@/lib/utils"
+ 
 
 const formSchema = z.object({
     title: z.string().min(3, "O título deve ter pelo menos 3 caracteres."),
@@ -57,6 +57,9 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
         },
     })
 
+    const watchedTitle = useWatch({ control: form.control, name: "title" })
+    const watchedContent = useWatch({ control: form.control, name: "content" })
+
     const mutation = useMutation({
         mutationFn: async (values: z.infer<typeof formSchema>) => {
             if (initialData) {
@@ -86,8 +89,8 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
             {/* Header Fixo/Sticky no mobile */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-6 sticky top-0 bg-background z-10 pt-2">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={onCancel} className="hover:bg-primary/10 hover:text-primary">
-                        <ArrowLeft className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={onCancel} className="hover:bg-primary/10 hover:text-primary" aria-label="Voltar">
+                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     <div>
                         <h2 className="text-2xl font-bold tracking-tight">
@@ -101,12 +104,12 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
                     <div className="flex-1 sm:flex-initial">
                         <PreviewDialog
                             type="page"
-                            title={form.watch("title")}
-                            content={form.watch("content")}
+                            title={watchedTitle}
+                            content={watchedContent}
                         />
                     </div>
                     <Button onClick={form.handleSubmit(onSubmit)} disabled={mutation.isPending} className="flex-1 sm:flex-initial shadow-lg shadow-primary/20">
-                        {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                         {initialData ? "Salvar" : "Criar Página"}
                     </Button>
                 </div>
@@ -149,7 +152,7 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
 
                         <div className="pt-8 space-y-6">
                             <div className="flex items-center gap-2 border-b pb-2">
-                                <Globe className="h-5 w-5 text-primary" />
+                                <Globe className="h-5 w-5 text-primary" aria-hidden="true" />
                                 <h3 className="text-lg font-bold">SEO & Meta Tags</h3>
                             </div>
 

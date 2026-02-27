@@ -23,16 +23,21 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Role } from "@/types"
+import { usePermission } from "@/hooks/use-permission"
 
 export function RoleList() {
     const [isFormOpen, setIsFormOpen] = useState(false)
-    const [editingRole, setEditingRole] = useState<any>(null)
+    const [editingRole, setEditingRole] = useState<Role | null>(null)
     const queryClient = useQueryClient()
+    // I-A4: apenas quem tem permissão pode gerenciar roles
+    const { hasPermission } = usePermission()
+    const canManageRoles = hasPermission('admin.user_manage')
 
-    const { data: roles, isLoading } = useQuery({
+    const { data: roles, isLoading } = useQuery<Role[]>({
         queryKey: ['roles'],
         queryFn: async ({ signal }) => {
-            const res = await api.get('/api/accounts/roles/', { signal })
+            const res = await api.get<Role[]>('/api/accounts/roles/', { signal })
             return res.data
         }
     })
@@ -50,7 +55,7 @@ export function RoleList() {
         }
     })
 
-    const handleEdit = (role: any) => {
+    const handleEdit = (role: Role) => {
         setEditingRole(role)
         setIsFormOpen(true)
     }
@@ -60,7 +65,7 @@ export function RoleList() {
         setIsFormOpen(true)
     }
 
-    if (isLoading) return <div className="p-8 text-center text-muted-foreground">Carregando papéis de acesso...</div>
+    if (isLoading) return <div className="p-8 text-center text-muted-foreground" role="status" aria-live="polite" aria-label="Carregando papéis de acesso">Carregando papéis de acesso...</div>
 
     return (
         <div className="space-y-6">
@@ -69,13 +74,16 @@ export function RoleList() {
                     <h2 className="text-3xl font-bold tracking-tight">Papéis e Acessos</h2>
                     <p className="text-muted-foreground text-sm">Gerencie quem pode fazer o quê no seu ecossistema.</p>
                 </div>
-                <Button onClick={handleAdd} className="shadow-lg shadow-primary/20">
-                    <Plus className="mr-2 h-4 w-4" /> Novo Papel
-                </Button>
+                {/* I-A4: apenas quem tem permissão vê o botão de criar */}
+                {canManageRoles && (
+                    <Button onClick={handleAdd} className="shadow-lg shadow-primary/20">
+                        <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Novo Papel
+                    </Button>
+                )}
             </div>
 
             <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
-                <Table>
+                <Table aria-label="Tabela de papéis e permissões">
                     <TableHeader className="bg-muted/50">
                         <TableRow>
                             <TableHead className="py-4">Nome do Papel</TableHead>
@@ -85,14 +93,14 @@ export function RoleList() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {roles?.map((role: any) => (
+                        {roles?.map((role) => (
                             <TableRow key={role.id} className="group hover:bg-muted/30 transition-colors">
                                 <TableCell className="py-4">
                                     <div className="flex items-center gap-2">
                                         {role.is_system_role ? (
-                                            <ShieldCheck className="h-4 w-4 text-primary" />
+                                            <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
                                         ) : (
-                                            <Shield className="h-4 w-4 text-muted-foreground" />
+                                            <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                                         )}
                                         <span className="font-bold">{role.name}</span>
                                         {role.is_system_role && (
@@ -120,24 +128,33 @@ export function RoleList() {
                                 <TableCell className="text-right">
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="group-hover:bg-background">
-                                                <MoreVertical className="h-4 w-4" />
+                                            <Button variant="ghost" size="icon" className="group-hover:bg-background" aria-label="Abrir menu de ações">
+                                                <MoreVertical className="h-4 w-4" aria-hidden="true" />
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                                            <DropdownMenuItem onClick={() => handleEdit(role)} className="cursor-pointer">
-                                                <Edit className="mr-2 h-4 w-4 text-muted-foreground" /> Editar
-                                            </DropdownMenuItem>
-                                            {!role.is_system_role && (
-                                                <DropdownMenuItem
-                                                    onClick={() => {
-                                                        if (window.confirm("Tem certeza que deseja excluir este papel?")) {
-                                                            deleteMutation.mutate(role.id)
-                                                        }
-                                                    }}
-                                                    className="text-destructive focus:text-destructive cursor-pointer"
-                                                >
-                                                    <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                                            {/* I-A4: apenas quem tem permissão vê ações de editar/excluir */}
+                                            {canManageRoles ? (
+                                                <>
+                                                    <DropdownMenuItem onClick={() => handleEdit(role)} className="cursor-pointer">
+                                                        <Edit className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" /> Editar
+                                                    </DropdownMenuItem>
+                                                    {!role.is_system_role && (
+                                                        <DropdownMenuItem
+                                                            onClick={() => {
+                                                                if (window.confirm("Tem certeza que deseja excluir este papel?")) {
+                                                                    deleteMutation.mutate(role.id)
+                                                                }
+                                                            }}
+                                                            className="text-destructive focus:text-destructive cursor-pointer"
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Excluir
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <DropdownMenuItem disabled className="text-muted-foreground text-xs">
+                                                    Sem permissão
                                                 </DropdownMenuItem>
                                             )}
                                         </DropdownMenuContent>

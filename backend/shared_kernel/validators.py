@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 # File size limits (in bytes)
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
-MAX_FILE_SIZE = 5 * 1024 * 1024   # 5 MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
 
 # Allowed MIME types

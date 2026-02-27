@@ -2,7 +2,7 @@ import { Skeleton, DashboardCardSkeleton } from "@/components/ui/skeleton"
 
 export default function DashboardLoading() {
     return (
-        <div className="space-y-12 pb-20">
+        <div className="space-y-12 pb-20" role="status" aria-live="polite" aria-label="Carregando dashboard">
             {/* Hero Skeleton - Matching DjangoHero height/layout */}
             <div className="-mx-8 -mt-8">
                 <div className="h-[400px] w-full bg-muted/20 animate-pulse flex flex-col justify-center px-12 space-y-6 border-b">

@@ -9,6 +9,9 @@ User = get_user_model()
 
 class ModulesTestCase(APITestCase):
     def setUp(self):
+        from django.core.cache import caches
+        for cache in caches.all():
+            cache.clear()
         # Setup similar to test_api_flow
         self.company = Company.objects.create(name="Test Corp", slug="test-corp")
         self.user = User.objects.create_user(
@@ -17,6 +20,15 @@ class ModulesTestCase(APITestCase):
             password="pass",
             company=self.company
         )
+        
+        # Iniciar roles e atribuir Admin
+        from apps.accounts.services import AccountService
+        from apps.accounts.models import Role
+        AccountService.ensure_default_roles(self.company)
+        admin_role = Role.all_objects.get(name='Administrador', company=self.company)
+        self.user.role = admin_role
+        self.user.save()
+
         self.client.force_authenticate(user=self.user)
         # Set tenant header
         self.client.credentials(HTTP_X_COMPANY_SLUG='test-corp')
@@ -37,7 +49,8 @@ class ModulesTestCase(APITestCase):
 
     def test_pages_crud(self):
         # Create Page
-        data = {"title": "About Us", "slug": "about", "content": "We are cool.", "is_published": True}
+        data = {"title": "About Us", "slug": "about", "content": "We are cool.", "status": "published"}
+
         response = self.client.post('/api/pages/', data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         
@@ -49,7 +62,7 @@ class ModulesTestCase(APITestCase):
 
     def test_articles_crud(self):
         # Create Article
-        data = {"title": "News 1", "slug": "news-1", "content": "Extra extra!", "is_published": True}
+        data = {"title": "News 1", "slug": "news-1", "content": "Extra extra!"}
         response = self.client.post('/api/articles/articles/', data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['author_name'], 'tester')

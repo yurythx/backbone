@@ -1,31 +1,33 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
+from .tasks import send_websocket_notification
+from urllib.parse import quote
 from apps.messenger.models import Message
 from apps.articles.models import Article
 from .models import Notification
+
 
 @receiver(post_save, sender=Message)
 def notify_new_message(sender, instance, created, **kwargs):
     if created:
         conversation = instance.conversation
-        channel_layer = get_channel_layer()
-        
+
         # Notify all participants except the sender
         for participant in conversation.participants.exclude(id=instance.sender.id):
             # Create notification record
+            # I-N3: encode created_at para evitar quebra de URL ('+' em iso format)
+            created_at_encoded = quote(instance.created_at.isoformat())
             notification = Notification.objects.create(
                 company=instance.company,
                 recipient=participant,
                 notification_type=Notification.TYPE_MESSAGE,
                 title=f"Nova mensagem de {instance.sender.username}",
                 message=instance.content[:100] if instance.content else "Anexo enviado",
-                link=f"/messenger?chat={conversation.id}"
+                link=f"/messenger?conversation={conversation.id}&message_id={instance.id}&created_at={created_at_encoded}"
             )
-            
-            # Send to WebSocket
-            async_to_sync(channel_layer.group_send)(
+
+            # Send to WebSocket via Celery
+            send_websocket_notification.delay(
                 f'notifications_user_{participant.id}',
                 {
                     'type': 'notification_message',
@@ -34,17 +36,43 @@ def notify_new_message(sender, instance, created, **kwargs):
                     'title': notification.title,
                     'message': notification.message,
                     'link': notification.link,
+                    'conversation_id': conversation.id,
+                    'message_id': instance.id,
+                    'message_created_at': instance.created_at.isoformat(),
                     'created_at': notification.created_at.isoformat(),
                 }
             )
 
+
+@receiver(pre_save, sender=Article)
+def track_article_status(sender, instance, **kwargs):
+    """
+    Salva o status original diretamente na instância para comparação no post_save.
+    Evita o uso de dicionários globais que não são seguros em ambientes multi-worker.
+    """
+    if instance.pk:
+        try:
+            # Busca apenas o campo status para performance
+            previous = Article.objects.filter(pk=instance.pk).values('status').first()
+            instance._original_status = previous['status'] if previous else None
+        except Exception:
+            instance._original_status = None
+    else:
+        instance._original_status = None
+
+
 @receiver(post_save, sender=Article)
 def notify_article_status(sender, instance, created, **kwargs):
-    # This signal could be more complex (check status change)
-    # For now, let's notify the author when an article is published
-    if not created and instance.status == Article.STATUS_PUBLISHED:
-        # Avoid duplicate notifications if already published (simplified for demo)
-        channel_layer = get_channel_layer()
+    """
+    Notifica o autor apenas quando o status MUDA para 'published'.
+    """
+    if created:
+        return
+
+    original_status = getattr(instance, '_original_status', None)
+
+    # Só notifica se houve transição real para 'published'
+    if instance.status == Article.STATUS_PUBLISHED and original_status != Article.STATUS_PUBLISHED:
         if instance.author:
             notification = Notification.objects.create(
                 company=instance.company,
@@ -54,8 +82,8 @@ def notify_article_status(sender, instance, created, **kwargs):
                 message=f"Seu artigo '{instance.title}' foi publicado com sucesso.",
                 link=f"/p/artigos/{instance.slug}"
             )
-            
-            async_to_sync(channel_layer.group_send)(
+
+            send_websocket_notification.delay(
                 f'notifications_user_{instance.author.id}',
                 {
                     'type': 'notification_message',

@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Mail, Send, CheckCircle2, AlertCircle, ShieldCheck, Lock } from "lucide-react"
+import { Loader2, Mail, Send, CheckCircle2, ShieldCheck, Lock, Globe } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
-import { Separator } from "@/components/ui/separator"
+ 
 
 interface SmtpSettingsProps {
     isOnboarding?: boolean
@@ -77,7 +77,7 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                 title: "Configurações salvas",
                 description: "As configurações de SMTP foram atualizadas com sucesso.",
             })
-        } catch (error) {
+        } catch {
             toast({
                 title: "Erro ao salvar",
                 description: "Não foi possível salvar as configurações de e-mail.",
@@ -96,10 +96,14 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                 title: "E-mail enviado!",
                 description: res.data.message || "Verifique sua caixa de entrada.",
             })
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const description =
+                typeof error === 'object' && error !== null
+                    ? (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Erro desconhecido ao enviar e-mail."
+                    : "Erro desconhecido ao enviar e-mail."
             toast({
                 title: "Falha no teste",
-                description: error.response?.data?.error || "Erro desconhecido ao enviar e-mail.",
+                description,
                 variant: "destructive"
             })
         } finally {
@@ -109,8 +113,8 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
 
     if (isLoading && !config.smtp_host) {
         return (
-            <div className="flex items-center justify-center p-24">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex items-center justify-center p-24" role="status" aria-live="polite" aria-label="Carregando configurações de e-mail">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
             </div>
         )
     }
@@ -124,7 +128,7 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
             >
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 mb-1">
-                        <Mail className="h-5 w-5 text-primary" />
+                        <Mail className="h-5 w-5 text-primary" aria-hidden="true" />
                         <H3>Comunicação Enterprise (SMTP)</H3>
                     </div>
                     <P className="text-muted-foreground text-sm max-w-2xl">
@@ -149,10 +153,11 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                 !config.use_custom_smtp && "opacity-30 blur-[2px] pointer-events-none grayscale"
             )}>
                 <div className="space-y-2">
-                    <Label className="font-bold text-xs uppercase flex items-center gap-2">
-                        <Globe className="h-3 w-3" /> Host do Servidor
+                    <Label htmlFor="smtp-host" className="font-bold text-xs uppercase flex items-center gap-2">
+                        <Globe className="h-3 w-3" aria-hidden="true" /> Host do Servidor
                     </Label>
                     <Input
+                        id="smtp-host"
                         placeholder="smtp.exemplo.com"
                         value={config.smtp_host || ""}
                         onChange={(e) => setConfig({ ...config, smtp_host: e.target.value })}
@@ -160,8 +165,9 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label className="font-bold text-xs uppercase">Porta</Label>
+                    <Label htmlFor="smtp-port" className="font-bold text-xs uppercase">Porta</Label>
                     <Input
+                        id="smtp-port"
                         type="number"
                         placeholder="587"
                         value={config.smtp_port}
@@ -170,10 +176,11 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label className="font-bold text-xs uppercase flex items-center gap-2">
-                        <Mail className="h-3 w-3" /> Usuário de Autenticação
+                    <Label htmlFor="smtp-user" className="font-bold text-xs uppercase flex items-center gap-2">
+                        <Mail className="h-3 w-3" aria-hidden="true" /> Usuário de Autenticação
                     </Label>
                     <Input
+                        id="smtp-user"
                         placeholder="contato@empresa.com"
                         value={config.smtp_user || ""}
                         onChange={(e) => setConfig({ ...config, smtp_user: e.target.value })}
@@ -181,10 +188,11 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label className="font-bold text-xs uppercase flex items-center gap-2">
-                        <Lock className="h-3 w-3" /> Senha / Token API
+                    <Label htmlFor="smtp-password" className="font-bold text-xs uppercase flex items-center gap-2">
+                        <Lock className="h-3 w-3" aria-hidden="true" /> Senha / Token API
                     </Label>
                     <Input
+                        id="smtp-password"
                         type="password"
                         placeholder="••••••••••••"
                         value={config.smtp_password || ""}
@@ -193,8 +201,9 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label className="font-bold text-xs uppercase">E-mail de Envio (From)</Label>
+                    <Label htmlFor="from-email" className="font-bold text-xs uppercase">E-mail de Envio (From)</Label>
                     <Input
+                        id="from-email"
                         placeholder="suporte@empresa.com"
                         value={config.from_email || ""}
                         onChange={(e) => setConfig({ ...config, from_email: e.target.value })}
@@ -221,7 +230,7 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                     className="bg-primary/5 border border-primary/20 p-6 rounded-3xl flex gap-4 items-center"
                 >
                     <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-                        <ShieldCheck className="h-6 w-6 text-primary" />
+                        <ShieldCheck className="h-6 w-6 text-primary" aria-hidden="true" />
                     </div>
                     <div className="flex-1">
                         <h4 className="font-bold text-sm text-foreground">Distribuição Padrão Ativa</h4>
@@ -233,19 +242,24 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
             )}
 
             {!isOnboarding && (
-                <div className="flex flex-col md:flex-row gap-4 justify-between pt-10 border-t sticky bottom-0 bg-background -mx-6 px-6 py-4 mt-4">
+                <div
+                    className="flex flex-col md:flex-row gap-4 justify-between pt-10 border-t sticky bottom-0 bg-background -mx-6 px-6 py-4 mt-4"
+                    role={(isTesting || isLoading) ? "status" : undefined}
+                    aria-live={(isTesting || isLoading) ? "polite" : undefined}
+                    aria-label={(isTesting || isLoading) ? (isTesting ? "Testando conexão SMTP" : "Aplicando configurações de e-mail") : undefined}
+                >
                     <Button
                         variant="ghost"
                         onClick={handleTest}
                         disabled={isTesting || !config.use_custom_smtp || !config.smtp_host}
                         className="rounded-xl font-bold"
                     >
-                        {isTesting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                        {isTesting ? <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" /> : <Send className="h-4 w-4 mr-2" aria-hidden="true" />}
                         Enviar Teste de Conexão
                     </Button>
                     <div className="flex gap-3">
                         <Button size="lg" onClick={handleSave} disabled={isLoading} className="rounded-xl font-bold px-10 shadow-lg shadow-primary/20">
-                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4 mr-2" aria-hidden="true" />}
                             Aplicar Configurações
                         </Button>
                     </div>
@@ -255,5 +269,4 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
     )
 }
 
-import { Globe } from "lucide-react"
-
+ 

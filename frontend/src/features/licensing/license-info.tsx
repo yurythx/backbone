@@ -24,7 +24,11 @@ export function LicenseInfo() {
     }
   })
 
-  if (isLoading) return <div>Loading license info...</div>
+  if (isLoading) return (
+    <div role="status" aria-live="polite" aria-label="Carregando informações de licença">
+      Loading license info...
+    </div>
+  )
 
   const currentLicense = licenses?.[0]
   const currentPlan = plans?.find(p => p.id === currentLicense?.plan)

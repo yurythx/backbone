@@ -18,10 +18,10 @@ export function PlanCard({ plan, isCurrent, onUpgrade, isLoading }: PlanCardProp
     const isEnterprise = plan.name.toLowerCase().includes('enterprise')
 
     const getIcon = () => {
-        if (isFree) return <Zap className="h-6 w-6 text-primary" />
-        if (isPro) return <Rocket className="h-6 w-6 text-primary" />
-        if (isEnterprise) return <Crown className="h-6 w-6 text-primary" />
-        return <Star className="h-6 w-6 text-primary" />
+        if (isFree) return <Zap className="h-6 w-6 text-primary" aria-hidden="true" />
+        if (isPro) return <Rocket className="h-6 w-6 text-primary" aria-hidden="true" />
+        if (isEnterprise) return <Crown className="h-6 w-6 text-primary" aria-hidden="true" />
+        return <Star className="h-6 w-6 text-primary" aria-hidden="true" />
     }
 
     return (
@@ -75,7 +75,7 @@ export function PlanCard({ plan, isCurrent, onUpgrade, isLoading }: PlanCardProp
                         {plan.features.map((feature, index) => (
                             <li key={index} className="flex items-start gap-4">
                                 <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 shadow-sm border border-primary/5">
-                                    <Check className="h-3 w-3 text-primary stroke-[3]" />
+                                    <Check className="h-3 w-3 text-primary stroke-[3]" aria-hidden="true" />
                                 </div>
                                 <div className="flex flex-col">
                                     <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">{feature.feature_name}</span>
@@ -107,7 +107,15 @@ export function PlanCard({ plan, isCurrent, onUpgrade, isLoading }: PlanCardProp
     )
 }
 
-function Badge({ children, variant, className }: any) {
+function Badge({
+    children,
+    variant = 'default',
+    className,
+}: {
+    children: React.ReactNode
+    variant?: 'outline' | 'default'
+    className?: string
+}) {
     return (
         <span className={cn(
             "px-2 py-0.5 rounded-full text-[10px] font-bold border",

@@ -1,81 +1,157 @@
 version: '3.8'
 
+# ============================================================
+# BACKBONE - PRODUCTION DOCKER COMPOSE
+# ============================================================
+# Prerequisites:
+#   cp .env.prod.example .env.prod
+#   Fill all variables in .env.prod before running.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# ============================================================
+
+x-backend-env: &backend-env
+  DEBUG: "False"
+  SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+  REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+  USE_S3: ${USE_S3:-True}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}
+  AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-backbone-media}
+  AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://minio:9000}
+  AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME:-us-east-1}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:?ALLOWED_HOSTS is required}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:?CSRF_TRUSTED_ORIGINS is required}
+  FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?FIELD_ENCRYPTION_KEY is required}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
 services:
+  # ──────────────────────────────────────────────────────────
+  # DATABASE
+  # ──────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
     container_name: backbone_db
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-backbone_db}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     networks:
-      - backbone_network
+      - backbone_internal
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
+  # ──────────────────────────────────────────────────────────
+  # CACHE / MESSAGE BROKER
+  # ──────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: backbone_redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     restart: unless-stopped
     networks:
-      - backbone_network
+      - backbone_internal
+    volumes:
+      - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 300m
 
+  # ──────────────────────────────────────────────────────────
+  # OBJECT STORAGE (MinIO)
+  # ──────────────────────────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
     container_name: backbone_minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     volumes:
       - minio_data:/data
     restart: unless-stopped
     networks:
-      - backbone_network
+      - backbone_internal
+      - backbone_public
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
+  # ──────────────────────────────────────────────────────────
+  # BACKEND (Django/Daphne)
+  # ──────────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: backbone_backend:${APP_VERSION:-latest}
     container_name: backbone_backend
-    command: daphne -b 0.0.0.0 -p 8005 config.asgi:application
+    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
     environment:
-      - DEBUG=${DEBUG:-False}
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - USE_S3=${USE_S3:-True}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
-      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-backbone-media}
-      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://minio:9000}
-      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
+      <<: *backend-env
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
-    ports:
-      - "8005:8005" # Exposto para Cloudflare Tunnel
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backbone_internal
+      - backbone_public
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/core/health/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  # ──────────────────────────────────────────────────────────
+  # CELERY WORKER
+  # ──────────────────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: backbone_backend:${APP_VERSION:-latest}
+    container_name: backbone_celery
+    command: celery -A config worker -l warning --concurrency=${CELERY_CONCURRENCY:-2} -Q default,emails,notifications
+    environment:
+      <<: *backend-env
     depends_on:
       db:
         condition: service_healthy
@@ -83,86 +159,105 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - backbone_network
+      - backbone_internal
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8005/api/core/health/" ]
+      test: [ "CMD", "celery", "-A", "config", "inspect", "ping", "-d", "celery@$$HOSTNAME" ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
-  celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: backbone_celery
-    command: celery -A config worker -l info
-    environment:
-      - DEBUG=${DEBUG:-False}
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - USE_S3=${USE_S3:-True}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
-      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-backbone-media}
-      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://minio:9000}
-      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
-    depends_on:
-      - db
-      - redis
-    restart: unless-stopped
-    networks:
-      - backbone_network
-
+  # ──────────────────────────────────────────────────────────
+  # CELERY BEAT (Scheduler)
+  # ──────────────────────────────────────────────────────────
   celery_beat:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: backbone_backend:${APP_VERSION:-latest}
     container_name: backbone_celery_beat
-    command: celery -A config beat -l info
+    command: celery -A config beat -l warning --scheduler django_celery_beat.schedulers:DatabaseScheduler
     environment:
-      - DEBUG=${DEBUG:-False}
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - USE_S3=${USE_S3:-True}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
-      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-backbone-media}
-      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://minio:9000}
-      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
+      <<: *backend-env
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
-      - backbone_network
+      - backbone_internal
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
+  # ──────────────────────────────────────────────────────────
+  # FRONTEND (Next.js)
+  # ──────────────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
+    image: backbone_frontend:${APP_VERSION:-latest}
     container_name: backbone_frontend
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-      - API_URL_INTERNAL=${API_URL_INTERNAL}
-      - NODE_ENV=production
-    ports:
-      - "3005:3005" # Exposto para Cloudflare Tunnel
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      API_URL_INTERNAL: http://backend:8000
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
     networks:
-      - backbone_network
+      - backbone_public
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:3000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  # ──────────────────────────────────────────────────────────
+  # GATEWAY (Reverse Proxy)
+  # ──────────────────────────────────────────────────────────
+  gateway:
+    image: nginx:alpine
+    container_name: backbone_gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/usr/share/nginx/html/static:ro
+      - media_volume:/usr/share/nginx/html/media:ro
+      - ./infra/certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    networks:
+      - backbone_public
 
 volumes:
   postgres_data:
+  redis_data:
   minio_data:
   static_volume:
   media_volume:
 
 
 networks:
-  backbone_network:
+  backbone_public:
+    driver: bridge
+  backbone_internal:
+    internal: true
     driver: bridge

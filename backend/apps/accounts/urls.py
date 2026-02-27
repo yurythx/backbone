@@ -4,7 +4,8 @@ from .views import (
     UserRegistrationView, UserViewSet, RoleViewSet,
     PasswordResetRequestView, PasswordResetConfirmView,
     InvitationViewSet, AcceptInvitationView,
-    CustomTokenObtainPairView, CustomTokenRefreshView
+    CustomTokenObtainPairView, CustomTokenRefreshView,
+    LogoutView,
 )
 from .theme_views import UserThemePreferenceViewSet
 
@@ -21,5 +22,7 @@ urlpatterns = [
     path('invitations/accept/', AcceptInvitationView.as_view(), name='accept_invitation'),
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    path('logout/', LogoutView.as_view(), name='logout'),
     path('', include(router.urls)),
 ]
+

@@ -2,23 +2,31 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 from apps.core.models import Company
+from apps.accounts.models import Role
 
 User = get_user_model()
 
 class UsersListTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Users Corp", slug="users-corp")
-        self.user = User.all_objects.create_user(
+        # Role com permissão admin.user_manage (necessária após A7)
+        self.admin_role = Role.objects.create(
+            company=self.company,
+            name="Admin",
+            permissions=["admin.user_manage"]
+        )
+        self.user = User.objects.create_user(
             username="owner",
             email="owner@corp.com",
             password="pass",
-            company=self.company
+            company=self.company,
+            role=self.admin_role
         )
         self.client.force_authenticate(user=self.user)
         self.client.credentials(HTTP_X_COMPANY_SLUG='users-corp')
 
-        User.all_objects.create_user(username="u1", email="u1@corp.com", password="pass", company=self.company)
-        User.all_objects.create_user(username="u2", email="u2@corp.com", password="pass", company=self.company)
+        User.objects.create_user(username="u1", email="u1@corp.com", password="pass", company=self.company)
+        User.objects.create_user(username="u2", email="u2@corp.com", password="pass", company=self.company)
 
     def test_users_list_has_results(self):
         res = self.client.get('/api/accounts/users/')

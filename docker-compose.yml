@@ -131,7 +131,7 @@ services:
     container_name: backbone_frontend
     command: npm run dev
     ports:
-      - "3005:3000"
+      - "3005:3005"
     volumes:
       - ./frontend:/app
       - /app/node_modules

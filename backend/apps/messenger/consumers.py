@@ -5,6 +5,7 @@ from django.core.cache import cache
 from shared_kernel.tenant_context import set_current_company
 from .models import Conversation
 
+
 class PresenceConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.user = self.scope.get('user')
@@ -15,31 +16,62 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         self.company_slug = await self.get_company_slug()
         self.room_group_name = f'presence_{self.company_slug}'
 
-        # Join room group
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
         )
 
         await self.accept()
-        
-        # Mark online and broadcast
-        await self.update_presence("online")
-        await self.broadcast_status("online")
+
+        # Mark presence with current user status and broadcast
+        user_status = await self.get_user_status()
+        await self.update_presence(user_status)
+        await self.broadcast_status(user_status)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
             await self.update_presence("offline")
             await self.broadcast_status("offline")
-            
+
             await self.channel_layer.group_discard(
                 self.room_group_name,
                 self.channel_name
             )
 
     async def presence_update(self, event):
-        # Send message to WebSocket
         await self.send(text_data=json.dumps(event))
+
+    async def receive(self, text_data):
+        try:
+            # Atomic Rate limiting: max 5 status updates/second
+            rate_key = f"ws:presence:rl:{self.user.id}"
+            if cache.add(rate_key, 1, timeout=1):
+                count = 1
+            else:
+                try:
+                    count = cache.incr(rate_key)
+                except ValueError:
+                    count = 1
+            
+            if count > 5:
+                # Do not close connection for presence (silent ignore is better for UI)
+                return
+
+            data = json.loads(text_data)
+
+            msg_type = data.get('type')
+            if msg_type == 'set_status' or msg_type == 'heartbeat':
+                new_status = data.get('status')
+                if not new_status and msg_type == 'heartbeat':
+                    # If heartbeat without explicit status, refresh current
+                    new_status = await self.get_user_status()
+                
+                if new_status in ['online', 'busy', 'offline']:
+                    await self.update_presence(new_status)
+                    if msg_type == 'set_status':
+                        await self.broadcast_status(new_status)
+        except Exception as e:
+            print(f"Error in PresenceConsumer receive: {e}")
 
     async def broadcast_status(self, status):
         if hasattr(self, 'room_group_name'):
@@ -60,38 +92,57 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         return "default"
 
     @database_sync_to_async
+    def get_user_status(self):
+        """Refresh user from DB to get latest status. Safe fallback if all_objects unavailable (#4 fix)."""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            manager = getattr(User, 'all_objects', User.objects)
+            user = manager.get(pk=self.user.pk)
+            return user.status
+        except User.DoesNotExist:
+            return "online"
+        except Exception:
+            return "online"
+
+    @database_sync_to_async
     def update_presence(self, status):
-        # Set context for cache key prefixing
+        from django.utils import timezone
         set_current_company(self.user.company)
         key = f"user_presence:{self.user.id}"
-        if status == "online":
-            cache.set(key, "online", timeout=None)
+        
+        # Persist status to database
+        type(self.user).objects.filter(pk=self.user.pk).update(status=status)
+        
+        if status != "offline":
+            # Best Practice: Use TTL (60s) for presence to handle "dirty" disconnects
+            cache.set(key, status, timeout=60)
         else:
             cache.delete(key)
+            # Persist last_seen so contacts can see "Last seen at HH:MM"
+            type(self.user).objects.filter(pk=self.user.pk).update(last_seen=timezone.now())
+
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.user = self.scope.get('user')
-        
+
         if not self.user or not self.user.is_authenticated:
             await self.close()
             return
 
         self.conversation_id = self.scope['url_route']['kwargs']['conversation_id']
-        
-        # Obter conversa verificando participação e tenant (via user)
+        # Verify conversation membership and tenant isolation
         self.conversation = await self.get_conversation(self.conversation_id, self.user)
-        
+
         if not self.conversation:
-            # Conversa não existe, ou usuário não participa, ou empresa errada
             await self.close()
             return
-            
-        # Isolamento: Grupo prefixado com slug da empresa
+
         company_slug = await self.get_company_slug(self.conversation)
+
         self.room_group_name = f'chat_{company_slug}_{self.conversation_id}'
 
-        # Join room group
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
@@ -100,45 +151,73 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
-        # Leave room group
         if hasattr(self, 'room_group_name'):
             await self.channel_layer.group_discard(
                 self.room_group_name,
                 self.channel_name
             )
 
-    # Receive message from WebSocket
     async def receive(self, text_data):
-        data = json.loads(text_data)
+        """
+        Handles incoming WebSocket frames from the client.
+
+        Supported types:
+          - "typing_status": broadcasts typing indicator to conversation group.
+
+        NOTE: Message sending is intentionally done via HTTP POST (REST API), not
+        via WebSocket, to ensure proper persistence, validation and file upload
+        support. Any attempt to send a message payload here will be rejected.
+        """
+        try:
+            data = json.loads(text_data)
+        except (json.JSONDecodeError, TypeError):
+            await self.close(code=4000)
+            return
+
         message_type = data.get('type')
 
-        if message_type == 'chat_message':
-            content = data.get('message')
-            conversation_id = data.get('conversation_id')
+        # ── Atomic Rate limiting: max 10 WS frames/second per user ──────────────
+        # Best Practice: Use Redis INCR for atomic counting.
+        # Use cache.add to initialize and cache.incr to increment atomically.
+        company_slug = getattr(self, 'company_slug', 'default')
+        rate_key = f"ws:rl:{company_slug}:{self.user.id}:{self.conversation_id}"
+        
+        if cache.add(rate_key, 1, timeout=1):
+            count = 1
+        else:
+            try:
+                count = cache.incr(rate_key)
+            except ValueError:
+                # Fallback for some backends that might still race
+                cache.set(rate_key, 1, timeout=1)
+                count = 1
             
-            # Broadcast message to room group
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'chat_message',
-                    'message': content,
-                    'conversation_id': conversation_id
-                }
-            )
-        elif message_type == 'typing_status':
+        if count > 10:
+            await self.close(code=4008)  # 4008: rate limit exceeded
+            return
+        # ───────────────────────────────────────────────────────────────────────
+
+        if message_type == 'typing_status':
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     'type': 'typing_status',
-                    'user_id': self.scope['user'].id,
-                    'username': self.scope['user'].username,
-                    'is_typing': data.get('is_typing', False)
+                    'user_id': self.user.id,
+                    'username': self.user.username,
+                    'is_typing': bool(data.get('is_typing', False))
                 }
             )
+        else:
+            # Unknown or unsupported type — silently ignore.
+            # Messages MUST be sent via the REST API endpoint.
+            pass
 
-    # Receive message from room group
+    # ──────────────────────────────────────────────────────────
+    # Group event handlers (called by channel layer group_send)
+    # ──────────────────────────────────────────────────────────
+
     async def chat_message(self, event):
-        # Send message to WebSocket
+        """New message broadcast from the REST API via MessengerService.broadcast_message."""
         await self.send(text_data=json.dumps({
             'type': 'message',
             'message': event['message'],
@@ -150,10 +229,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'file_name': event.get('file_name'),
             'file_type': event.get('file_type'),
             'file_size': event.get('file_size'),
+            'reply_to': event.get('reply_to'),
         }))
 
     async def typing_status(self, event):
-        # Only send typing status of OTHERS to the client
+        """Forward typing status to all group members, excluding the typer."""
         if event['user_id'] != self.user.id:
             await self.send(text_data=json.dumps({
                 'type': 'typing',
@@ -194,10 +274,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'edited_at': event['edited_at']
         }))
 
+    # ──────────────────────────────────────────────────────────
+    # DB helpers
+    # ──────────────────────────────────────────────────────────
+
     @database_sync_to_async
     def get_conversation(self, conversation_id, user):
         try:
-            # Verifica se a conversa existe E se o usuário é participante
             return Conversation.all_objects.select_related('company').get(
                 id=int(conversation_id),
                 participants=user

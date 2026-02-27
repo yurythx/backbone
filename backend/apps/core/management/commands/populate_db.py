@@ -92,8 +92,9 @@ class Command(BaseCommand):
                     title=title,
                     slug=slugify(title) + "-" + str(random.randint(10000,99999)),
                     content=self.fake.text(max_nb_chars=1000),
-                    is_published=True
+                    status='published'
                 )
+
 
         # 3. Categories (aim for 20)
         if Category.objects.filter(company=company).count() < 20:
@@ -118,7 +119,7 @@ class Command(BaseCommand):
                     content=self.fake.text(max_nb_chars=3000),
                     author=random.choice(company_users),
                     category=random.choice(categories) if categories else None,
-                    is_published=True,
+                    status=Article.STATUS_PUBLISHED,
                     published_at=timezone.now()
                 )
 

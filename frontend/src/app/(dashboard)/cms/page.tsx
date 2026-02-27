@@ -1,22 +1,18 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { PageList } from "@/features/pages/page-list"
 import { PageForm } from "@/features/pages/page-form"
 import { Page } from "@/types"
 
 function CMSPageContent() {
-  const [view, setView] = useState<'list' | 'create' | 'edit'>('list')
-  const [selectedPage, setSelectedPage] = useState<Page | null>(null)
   const searchParams = useSearchParams()
+  const initialView = searchParams.get('action') === 'create' ? 'create' : 'list'
+  const [view, setView] = useState<'list' | 'create' | 'edit'>(initialView)
+  const [selectedPage, setSelectedPage] = useState<Page | null>(null)
 
-  useEffect(() => {
-    if (searchParams.get('action') === 'create') {
-      setView('create')
-      setSelectedPage(null)
-    }
-  }, [searchParams])
+  // Estado inicial já deriva de searchParams; sem sincronização via efeito
 
   const handleCreate = () => {
     setSelectedPage(null)

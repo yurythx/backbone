@@ -24,6 +24,41 @@ User = get_user_model()
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+@extend_schema(tags=['Accounts - Auth'], summary="Logout and invalidate refresh token")
+class LogoutView(generics.GenericAPIView):
+    """
+    POST /api/accounts/logout/
+    Blacklists the provided refresh token so it can no longer be used
+    to generate new access tokens. The current access token remains valid
+    until it expires (up to 60 min), but cannot be refreshed.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.exceptions import TokenError
+
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response(
+                {"detail": "Refresh token is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except TokenError:
+            # Token already blacklisted or invalid — treat as success (idempotent logout)
+            pass
+        except Exception as e:
+            return Response(
+                {"detail": f"Logout failed: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response({"detail": "Logout successful."}, status=status.HTTP_200_OK)
+
 @extend_schema(tags=['Accounts - Auth'], summary="Refresh access token")
 class CustomTokenRefreshView(generics.GenericAPIView):
     """
@@ -133,23 +168,30 @@ class PasswordResetConfirmView(generics.GenericAPIView):
 )
 class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated] # Adicionar HasModuleAccess se quiser restringir a 'admin' module
+    permission_classes = [permissions.IsAuthenticated]
+    required_permission = 'admin.user_manage'  # A7: RBAC — exige permissão para gerenciar usuários
     search_fields = ['username', 'email', 'first_name', 'last_name']
     ordering_fields = ['username', 'email', 'first_name', 'last_name', 'date_joined']
 
+    def get_permissions(self):
+        # A7: 'me' é liberado para qualquer usuário autenticado (perfil próprio)
+        # As demais actions exigem 'admin.user_manage' via HasRolePermission
+        from .permissions import HasRolePermission
+        if self.action in ('me', 'retrieve'):
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated(), HasRolePermission()]
+
     def get_queryset(self):
-        # Para listagem de usuários
         # Se for superusuário, vê todos os usuários de todas as empresas
         if self.request.user.is_superuser:
-            qs = User.objects.select_related('role', 'company').all().order_by('username')
+            qs = User.all_objects.select_related('role', 'company').all().order_by('username')
         else:
-            # Usuários normais (mesmo admin) só veem da sua própria empresa
-            # Usando filter explicito em vez de tenant_objects para garantir
-            qs = User.objects.filter(company=self.request.company).select_related('role').order_by('username')
-            
+            # Regular tenant users use standard objects (which already filters by tenant)
+            qs = User.objects.select_related('role').all().order_by('username')
+
         role_id = self.request.query_params.get('role')
         q = self.request.query_params.get('q')
-        
+
         if role_id:
             qs = qs.filter(role_id=role_id)
         if q:
@@ -160,7 +202,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 Q(first_name__icontains=q) |
                 Q(last_name__icontains=q)
             )
-            
+
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -201,15 +243,34 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.save(company=company)
         logger.info(f"USER CREATED SUCCESSFULLY for company {company.slug}")
 
+    def perform_update(self, serializer):
+        target_user = self.get_object()
+        # A6: Segurança - Apenas superusuários podem editar outros superusuários
+        if target_user.is_superuser and not self.request.user.is_superuser:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Somente um superusuário pode editar outro superusuário.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # A6: Segurança - Apenas superusuários podem remover outros superusuários
+        if instance.is_superuser and not self.request.user.is_superuser:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Somente um superusuário pode remover outro superusuário.")
+        instance.delete()
+
     @action(detail=False, methods=['get', 'put', 'patch'])
     def me(self, request):
         user = request.user
         if request.method == 'GET':
             serializer = self.get_serializer(user)
             return Response(serializer.data)
-        
-        allowed = {'first_name', 'last_name', 'email'}
+
+        # M-A1: incluir 'avatar' no conjunto de campos editáveis pelo próprio usuário
+        allowed = {'first_name', 'last_name', 'email', 'avatar'}
         filtered = {k: v for k, v in request.data.items() if k in allowed}
+        # Para uploads de arquivo (multipart), request.FILES também deve ser incluído
+        if 'avatar' in request.FILES:
+            filtered['avatar'] = request.FILES['avatar']
         serializer = self.get_serializer(user, data=filtered, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -218,8 +279,17 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def export(self, request):
-        if not request.user.is_staff:
-            return Response({"detail": "Apenas administradores podem exportar usuários."}, status=status.HTTP_403_FORBIDDEN)
+        # A4: usar RBAC em vez de is_staff — a permissão admin.user_manage já cobre isso
+        from .permissions import HasRolePermission
+        if not request.user.is_superuser:
+            perm_check = HasRolePermission()
+            perm_check.required_permission = 'admin.user_manage'
+            view_copy = type('V', (), {'required_permission': 'admin.user_manage'})()
+            if not HasRolePermission().has_permission(request, view_copy):
+                return Response(
+                    {"detail": "Você não tem permissão para exportar usuários."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
         qs = self.get_queryset()
         rows = ["username,email,first_name,last_name,role"]
         for u in qs:
@@ -240,11 +310,21 @@ class UserViewSet(viewsets.ModelViewSet):
 )
 class RoleViewSet(viewsets.ModelViewSet):
     serializer_class = RoleSerializer
+    # I-A2 + A1: exige permissão RBAC para gerenciar roles
     permission_classes = [permissions.IsAuthenticated]
+    required_permission = 'admin.user_manage'
     pagination_class = None
 
+    def get_permissions(self):
+        from .permissions import HasRolePermission
+        # Leitura (list/retrieve) liberada para qualquer autenticado (para popular selects)
+        if self.action in ('list', 'retrieve', 'permissions'):
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated(), HasRolePermission()]
+
     def get_queryset(self):
-        return Role.objects.all().order_by('name')
+        # A1: filtrar roles pelo tenant atual — não expor roles de outros tenants
+        return Role.objects.filter(company=self.request.company).order_by('name')
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
@@ -281,11 +361,22 @@ class RoleViewSet(viewsets.ModelViewSet):
 )
 class InvitationViewSet(viewsets.ModelViewSet):
     serializer_class = InvitationSerializer
+    # I-A3: exige permissão RBAC para gerenciar convites
     permission_classes = [permissions.IsAuthenticated]
+    required_permission = 'admin.user_manage'
     pagination_class = None
 
+    def get_permissions(self):
+        from .permissions import HasRolePermission
+        return [permissions.IsAuthenticated(), HasRolePermission()]
+
     def get_queryset(self):
-        return Invitation.objects.select_related('role', 'company', 'invited_by').all().order_by('-created_at')
+        # A2: filtrar convites pelo tenant atual — evita vazamento cross-tenant
+        return (
+            Invitation.objects.filter(company=self.request.company)
+            .select_related('role', 'company', 'invited_by')
+            .order_by('-created_at')
+        )
 
     def perform_create(self, serializer):
         from shared_kernel.licensing import check_feature_limit
@@ -306,8 +397,11 @@ class InvitationViewSet(viewsets.ModelViewSet):
         """
         Reenvia o e-mail de convite para o destinatário.
         """
-        if not request.user.is_staff:
-            return Response({"detail": "Apenas administradores podem reenviar convites."}, status=status.HTTP_403_FORBIDDEN)
+        # A5: usar RBAC em vez de is_staff
+        from .permissions import HasRolePermission
+        view_copy = type('V', (), {'required_permission': 'admin.user_manage'})()
+        if not request.user.is_superuser and not HasRolePermission().has_permission(request, view_copy):
+            return Response({"detail": "Você não tem permissão para reenviar convites."}, status=status.HTTP_403_FORBIDDEN)
         invite = self.get_object()
         # Simple throttle: block resends within 60 seconds per invite
         cache_key = f"invite_resend:{invite.token}"

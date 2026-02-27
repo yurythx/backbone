@@ -19,22 +19,21 @@ import {
   ChevronRight,
   TrendingUp,
   Globe,
-  LogOut,
   KeyRound
 } from "lucide-react"
-import { SlideUp } from "@/components/ui/motion"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import Image from "next/image"
 
 interface SidebarItem {
   title: string
   href: string
-  icon: any
+  icon: React.ComponentType<{ className?: string }>
   module?: string
   exact?: boolean
 }
@@ -107,6 +106,11 @@ const sidebarSections: SidebarSection[] = [
         icon: Package,
       },
       {
+        title: "Empresas",
+        href: "/admin/companies",
+        icon: LayoutDashboard,
+      },
+      {
         title: "Configurações",
         href: "/settings",
         icon: Settings,
@@ -124,7 +128,6 @@ export function Sidebar() {
 
   const userPermissions = me?.role_details?.permissions || []
   const isSuperuser = me?.is_superuser
-  const isStaff = me?.is_staff // Assuming staff can access basic admin tools or we use permissions strictly
 
   const hasPermission = (permission: string) => {
     if (isSuperuser) return true
@@ -147,6 +150,7 @@ export function Sidebar() {
         // Roles and Modules usually only for Super Admin or high level Admin
         if (item.href === '/admin/roles' && !hasPermission('admin.user_manage')) return false
         if (item.href === '/admin/modules' && !isSuperuser) return false // Only superuser manages modules globally usually
+        if (item.href === '/admin/companies' && !isSuperuser) return false
 
         // Fallback for general admin access
         return hasPermission('admin.view_dashboard')
@@ -173,11 +177,17 @@ export function Sidebar() {
         <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap">
           {/* Logo Wrapper */}
           <div className={cn(
-            "flex-shrink-0 transition-all duration-300 flex items-center justify-center",
+            "flex-shrink-0 transition-all duration-300 flex items-center justify-center relative",
             isSidebarCollapsed ? "h-10 w-10" : "h-8 w-8"
           )}>
             {logo ? (
-              <img src={logo} alt={companyName || "Logo"} className="h-full w-full object-contain" />
+              <Image
+                src={logo}
+                alt={companyName || "Logo"}
+                width={isSidebarCollapsed ? 32 : 28}
+                height={isSidebarCollapsed ? 32 : 28}
+                className="object-contain"
+              />
             ) : (
               <div className="h-full w-full rounded-lg bg-primary/20 flex items-center justify-center">
                 <span className="text-lg">🦴</span>
@@ -199,26 +209,36 @@ export function Sidebar() {
       <button
         onClick={toggleSidebar}
         className={cn(
-          "absolute -right-3 top-20 bg-background border rounded-full p-1.5 shadow-md z-30 transition-transform duration-300 hover:bg-muted hover:scale-110",
+          "absolute -right-3 top-20 bg-background border rounded-full p-1.5 shadow-md z-30 transition-transform duration-300 hover:bg-muted hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
           !isSidebarCollapsed && "rotate-180"
         )}
+        aria-label="Alternar barra lateral"
+        aria-expanded={!isSidebarCollapsed}
       >
-        <ChevronRight className="h-3 w-3" />
+        <ChevronRight className="h-3 w-3" aria-hidden="true" />
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-6 scrollbar-thin scrollbar-thumb-muted-foreground/20">
+      <nav className="flex-1 py-6 px-3 space-y-6 overflow-hidden" role="navigation" aria-label="Navegação principal">
         <TooltipProvider delayDuration={0}>
           {filteredSections.map((section, sectionIndex) => (
-            <div key={sectionIndex} className="space-y-2">
+            <div
+              key={sectionIndex}
+              className="space-y-2"
+              role="group"
+              aria-labelledby={!isSidebarCollapsed && section.title ? `sidebar-section-${sectionIndex}-title` : undefined}
+            >
               {!isSidebarCollapsed && section.title && (
-                <h4 className="px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground/70 mb-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                <h4
+                  id={`sidebar-section-${sectionIndex}-title`}
+                  className="px-4 text-xs font-bold uppercase tracking-wider text-muted-foreground/70 mb-2 animate-in fade-in slide-in-from-left-2 duration-300"
+                >
                   {section.title}
                 </h4>
               )}
 
               <div className="space-y-1">
-                {section.items.map((item, itemIndex) => {
+                {section.items.map((item) => {
                   const Icon = item.icon
                   const isActive = item.exact
                     ? pathname === item.href
@@ -230,17 +250,19 @@ export function Sidebar() {
                         <Link
                           href={item.href}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative",
+                            "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                             isActive
                               ? "text-primary bg-primary/10 shadow-sm"
                               : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                             isSidebarCollapsed && "justify-center px-2"
                           )}
+                          aria-current={isActive ? "page" : undefined}
+                          aria-label={isSidebarCollapsed ? item.title : undefined}
                         >
                           <Icon className={cn(
                             "h-5 w-5 transition-transform duration-300 group-hover:scale-110",
                             isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
-                          )} />
+                          )} aria-hidden="true" />
 
                           {!isSidebarCollapsed && (
                             <span className="relative z-10 transition-all duration-300">{item.title}</span>

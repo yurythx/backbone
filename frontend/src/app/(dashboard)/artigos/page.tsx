@@ -1,37 +1,36 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, Suspense, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
-import { ArticleList } from "@/features/articles/article-list"
+import axios from "axios"
 import { ArticleForm } from "@/features/articles/article-form"
 import { TagList } from "@/features/articles/tag-list"
 import { ArticleAnalytics } from "@/features/articles/article-analytics"
-import { Article } from "@/types"
+import { Article, Category } from "@/types"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PublicArticleCard } from "@/components/public/article-card"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Search, Filter, Clock, ArrowRight, BookOpen, Tag } from "lucide-react"
+import { PublicArticleCard } from "@/components/public/article-card"
 import { Skeleton } from "@/components/ui/skeleton"
-import Link from "next/link"
-import { formatDistanceToNow } from "date-fns"
-import { ptBR } from "date-fns/locale"
+import { Search, BookOpen, Plus } from "lucide-react"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-function PublicArticlesView() {
-    return null
-}
-
 function ArtigosPageContent() {
-    const [view, setView] = useState<'list' | 'blog' | 'create' | 'edit'>('list')
-    const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
     const searchParams = useSearchParams()
+    const initialView = searchParams.get('action') === 'create' ? 'create' : 'grid'
+    const [view, setView] = useState<'grid' | 'create' | 'edit'>(initialView)
+    const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
     const router = useRouter()
+    const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') ?? "")
+    const [visibility, setVisibility] = useState<'all' | 'private'>(() => (searchParams.get('v') === 'private' ? 'private' : 'all'))
+    const [categoryId, setCategoryId] = useState<number | null>(() => {
+        const raw = searchParams.get('category')
+        const n = raw ? Number(raw) : NaN
+        return Number.isFinite(n) && n > 0 ? n : null
+    })
 
     const { data: me, isLoading } = useQuery({
         queryKey: ['me'],
@@ -39,12 +38,192 @@ function ArtigosPageContent() {
             try {
                 const res = await api.get('/api/accounts/users/me/', { signal })
                 return res.data
-            } catch (error) {
+            } catch {
                 return null
             }
         },
         retry: false
     })
+
+    const { data: categories } = useQuery<Category[]>({
+        queryKey: ['categories'],
+        queryFn: async () => {
+            const res = await api.get<Category[] | { results: Category[] }>('/api/articles/categories/')
+            const data = Array.isArray(res.data) ? res.data : res.data.results || []
+            return Array.isArray(data) ? data : []
+        }
+    })
+
+    const {
+        data,
+        isFetching,
+        isFetchingNextPage,
+        fetchNextPage,
+        hasNextPage,
+        error,
+    } = useInfiniteQuery({
+        queryKey: ['dashboard-articles-grid', visibility, searchTerm, categoryId],
+        queryFn: async ({ pageParam }) => {
+            const params = new URLSearchParams()
+            params.set('visibility', visibility === 'all' ? 'all' : 'private')
+            if (searchTerm.trim()) params.set('search', searchTerm.trim())
+            if (categoryId) params.set('category', String(categoryId))
+            if (pageParam) params.set('page', String(pageParam))
+            const url = `/api/articles/articles/?${params.toString()}`
+            const res = await api.get(url)
+            return res.data
+        },
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) => {
+            const next = lastPage?.next
+            if (!next) return undefined
+            try {
+                const u = new URL(next)
+                const p = u.searchParams.get('page')
+                return p ? Number(p) : undefined
+            } catch {
+                const m = /[?&]page=(\d+)/.exec(next)
+                return m ? Number(m[1]) : undefined
+            }
+        },
+        enabled: !isLoading && !!me,
+    })
+    const list: Article[] = (data?.pages ?? []).flatMap((pg: unknown) => {
+        if (Array.isArray(pg)) return pg as Article[]
+        const p = pg as { results?: unknown }
+        return Array.isArray(p?.results) ? (p.results as Article[]) : []
+    })
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'
+    const cleanAxios = useMemo(() => {
+        return axios.create({
+            baseURL: API_URL,
+            headers: { 'Content-Type': 'application/json' }
+        })
+    }, [API_URL])
+
+    const {
+        data: publicData,
+        isFetchingNextPage: isFetchingNextPagePublic,
+        fetchNextPage: fetchNextPagePublic,
+        hasNextPage: hasNextPagePublic,
+    } = useInfiniteQuery({
+        queryKey: ['dashboard-public-articles', searchTerm, categoryId],
+        queryFn: async ({ pageParam }) => {
+            const params = new URLSearchParams()
+            if (searchTerm.trim()) params.set('search', searchTerm.trim())
+            if (categoryId) params.set('category', String(categoryId))
+            if (pageParam) params.set('page', String(pageParam))
+            const res = await cleanAxios.get('/api/articles/public/articles/', { params })
+            return res.data
+        },
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) => {
+            const next = lastPage?.next
+            if (!next) return undefined
+            try {
+                const u = new URL(next)
+                const p = u.searchParams.get('page')
+                return p ? Number(p) : undefined
+            } catch {
+                const m = /[?&]page=(\d+)/.exec(next)
+                return m ? Number(m[1]) : undefined
+            }
+        },
+        enabled: !isLoading && !!me && visibility === 'all',
+    })
+    type PublicArticle = {
+        id: number
+        title: string
+        slug: string
+        content?: string
+        excerpt?: string
+        image?: string | null
+        cover_image?: string | null
+        category_name?: string | null
+        tags?: string[]
+        meta_title?: string | null
+        meta_description?: string | null
+        published_at?: string | null
+        created_at?: string | null
+        updated_at?: string | null
+        author_name?: string | null
+        company_name?: string | null
+        company_slug?: string | null
+    }
+    const publicListRaw: PublicArticle[] = (publicData?.pages ?? []).flatMap((pg: unknown) => {
+        if (Array.isArray(pg)) return pg as PublicArticle[]
+        const p = pg as { results?: unknown }
+        return Array.isArray(p?.results) ? (p.results as PublicArticle[]) : []
+    })
+    const publicList: Article[] = publicListRaw.map((a: PublicArticle) => ({
+        ...(a as unknown as Article),
+        is_public: true,
+        status: 'published',
+    })) as Article[]
+
+    const mergedList: Article[] = useMemo(() => {
+        if (visibility === 'private') {
+            return list.filter((a: Article) => a?.is_public === false)
+        }
+        const map = new Map<string, Article>()
+        for (const a of list) {
+            if (typeof a.slug === 'string') map.set(a.slug, a)
+        }
+        for (const b of publicList) {
+            if (typeof b.slug === 'string' && !map.has(b.slug)) {
+                map.set(b.slug, b)
+            }
+        }
+        const arr = Array.from(map.values())
+        arr.sort((a: Article, b: Article) => {
+            const ad = new Date((a as unknown as { published_at?: string }).published_at || a.created_at || 0).getTime()
+            const bd = new Date((b as unknown as { published_at?: string }).published_at || b.created_at || 0).getTime()
+            return bd - ad
+        })
+        return arr
+    }, [visibility, list, publicList])
+
+    useEffect(() => {
+        const params = new URLSearchParams()
+        if (searchTerm.trim()) params.set('q', searchTerm.trim())
+        if (visibility === 'private') params.set('v', 'private')
+        if (categoryId) params.set('category', String(categoryId))
+        const qs = params.toString()
+        router.replace(qs ? `?${qs}` : '?', { scroll: false })
+    }, [searchTerm, visibility, categoryId, router])
+
+    useEffect(() => {
+        const q = searchParams.get('q') ?? ""
+        const v = searchParams.get('v') === 'private' ? 'private' : 'all'
+        const cRaw = searchParams.get('category')
+        const cNum = cRaw ? Number(cRaw) : NaN
+        const c = Number.isFinite(cNum) && cNum > 0 ? cNum : null
+        if (q !== searchTerm) setSearchTerm(q)
+        if (v !== visibility) setVisibility(v)
+        if (c !== categoryId) setCategoryId(c)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams])
+
+    useEffect(() => {
+        const action = searchParams.get('action')
+        const slug = searchParams.get('slug')
+        if (action === 'edit' && slug) {
+            ;(async () => {
+                try {
+                    const res = await api.get('/api/articles/articles/', { params: { slug } })
+                    const payload = res.data?.results ?? res.data
+                    const found: Article | null = Array.isArray(payload) ? (payload[0] ?? null) : (payload ?? null)
+                    if (found) {
+                        setSelectedArticle(found)
+                        setView('edit')
+                    }
+                } catch {
+                    // ignore
+                }
+            })()
+        }
+    }, [searchParams])
 
     useEffect(() => {
         if (!isLoading && !me) {
@@ -52,35 +231,17 @@ function ArtigosPageContent() {
         }
     }, [me, isLoading, router])
 
-    useEffect(() => {
-        if (searchParams.get('action') === 'create') {
-            setView('create')
-            setSelectedArticle(null)
-        }
-    }, [searchParams])
-
     if (isLoading || !me) {
         return <div className="flex items-center justify-center h-full">Carregando...</div>
     }
 
-    // Existing authenticated view logic...
-    const handleCreate = () => {
-        setSelectedArticle(null)
-        setView('create')
-    }
-
-    const handleEdit = (article: Article) => {
-        setSelectedArticle(article)
-        setView('edit')
-    }
-
     const handleSuccess = () => {
-        setView('list')
+        setView('grid')
         setSelectedArticle(null)
     }
 
     const handleCancel = () => {
-        setView('list')
+        setView('grid')
         setSelectedArticle(null)
     }
 
@@ -90,6 +251,16 @@ function ArtigosPageContent() {
                 <div>
                     <h1 className="text-4xl font-extrabold tracking-tight">Centro de Conteúdo</h1>
                     <p className="text-muted-foreground text-lg">Gerencie artigos, notícias e organização temática.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Link
+                        href="/artigos/novo"
+                        className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition"
+                        aria-label="Criar novo artigo"
+                    >
+                        <Plus className="h-4 w-4" aria-hidden="true" />
+                        Novo Artigo
+                    </Link>
                 </div>
             </div>
 
@@ -101,14 +272,131 @@ function ArtigosPageContent() {
                 </TabsList>
 
                 <TabsContent value="articles" className="mt-6">
-                    <ArticleList onCreate={handleCreate} onEdit={handleEdit} />
-                    
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-6">
+                        <div className="relative flex-1" role="search" aria-label="Pesquisar artigos">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" aria-hidden="true" />
+                            <Input
+                                type="search"
+                                placeholder="Buscar por título, resumo ou categoria..."
+                                className="pl-12 h-12 rounded-2xl bg-background/50 backdrop-blur border-primary/10 focus-visible:ring-primary/20"
+                                value={searchTerm}
+                                onChange={(e) => { setSearchTerm(e.target.value) }}
+                                aria-label="Buscar artigos"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                className={`h-10 px-3 rounded-full text-sm font-medium border ${visibility === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border'}`}
+                                onClick={() => { setVisibility('all') }}
+                            >
+                                Todos
+                            </button>
+                            <button
+                                type="button"
+                                className={`h-10 px-3 rounded-full text-sm font-medium border ${visibility === 'private' ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border'}`}
+                                onClick={() => { setVisibility('private') }}
+                            >
+                                Privado
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-4">
+                        <button
+                            type="button"
+                            onClick={() => setCategoryId(null)}
+                            className={`h-8 px-3 rounded-full text-xs font-medium border whitespace-nowrap ${categoryId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border'}`}
+                            aria-label="Todas as categorias"
+                        >
+                            Todas as categorias
+                        </button>
+                        {categories?.map((cat) => (
+                            <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => setCategoryId(cat.id)}
+                                className={`h-8 px-3 rounded-full text-xs font-medium border whitespace-nowrap ${categoryId === cat.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border'}`}
+                                aria-label={`Filtrar por ${cat.name}`}
+                            >
+                                {cat.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    {error && (
+                        <div className="text-center py-12 border-2 border-destructive/20 rounded-3xl bg-destructive/5" role="alert" aria-live="assertive" aria-label="Erro ao carregar artigos">
+                            <p className="text-destructive font-medium">
+                                Erro ao carregar artigos. Tente novamente mais tarde.
+                            </p>
+                        </div>
+                    )}
+
+                    {isFetching && list.length === 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6" role="status" aria-live="polite" aria-label="Carregando artigos">
+                            {[...Array(6)].map((_, i) => (
+                                <div key={i} className="space-y-4">
+                                    <Skeleton className="aspect-video w-full rounded-2xl" />
+                                    <div className="space-y-2">
+                                        <Skeleton className="h-6 w-3/4" />
+                                        <Skeleton className="h-4 w-full" />
+                                        <Skeleton className="h-4 w-5/6" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {!error && mergedList.length > 0 && (
+                        <div
+                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
+                            role="list"
+                            aria-label={`${mergedList.length} artigos encontrados`}
+                        >
+                            {mergedList.map((article: Article) => (
+                                <PublicArticleCard key={article.id} article={article} showVisibilityBadge showStatusBadge useDashboardPreview />
+                            ))}
+                        </div>
+                    )}
+
+                    {!isFetching && !error && mergedList.length === 0 && (
+                        <div className="text-center py-16 sm:py-20 border-2 border-dashed rounded-3xl bg-muted/10">
+                            <div className="h-16 w-16 rounded-full bg-muted/30 mx-auto mb-4 flex items-center justify-center">
+                                <BookOpen className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
+                            </div>
+                            <h3 className="text-lg font-semibold mb-2">Nenhum artigo encontrado</h3>
+                            <p className="text-muted-foreground max-w-md mx-auto">
+                                {searchTerm
+                                    ? `Não encontramos artigos com "${searchTerm}". Tente ajustar sua busca ou limpar o filtro.`
+                                    : "Nenhum artigo disponível no momento."}
+                            </p>
+                        </div>
+                    )}
+
+                    {!error && (hasNextPage || hasNextPagePublic) && (
+                        <div className="flex items-center justify-center mt-6">
+                            <button
+                                type="button"
+                                className="h-10 px-6 rounded-full border bg-background hover:bg-muted transition-colors disabled:opacity-50"
+                                onClick={() => {
+                                    if (hasNextPage) fetchNextPage()
+                                    if (hasNextPagePublic) fetchNextPagePublic()
+                                }}
+                                disabled={isFetchingNextPage || isFetchingNextPagePublic}
+                                aria-label="Carregar mais artigos"
+                            >
+                                {(isFetchingNextPage || isFetchingNextPagePublic) ? 'Carregando...' : 'Carregar mais'}
+                            </button>
+                        </div>
+                    )}
+
                     {(view === 'create' || view === 'edit') && (
-                        <ArticleForm
-                            initialData={selectedArticle}
-                            onSuccess={handleSuccess}
-                            onCancel={handleCancel}
-                        />
+                        <div className="mt-10">
+                            <ArticleForm
+                                initialData={selectedArticle}
+                                onSuccess={handleSuccess}
+                                onCancel={handleCancel}
+                            />
+                        </div>
                     )}
                 </TabsContent>
 

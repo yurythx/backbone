@@ -11,9 +11,8 @@ class TenantUserManager(UserManager):
         qs = super().get_queryset()
         if company:
             return qs.filter(company=company)
-        # Fallback para autenticação e rotas administrativas: 
-        # retorna tudo se não houver contexto, deixando a filtragem para o middleware/permissions
-        return qs
+        # Fallback seguro: sem contexto de empresa, não retorna nada
+        return qs.none()
 
 class Role(BaseTenantModel):
     """
@@ -45,16 +44,25 @@ class User(AbstractUser, BaseTenantModel):
     )
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True, help_text="Foto de perfil do usuário")
     last_seen = models.DateTimeField(null=True, blank=True, help_text="Última vez visto online")
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('online', 'Online'),
+            ('busy', 'Ocupado'),
+            ('offline', 'Offline'),
+        ],
+        default='online',
+        help_text="Status de presença do usuário"
+    )
 
     # Managers
-    objects = UserManager() # Global manager for Auth (Important for DRF!)
-    tenant_objects = TenantUserManager() # Filtered manager for views
+    objects = TenantUserManager()  # Tenant-aware default manager
+    all_objects = UserManager()    # Global manager for auth and cross-tenant ops
 
     class Meta:
         verbose_name = "User"
         verbose_name_plural = "Users"
-        # Usar o manager global por padrão para compatibilidade
-        default_manager_name = 'objects'
+        default_manager_name = 'all_objects'
         indexes = [
             models.Index(fields=['company', 'last_seen'], name='user_company_last_seen_idx'),
             models.Index(fields=['company', 'role'], name='user_company_role_idx'),

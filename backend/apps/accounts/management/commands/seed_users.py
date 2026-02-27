@@ -57,13 +57,13 @@ class Command(BaseCommand):
                         is_admin = bool(role and role.name == 'Administrador')
                         is_editor = bool(role and role.name == 'Editor')
 
-                        user, created = User.objects.update_or_create(
+                        user, created = User.all_objects.update_or_create(
                             username=username,
+                            company=company,
                             defaults={
                                 'email': user_data['email'],
                                 'first_name': user_data['first_name'],
                                 'last_name': user_data['last_name'],
-                                'company': company,
                                 'role': role,
                                 'is_staff': is_admin or is_editor, 
                                 'is_superuser': is_admin
@@ -86,7 +86,7 @@ class Command(BaseCommand):
                         is_admin = bool(role and role.name == 'Administrador')
                         is_editor = bool(role and role.name == 'Editor')
 
-                        user = User.objects.get(username=username)
+                        user = User.all_objects.get(username=username)
                         user.company = company
                         user.role = role
                         user.is_staff = is_admin or is_editor

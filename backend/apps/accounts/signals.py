@@ -1,11 +1,17 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
-from apps.core.models import AuditLog
+from apps.core.models import Company, AuditLog
 from .tasks import send_welcome_email
+from .services import AccountService
 from django.conf import settings
 
 User = get_user_model()
+
+@receiver(post_save, sender=Company)
+def company_post_save(sender, instance, created, **kwargs):
+    if created:
+        AccountService.ensure_default_roles(instance)
 
 @receiver(post_save, sender=User)
 def user_post_save(sender, instance, created, **kwargs):

@@ -63,7 +63,8 @@ export function ArticleHistory({ articleId }: ArticleHistoryProps) {
                 title: "Versão restaurada",
                 description: "O artigo foi revertido com sucesso.",
             })
-            queryClient.invalidateQueries({ queryKey: ['articles', articleId] })
+            // I4: usa queryKey sem parâmetros extras para invalidar todas as variantes da query de artigos
+            queryClient.invalidateQueries({ queryKey: ['articles'] })
             queryClient.invalidateQueries({ queryKey: ['article-history', articleId] })
             setSelectedVersion(null)
             setIsOpen(false)
@@ -82,7 +83,7 @@ export function ArticleHistory({ articleId }: ArticleHistoryProps) {
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-2">
-                        <Clock className="h-4 w-4" />
+                        <Clock className="h-4 w-4" aria-hidden="true" />
                         Histórico
                     </Button>
                 </SheetTrigger>
@@ -96,7 +97,7 @@ export function ArticleHistory({ articleId }: ArticleHistoryProps) {
 
                     <ScrollArea className="h-[calc(100vh-120px)] mt-6 pr-4">
                         {isLoading ? (
-                            <div className="text-center py-4 text-muted-foreground">Carregando...</div>
+                            <div className="text-center py-4 text-muted-foreground" role="status" aria-live="polite" aria-label="Carregando histórico do artigo">Carregando...</div>
                         ) : versions?.length === 0 ? (
                             <div className="text-center py-4 text-muted-foreground">Sem histórico disponível.</div>
                         ) : (
@@ -108,7 +109,7 @@ export function ArticleHistory({ articleId }: ArticleHistoryProps) {
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                <Clock className="h-3 w-3" />
+                                                <Clock className="h-3 w-3" aria-hidden="true" />
                                                 <span>
                                                     {format(new Date(version.created_at), "dd 'de' MMM, HH:mm", { locale: ptBR })}
                                                 </span>
@@ -119,18 +120,19 @@ export function ArticleHistory({ articleId }: ArticleHistoryProps) {
                                                 className="h-8 w-8 hover:text-primary"
                                                 onClick={() => setSelectedVersion(version)}
                                                 title="Restaurar esta versão"
+                                                aria-label="Restaurar esta versão"
                                             >
-                                                <RotateCcw className="h-4 w-4" />
+                                                <RotateCcw className="h-4 w-4" aria-hidden="true" />
                                             </Button>
                                         </div>
 
                                         <div className="flex items-center gap-2 text-sm font-medium">
-                                            <User className="h-3 w-3" />
+                                            <User className="h-3 w-3" aria-hidden="true" />
                                             <span>{version.user}</span>
                                         </div>
 
                                         <div className="flex items-start gap-2 text-sm bg-muted p-2 rounded text-muted-foreground">
-                                            <MessageCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                            <MessageCircle className="h-3 w-3 mt-0.5 shrink-0" aria-hidden="true" />
                                             <span>{version.comment || "Sem comentário"}</span>
                                         </div>
                                     </div>

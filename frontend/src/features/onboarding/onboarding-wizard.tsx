@@ -5,12 +5,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Company } from "@/types"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardTitle } from "@/components/ui/card"
 import { BrandingSettings } from "@/components/settings/branding-settings"
 import { SmtpSettings } from "@/features/settings/smtp-settings"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Check, ChevronRight, Rocket, Shield, Globe, Mail, Palette, Sparkles, Layout, ArrowRight, CheckCircle2 } from "lucide-react"
+import { ChevronRight, Rocket, Shield, Globe, Mail, Palette, Sparkles, ArrowRight, CheckCircle2 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 
@@ -57,9 +57,9 @@ export function OnboardingWizard() {
                         className="flex flex-col items-center justify-center py-12 text-center space-y-8"
                     >
                         <div className="relative">
-                            <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
+                            <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" aria-hidden="true" />
                             <div className="relative h-24 w-24 rounded-3xl bg-primary flex items-center justify-center shadow-2xl shadow-primary/20">
-                                <Rocket className="h-12 w-12 text-primary-foreground animate-bounce" />
+                                <Rocket className="h-12 w-12 text-primary-foreground animate-bounce" aria-hidden="true" />
                             </div>
                         </div>
                         <div className="space-y-3 max-w-md">
@@ -73,8 +73,8 @@ export function OnboardingWizard() {
                             <WelcomeFeature icon={Mail} label="Comunicação" />
                             <WelcomeFeature icon={Globe} label="Domínio" />
                         </div>
-                        <Button size="lg" onClick={handleNext} className="rounded-full px-12 font-bold h-14 text-lg shadow-xl shadow-primary/20 group">
-                            Começar Setup <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                        <Button size="lg" onClick={handleNext} className="rounded-full px-12 font-bold h-14 text-lg shadow-xl shadow-primary/20 group" aria-label="Começar setup">
+                            Começar Setup <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                         </Button>
                     </motion.div>
                 )
@@ -100,7 +100,7 @@ export function OnboardingWizard() {
                                 <div className="relative">
                                     <Input value={company.slug} readOnly className="h-12 rounded-xl bg-muted/30 border-none font-semibold text-lg pr-32" />
                                     <div className="absolute inset-y-0 right-0 flex items-center pr-4">
-                                        <span className="text-xs font-bold text-primary/40">.backbone.io</span>
+                                <span className="text-xs font-bold text-primary/40" aria-hidden="true">.backbone.io</span>
                                     </div>
                                 </div>
                                 <p className="text-[10px] text-muted-foreground italic px-1">Este identificador não pode ser alterado após a criação.</p>
@@ -173,7 +173,7 @@ export function OnboardingWizard() {
                             </div>
 
                             <div className="bg-primary/5 border border-primary/10 p-6 rounded-3xl flex gap-4">
-                                <Sparkles className="h-6 w-6 text-primary shrink-0 mt-1" />
+                                <Sparkles className="h-6 w-6 text-primary shrink-0 mt-1" aria-hidden="true" />
                                 <div className="space-y-1">
                                     <h4 className="font-bold text-sm">Quase lá!</h4>
                                     <p className="text-xs text-muted-foreground leading-relaxed">
@@ -193,7 +193,7 @@ export function OnboardingWizard() {
         <div className="fixed inset-0 z-[100] bg-background/85 backdrop-blur-3xl flex items-center justify-center p-4">
             <Card className="w-full max-w-5xl shadow-2xl overflow-hidden glass-morphism border-t-4 border-t-primary">
                 {step > 0 && (
-                    <div className="h-1 bg-muted">
+                    <div className="h-1 bg-muted" aria-hidden="true">
                         <motion.div
                             className="h-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]"
                             initial={{ width: 0 }}
@@ -232,7 +232,7 @@ export function OnboardingWizard() {
                                 className="rounded-xl px-10 font-bold gap-2 shadow-lg shadow-primary/10"
                             >
                                 {step === totalSteps - 1 ? 'Lançar Plataforma' : 'Continuar Setup'}
-                                {step === totalSteps - 1 ? <CheckCircle2 className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                                {step === totalSteps - 1 ? <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> : <ChevronRight className="h-5 w-5" aria-hidden="true" />}
                             </Button>
                         </div>
                     </CardFooter>
@@ -242,22 +242,24 @@ export function OnboardingWizard() {
     )
 }
 
-function WelcomeFeature({ icon: Icon, label }: { icon: any, label: string }) {
+import type { ComponentType } from "react"
+
+function WelcomeFeature({ icon: Icon, label }: { icon: ComponentType<{ className?: string }>, label: string }) {
     return (
         <div className="flex flex-col items-center gap-2">
             <div className="h-12 w-12 rounded-2xl glass-morphism border-0 flex items-center justify-center shadow-sm">
-                <Icon className="h-5 w-5 text-muted-foreground" />
+                <Icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
             </div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
         </div>
     )
 }
 
-function StepHeader({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
+function StepHeader({ icon: Icon, title, description }: { icon: ComponentType<{ className?: string }>, title: string, description: string }) {
     return (
         <div className="flex items-center gap-5 pb-2">
             <div className="h-14 w-14 rounded-2xl glass-morphism border-0 flex items-center justify-center shrink-0 shadow-md">
-                <Icon className="h-7 w-7 text-primary" />
+                <Icon className="h-7 w-7 text-primary" aria-hidden="true" />
             </div>
             <div>
                 <CardTitle className="text-2xl font-black tracking-tight">{title}</CardTitle>
