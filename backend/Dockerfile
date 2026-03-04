@@ -52,14 +52,12 @@ COPY --from=builder /install /install
 
 WORKDIR /app
 
+# Create a non-root user (UID 1000 to match common host users)
+RUN addgroup --system --gid 1000 app \
+    && adduser --system --uid 1000 --ingroup app --no-create-home app
+
 # Copy application source
 COPY . /app/
-
-# Create a non-root user and lock down permissions (using UID 1000 to match common host users)
-RUN addgroup --system --gid 1000 app \
-    && adduser --system --uid 1000 --ingroup app --no-create-home app \
-    && mkdir -p /app/staticfiles /app/media \
-    && chown -R app:app /app
 
 # Collect static files at build time (dummy env vars — no DB connection needed)
 RUN SECRET_KEY="build-phase-dummy-key" \
@@ -72,9 +70,8 @@ RUN SECRET_KEY="build-phase-dummy-key" \
     FIELD_ENCRYPTION_KEY="" \
     python manage.py collectstatic --noinput --clear
 
-
-
-RUN chmod +x /app/entrypoint.sh
+# IMPORTANT: Fix permissions AFTER all files (including static) are created
+RUN chown -R app:app /app && chmod +x /app/entrypoint.sh
 
 # Drop privileges
 USER app
