@@ -120,12 +120,14 @@ services:
       dockerfile: Dockerfile
     image: backbone_backend:${APP_VERSION:-latest}
     container_name: backbone_backend
-    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
+    command: daphne -b 0.0.0.0 -p 8005 config.asgi:application
     environment:
       <<: *backend-env
-    # Acesso via Cloudflare Tunnel na rede interna
     networks:
       - backbone_internal
+    ports:
+      # Bind apenas no loopback para o deploy.sh e Cloudflare Tunnel local
+      - "127.0.0.1:8005:8005"
     depends_on:
       db:
         condition: service_healthy
@@ -135,7 +137,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/core/health/" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:8005/api/core/health/" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -269,9 +271,11 @@ services:
     container_name: backbone_frontend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      API_URL_INTERNAL: http://backbone_backend:8000
+      API_URL_INTERNAL: http://backbone_backend:8005
       NODE_ENV: production
-    # Removido 'ports' - o tunnel acessa via rede interna
+    ports:
+      # Bind apenas no loopback para o deploy.sh e Cloudflare Tunnel local
+      - "127.0.0.1:3005:3005"
     depends_on:
       backend:
         condition: service_healthy

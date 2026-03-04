@@ -76,7 +76,7 @@ RUN chown -R app:app /app && chmod +x /app/entrypoint.sh
 # Drop privileges
 USER app
 
-EXPOSE 8000
+EXPOSE 8005
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8005", "config.asgi:application"]
