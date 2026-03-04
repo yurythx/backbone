@@ -55,9 +55,9 @@ WORKDIR /app
 # Copy application source
 COPY . /app/
 
-# Create a non-root user and lock down permissions
-RUN addgroup --system app \
-    && adduser --system --ingroup app --no-create-home app \
+# Create a non-root user and lock down permissions (using UID 1000 to match common host users)
+RUN addgroup --system --gid 1000 app \
+    && adduser --system --uid 1000 --ingroup app --no-create-home app \
     && mkdir -p /app/staticfiles /app/media \
     && chown -R app:app /app
 

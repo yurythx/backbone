@@ -79,6 +79,13 @@ git pull origin main
 # ── Passo 2: Build e (re)start ────────────────────────────────
 echo -e "${BLUE}[Passo 2] Build e start dos containers...${NC}"
 "${COMPOSE_CMD[@]}" build --no-cache backend frontend
+# Corrigir permissões dos volumes no host (garante que o usuário 'app' no container consiga escrever)
+# O usuário 'app' no container tem UID 100 geralmente em debian-slim se for o primeiro usuário system
+echo -e "${YELLOW}[Ajuste] Garantindo permissões das pastas de volumes...${NC}"
+mkdir -p ./staticfiles ./media ./backups
+sudo chown -R 1000:1000 ./staticfiles ./media ./backups 2>/dev/null || true
+sudo chmod -R 775 ./staticfiles ./media ./backups 2>/dev/null || true
+
 "${COMPOSE_CMD[@]}" up -d --remove-orphans
 
 # ── Passo 3: Migrações e static ───────────────────────────────
