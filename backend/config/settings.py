@@ -104,11 +104,8 @@ REST_FRAMEWORK = {
         'shared_kernel.throttling.TenantRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        # SECURITY: Adjusted to realistic values to prevent abuse
-        # tenant: authenticated users per company (1000 req/day = ~1 req/90sec)
-        # anon: unauthenticated requests (100 req/day for onboarding, public endpoints)
-        'tenant': '1000/day',
-        'anon': '100/day',
+        'tenant': '5000/day',
+        'anon': '500/day',
         # Scoped throttles
         'link_preview': '15/min',
         'public_articles': '60/min',
@@ -118,14 +115,16 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,          # Issue new refresh token on every refresh
-    "BLACKLIST_AFTER_ROTATION": True,       # Revoke the old refresh token after rotation
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),  # Mais curto por segurança
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),   # Longo para evitar deslogar no mobile frequentemente
+    "ROTATE_REFRESH_TOKENS": True,                  # Novo refresh token a cada renovação
+    "BLACKLIST_AFTER_ROTATION": True,               # Invalida o antigo por segurança
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
 }
 
 # Health check behavior in development
@@ -217,10 +216,18 @@ CORS_ALLOW_HEADERS = [
 # Allow credentials (cookies, Authorization headers) across origins
 CORS_ALLOW_CREDENTIALS = True
 
+# Native App schemes (Future-proofing for Capacitor/React Native)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^app://.*$",
+    r"^capacitor://.*$",
+    r"^http://localhost(:[0-9]+)?$",
+]
+
 # Expose these response headers to the browser (needed by frontend to read them)
 CORS_EXPOSE_HEADERS = [
     "x-request-id",
     "content-disposition",
+    "x-company-slug",
 ]
 
 

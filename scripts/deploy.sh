@@ -129,7 +129,11 @@ if [ "${SKIP_SEED:-0}" != "1" ]; then
   "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_system || true
   "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_cms    || true
   "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_pages  || true
-  echo -e "${GREEN}✓ Seeds concluídos.${NC}"
+  
+  echo -e "${BLUE}[Passo 4.1] Alinhando domínio de produção...${NC}"
+  "${COMPOSE_CMD[@]}" exec -T backend python manage.py fix_production_domain || true
+  
+  echo -e "${GREEN}✓ Seeds e Alinhamento concluídos.${NC}"
 else
   echo -e "${YELLOW}⚠ Seeds pulados (SKIP_SEED=1).${NC}"
 fi
