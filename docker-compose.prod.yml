@@ -123,9 +123,8 @@ services:
     command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
     environment:
       <<: *backend-env
-    volumes:
-      - static_volume:/app/staticfiles
-      - media_volume:/app/media
+    networks:
+      - backbone_internal
     ports:
       # Bind apenas no loopback — nunca expor ao mundo!
       - "127.0.0.1:8005:8000"
@@ -137,8 +136,6 @@ services:
       minio:
         condition: service_healthy
     restart: unless-stopped
-    networks:
-      - backbone_internal
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/core/health/" ]
       interval: 30s
