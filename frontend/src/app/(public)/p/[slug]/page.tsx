@@ -5,7 +5,7 @@ import { Metadata } from 'next'
 import PublicPageContent from "./content"
 
 export async function generateMetadata(
-    { params }: { params: { slug: string } }
+    { params }: { params: Promise<{ slug: string }> }
 ): Promise<Metadata> {
     const { slug } = await params
 
@@ -32,7 +32,7 @@ export async function generateMetadata(
     }
 }
 
-export default async function PublicPageDetailPage({ params }: { params: { slug: string } }) {
+export default async function PublicPageDetailPage({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params
     return <PublicPageContent slug={slug} />
 }
