@@ -52,6 +52,15 @@ fi
 # Validar sintaxe do compose
 "${COMPOSE_CMD[@]}" config >/dev/null
 
+# ── Validação de Variáveis Críticas ───────────────────────────
+REDIS_URL=$(grep -E '^REDIS_URL=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' || echo "")
+if [[ -n "$REDIS_URL" && "$REDIS_URL" == *"@redis"* && "$REDIS_URL" != *":@redis"* ]]; then
+  if [[ "$REDIS_URL" != *":http"* && "$REDIS_URL" != *"redis://:"* ]]; then
+    echo -e "${REDI}[AVISO] Sua REDIS_URL parece estar sem o ':' antes da senha.${NC}"
+    echo -e "${YELLOW}O formato correto é: redis://:SENHA@redis:6379/0${NC}"
+  fi
+fi
+
 # ── Passo 0: Backup ───────────────────────────────────────────
 BACKUP_FILE="./backups/backup_$(date +%F_%H-%M-%S).sql"
 mkdir -p ./backups
@@ -79,12 +88,13 @@ git pull origin main
 # ── Passo 2: Build e (re)start ────────────────────────────────
 echo -e "${BLUE}[Passo 2] Build e start dos containers...${NC}"
 "${COMPOSE_CMD[@]}" build --no-cache backend frontend
-# Corrigir permissões dos volumes no host (garante que o usuário 'app' no container consiga escrever)
-# O usuário 'app' no container tem UID 100 geralmente em debian-slim se for o primeiro usuário system
-echo -e "${YELLOW}[Ajuste] Garantindo permissões das pastas de volumes...${NC}"
+
+echo -e "${YELLOW}[Ajuste] Corrigindo permissões de volumes (pode pedir senha sudo)...${NC}"
+# Criar pastas se não existirem
 mkdir -p ./staticfiles ./media ./backups
-sudo chown -R 1000:1000 ./staticfiles ./media ./backups 2>/dev/null || true
-sudo chmod -R 775 ./staticfiles ./media ./backups 2>/dev/null || true
+# Forçar permissão 1000 (usuário app do container)
+sudo chown -R 1000:1000 ./staticfiles ./media ./backups 2>/dev/null || echo "Aviso: Não foi possível mudar dono via sudo, tentando chmod..."
+sudo chmod -R 775 ./staticfiles ./media ./backups 2>/dev/null || chmod -R 775 ./staticfiles ./media ./backups || true
 
 "${COMPOSE_CMD[@]}" up -d --remove-orphans
 
