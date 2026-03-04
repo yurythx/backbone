@@ -257,8 +257,7 @@ if USE_S3:
         },
     }
     
-    # Backward compatibility
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    # Backward compatibility (removed - using STORAGES)
     
     # Configuração de Domínio e URLs (Proxy ou Direto)
     media_host = env("MEDIA_HOST", default=None)
@@ -335,7 +334,11 @@ if REDIS_URL:
     from urllib.parse import urlparse as _urlparse
     _parsed = _urlparse(REDIS_URL)
     # Reconstruct base URL: scheme + auth (if any) + host + port (without path/db)
-    _auth = f"{_parsed.username}:{_parsed.password}@" if _parsed.username else ""
+    _auth = ""
+    if _parsed.username or _parsed.password:
+        _user = _parsed.username if _parsed.username else ""
+        _pass = f":{_parsed.password}" if _parsed.password else ""
+        _auth = f"{_user}{_pass}@"
     _port = f":{_parsed.port}" if _parsed.port else ""
     REDIS_BASE = f"{_parsed.scheme}://{_auth}{_parsed.hostname}{_port}"
 
