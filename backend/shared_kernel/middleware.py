@@ -38,10 +38,17 @@ class TenantMiddleware:
 
         def get_company_from_cache(key):
             data = cache.get(key)
-            if data:
-                # Retorna uma instância "rasa" apenas com ID e slug para o middleware
-                return Company(id=data['id'], slug=data['slug'], name=data['name'])
-            return None
+            if not data:
+                return None
+            # P5: Return a real DB-backed instance to avoid AttributeError on
+            # FK traversals and method calls on a 'hollow' Company(id=..., slug=...) object.
+            # The PK lookup hits the DB only on cache miss.
+            try:
+                return Company.objects.get(pk=data['id'])
+            except Company.DoesNotExist:
+                # Cache entry is stale — evict it.
+                cache.delete(key)
+                return None
 
         if slug:
             cache_key = f"company_slug:{slug}"

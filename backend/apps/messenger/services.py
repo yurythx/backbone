@@ -2,10 +2,15 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.db.models import Count
+from django.utils import timezone
 from .models import Conversation, Message, ConversationPreference
 
 from .serializers import MessageSerializer
 from apps.notifications.tasks import notify_user_push
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -16,49 +21,70 @@ class MessengerService:
         Creates a new conversation or returns an existing one for private chats.
         Ensures that 1:1 conversations are unique per company.
         """
+        from django.db import transaction
+
         if isinstance(participant_usernames, str):
             participant_usernames = [participant_usernames]
         elif not participant_usernames:
             participant_usernames = []
 
         # Normalize: others = set of unique usernames excluding the creator
-        others = {u for u in participant_usernames if u != creator.username}
+        others = {u for u in participant_usernames if u and u != creator.username}
         
-        if not is_group:
-            # 1:1 Chat: Find existing private conversation between EXACTLY these participants
-            # (either creator + 1 other, or just creator for self-chat)
-            qs = Conversation.all_objects.filter(company=company, is_group=False, participants=creator)
+        logger.debug(f"[Messenger] Create Conversation: creator={creator.username}, company={company}, others={others}, is_group={is_group}")
+
+        with transaction.atomic():
+            if not is_group:
+                # 1:1 Chat: Find existing private conversation between EXACTLY these participants
+                # (either creator + 1 other, or just creator for self-chat)
+                qs = Conversation.all_objects.filter(company=company, is_group=False, participants=creator)
+                
+                if others:
+                    target_username = list(others)[0] # only consider first for 1:1
+                    try:
+                        target_user = User.all_objects.get(company=company, username=target_username)
+                        existing = qs.filter(participants=target_user).annotate(p_count=Count('participants')).filter(p_count=2).first()
+                        if existing:
+                            logger.info(f"[Messenger] Found existing 1:1 conversation {existing.id} for {creator.username} and {target_username}")
+                            return existing
+                    except User.DoesNotExist:
+                        logger.warning(f"[Messenger] Target user {target_username} not found in company {company}")
+                        pass
+                else:
+                    # Self-chat
+                    existing = qs.annotate(p_count=Count('participants')).filter(p_count=1).first()
+                    if existing:
+                        logger.info(f"[Messenger] Found existing self-chat {existing.id} for {creator.username}")
+                        return existing
+
+            # If we reached here, create a new one
+            logger.info(f"[Messenger] Creating new conversation: title={title}, is_group={is_group}")
+            conversation = Conversation.all_objects.create(
+                company=company,
+                title=title,
+                is_group=is_group
+            )
             
-            if others:
-                target_username = list(others)[0] # only consider first for 1:1
+            participants_to_add = [creator]
+            if is_group:
+                for username in others:
+                    try:
+                        target_user = User.all_objects.get(company=company, username=username)
+                        participants_to_add.append(target_user)
+                    except User.DoesNotExist:
+                        continue
+            elif others:
+                # 1:1 case
+                target_username = list(others)[0]
                 try:
                     target_user = User.all_objects.get(company=company, username=target_username)
-                    existing = qs.filter(participants=target_user).annotate(p_count=Count('participants')).filter(p_count=2).first()
-                    if existing: return existing
+                    participants_to_add.append(target_user)
                 except User.DoesNotExist:
                     pass
-            else:
-                # Self-chat: exactly 1 participant (the creator)
-                existing = qs.annotate(p_count=Count('participants')).filter(p_count=1).first()
-                if existing: return existing
-
-        conversation = Conversation.all_objects.create(
-            company=company,
-            title=title,
-            is_group=is_group
-        )
-        conversation.participants.add(creator)
-        
-        if others:
-            for username in others:
-                try:
-                    target_user = User.all_objects.get(company=company, username=username)
-                    conversation.participants.add(target_user)
-                    if not is_group: break # Stop after first for 1:1
-                except User.DoesNotExist:
-                    continue
-                    
-        return conversation
+            
+            conversation.participants.set(participants_to_add)
+            logger.debug(f"[Messenger] Created conversation {conversation.id} with participants {[p.username for p in participants_to_add]}")
+            return conversation
 
 
     @staticmethod
@@ -66,6 +92,8 @@ class MessengerService:
         """
         Sends a message to a conversation and signals via WebSockets.
         """
+        logger.debug(f"[Messenger] Sending message: user={user.username}, conversation={conversation.id}, has_file={bool(file_obj)}")
+        
         message_data = {
             'company': company,
             'conversation': conversation,
@@ -76,18 +104,24 @@ class MessengerService:
         if file_obj:
             message_data['file'] = file_obj
             message_data['file_name'] = file_obj.name
-            message_data['file_type'] = file_obj.content_type
+            message_data['file_type'] = getattr(file_obj, 'content_type', 'application/octet-stream')
             message_data['file_size'] = file_obj.size
+            logger.info(f"[Messenger] Attaching file {file_obj.name} ({file_obj.size} bytes)")
 
         if reply_to_id:
             try:
                 reply_to = Message.all_objects.get(id=reply_to_id, conversation=conversation)
                 message_data['reply_to'] = reply_to
             except Message.DoesNotExist:
-                pass
+                logger.warning(f"[Messenger] Reply to message {reply_to_id} not found")
 
-        message = Message.all_objects.create(**message_data)
+        message = Message.objects.create(**message_data)
         
+        if file_obj:
+            logger.info(f"[Messenger] Message {message.id} created with file path: {message.file.name if message.file else 'NONE'}")
+            if message.file:
+                logger.debug(f"[Messenger] Generated URL: {message.file.url}")
+
         # Signaling
         MessengerService.broadcast_message(company, conversation, message, request)
         
@@ -243,5 +277,23 @@ class MessengerService:
                 'message_id': message.id,
                 'content': message.content,
                 'edited_at': message.edited_at.isoformat() if message.edited_at else None
+            }
+        )
+
+    @staticmethod
+    def broadcast_all_read(company, conversation, user_id):
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+            
+        group_name = f'chat_{company.slug}_{conversation.id}'
+        
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'read_all_update',
+                'conversation_id': conversation.id,
+                'user_id': user_id,
+                'read_at': timezone.now().isoformat()
             }
         )

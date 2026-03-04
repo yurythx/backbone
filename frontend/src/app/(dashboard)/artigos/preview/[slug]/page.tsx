@@ -10,6 +10,7 @@ import { ArrowLeft, CalendarDays, User, Pencil } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Image from "next/image"
+import { fixImageUrl } from "@/lib/utils"
 
 export default function ArticlePreviewPage() {
   const params = useParams<{ slug: string }>()
@@ -38,7 +39,7 @@ export default function ArticlePreviewPage() {
     staleTime: 60_000,
   })
 
-  const imageUrl = useMemo(() => data?.cover_image || data?.image || null, [data])
+  const imageUrl = useMemo(() => fixImageUrl(data?.cover_image || data?.image || null), [data])
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-[60vh]">Carregando...</div>
@@ -102,7 +103,7 @@ export default function ArticlePreviewPage() {
             <Button
               variant="default"
               className="rounded-full gap-2"
-              onClick={() => router.push(`/artigos?action=edit&slug=${encodeURIComponent(data.slug)}`)}
+              onClick={() => router.push(`/artigos/editar/${encodeURIComponent(data.slug)}`)}
             >
               <Pencil className="h-4 w-4" aria-hidden="true" />
               Editar

@@ -2,7 +2,9 @@ from django.db import models
 from django.conf import settings
 from django.db.models import Count, Q
 from shared_kernel.models import BaseTenantModel
+from shared_kernel.utils import tenant_upload_to, make_key_with_tenant
 from shared_kernel.validators import validate_chat_file
+
 
 
 class SoftDeleteManager(models.Manager):
@@ -46,7 +48,8 @@ class Message(BaseTenantModel):
 
     # File attachments
     file = models.FileField(
-        upload_to='chat/attachments/',
+        upload_to=tenant_upload_to('chat/attachments'),
+
         blank=True,
         null=True,
         validators=[validate_chat_file],
@@ -148,3 +151,22 @@ class ConversationPreference(BaseTenantModel):
 
     def __str__(self):
         return f"{self.user} prefs for conv {self.conversation_id}"
+
+
+class ContactBlock(BaseTenantModel):
+    """
+    Bloqueio de contatos entre usuários.
+    Garante que as preferências de bloqueio sejam persistidas no backend.
+    """
+    blocker = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='blocked_contacts', on_delete=models.CASCADE)
+    blocked = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='blocked_by', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('blocker', 'blocked')
+        indexes = [
+            models.Index(fields=['blocker', 'blocked']),
+        ]
+
+    def __str__(self):
+        return f"{self.blocker} blocked {self.blocked}"

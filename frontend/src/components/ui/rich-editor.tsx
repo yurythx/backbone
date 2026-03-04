@@ -3,13 +3,12 @@
 import { useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
 import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { Color } from '@tiptap/extension-color'
+
 import {
     Bold,
     Italic,
@@ -89,13 +88,8 @@ export function RichEditor({ content, onChange, placeholder, className }: RichEd
                 levels: [1, 2, 3],
             },
         }),
-        Underline,
-        Link.configure({
-            openOnClick: false,
-            autolink: true,
-            linkOnPaste: true,
-        }),
         Image.configure({
+
             HTMLAttributes: {
                 class: 'rounded-lg border border-border shadow-sm max-w-full h-auto my-4',
             },

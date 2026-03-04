@@ -8,7 +8,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from apps.module_manager.permissions import HasModuleAccess
-from apps.accounts.permissions import HasRolePermission
+from apps.accounts.permissions import HasRolePermission, ActionRolePermission
 from shared_kernel.audit import log_create, log_update, log_delete
 from .models import Article, Category, Tag, Comment, ArticleView
 from .serializers import (
@@ -17,7 +17,7 @@ from .serializers import (
     GlobalArticlesAnalyticsSerializer
 )
 from .services import ArticleService
-from .filters import ArticleFilter
+from .filters import ArticleFilter, PublicArticleFilter
 
 @extend_schema_view(
     list=extend_schema(tags=['Public Articles'], description='Lista artigos públicos sem necessidade de autenticação'),
@@ -31,7 +31,7 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ArticlePublicSerializer
     permission_classes = [permissions.AllowAny]
     lookup_field = 'slug'
-    filterset_fields = ['category', 'tags']
+    filterset_class = PublicArticleFilter
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['published_at', 'created_at']
     ordering = ['-published_at']
@@ -65,7 +65,14 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Detalhe de artigo público com registro de visualização.
         """
-        instance = self.get_object()
+        try:
+            instance = self.get_object()
+        except Article.MultipleObjectsReturned:
+            return Response(
+                {"error": "Multiple articles found with this slug. Please provide 'company_slug' parameter."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Registrar visualização mesmo para usuários não autenticados
         user = request.user if request.user.is_authenticated else None
         ArticleService.record_view(user, instance, request.META.get('REMOTE_ADDR'))
@@ -157,16 +164,29 @@ class TagViewSet(viewsets.ModelViewSet):
 )
 class ArticleViewSet(viewsets.ModelViewSet):
     serializer_class = ArticleSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = 'articles.article_view' # Default for list/retrieve
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
     module_code = 'articles'
     filterset_class = ArticleFilter
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'title']
 
-    def get_permissions(self):
-        # Override to ensure we always use the latest classes
-        return [permissions.IsAuthenticated(), HasModuleAccess(), HasRolePermission()]
+    # Permissões granulares por action — gerenciadas por ActionRolePermission.
+    # Isso evita mutar self.required_permission dentro de perform_create/update/destroy.
+    action_permissions = {
+        'list':              'articles.article_view',
+        'retrieve':          'articles.article_view',
+        'create':            'articles.article_create',
+        'update':            'articles.article_edit',
+        'partial_update':    'articles.article_edit',
+        'destroy':           'articles.article_delete',
+        'publish':           'articles.article_publish',
+        'submit_for_review': 'articles.article_create',
+        'reject':            'articles.article_publish',
+        'revert':            'articles.article_edit',
+        'history':           'articles.article_view',
+        'analytics':         'articles.article_view',
+        'analytics_detail':  'articles.article_view',
+    }
 
     def get_queryset(self):
         """
@@ -195,16 +215,10 @@ class ArticleViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        self.required_permission = 'articles.article_create'
-        if not HasRolePermission().has_permission(self.request, self):
-             from rest_framework.exceptions import PermissionDenied
-             raise PermissionDenied("Sem permissão para criar artigos.")
-
+        # Permission already verified by ActionRolePermission before this point.
         from shared_kernel.licensing import check_feature_limit
-        from apps.licensing.models import License
-        active_license = License.objects.filter(company=self.request.company, is_active=True).exists()
         can_add, limit, current = check_feature_limit(self.request.company, 'max_articles')
-        if active_license and not can_add:
+        if not can_add:
             from rest_framework.exceptions import ValidationError
             raise ValidationError(f"Limite de artigos atingido ({current}/{limit}). Faça um upgrade do seu plano.")
 
@@ -215,29 +229,23 @@ class ArticleViewSet(viewsets.ModelViewSet):
             image=self.request.FILES.get('image')
         )
         serializer.instance = article
+        log_create(self.request.user, "Article", article, request=self.request)
 
     def perform_update(self, serializer):
-        self.required_permission = 'articles.article_edit'
-        if not HasRolePermission().has_permission(self.request, self):
-             from rest_framework.exceptions import PermissionDenied
-             raise PermissionDenied("Sem permissão para editar artigos.")
-
+        # Permission already verified by ActionRolePermission before this point.
         updated_article = ArticleService.update_article(
             user=self.request.user,
-            article=serializer.instance,  # reutiliza instance já carregada pelo DRF
+            article=serializer.instance,
             data=serializer.validated_data,
             image=self.request.FILES.get('image')
         )
-        # Atualiza o serializer.instance para que a resposta reflita os dados atualizados
         serializer.instance = updated_article
+        log_update(self.request.user, "Article", updated_article, request=self.request)
 
     def perform_destroy(self, instance):
-        self.required_permission = 'articles.article_delete'
-        if not HasRolePermission().has_permission(self.request, self):
-             from rest_framework.exceptions import PermissionDenied
-             raise PermissionDenied("Sem permissão para excluir artigos.")
-
+        # Permission already verified by ActionRolePermission before this point.
         ArticleService.delete_article(self.request.user, instance)
+        log_delete(self.request.user, "Article", instance, request=self.request)
         instance.delete()
 
     @action(detail=True, methods=['get'])

@@ -2,21 +2,21 @@ from rest_framework import viewsets, permissions, status, mixins, exceptions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
-from .models import Conversation, Message
-from .serializers import ConversationSerializer, MessageSerializer, ContactSerializer
-from .services import MessengerService
 from django.contrib.auth import get_user_model
-from apps.module_manager.permissions import HasModuleAccess
-from shared_kernel.sanitization import sanitize_url
-from urllib.parse import urlparse, urljoin
-import ipaddress
 from django.core.cache import cache
+from django.utils import timezone
+from apps.module_manager.permissions import HasModuleAccess
+from apps.accounts.permissions import HasRolePermission
+from shared_kernel.sanitization import sanitize_url
+from .models import Conversation, Message, ContactBlock
+from .serializers import ConversationSerializer, MessageSerializer, ContactSerializer, ContactBlockSerializer
+from .services import MessengerService
+from urllib.parse import urlparse
+import ipaddress
 import time
 from rest_framework.throttling import ScopedRateThrottle
 
 User = get_user_model()
-
-from apps.accounts.permissions import HasRolePermission
 
 @extend_schema_view(
     list=extend_schema(tags=['Messenger']),
@@ -39,11 +39,26 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
             else:
                 qs = User.all_objects.exclude(id=self.request.user.id)
         else:
-            # Users only see others in the same groups (Contact Privacy)
-            user_groups = self.request.user.groups.all()
-            qs = User.objects.filter(groups__in=user_groups).exclude(id=self.request.user.id).distinct()
+            # Users see everyone in the same company
+            qs = User.objects.filter(company=self.request.company).exclude(id=self.request.user.id)
         
         return qs.order_by('username')
+
+@extend_schema_view(
+    list=extend_schema(tags=['Messenger']),
+    create=extend_schema(tags=['Messenger']),
+    destroy=extend_schema(tags=['Messenger']),
+)
+class ContactBlockViewSet(viewsets.ModelViewSet):
+    serializer_class = ContactBlockSerializer
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    module_code = 'messenger'
+
+    def get_queryset(self):
+        return ContactBlock.objects.filter(blocker=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(blocker=self.request.user, company=self.request.company)
 
 @extend_schema_view(
     list=extend_schema(tags=['Messenger']),
@@ -148,7 +163,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(conversation)
             return Response(serializer.data)
         else:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+            # Retorna 204 No Content para indicar que não existe conversa, 
+            # evitando erro 404 no console do navegador que assusta o usuário.
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
 
     @action(detail=True, methods=['post'])
@@ -231,7 +248,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
         count = unread_messages.count()
         if count > 0:
             unread_messages.update(is_read=True)
-            # In a real-world scenario, we might want to broadcast this via WS.
+            # Broadcast read status
+            MessengerService.broadcast_all_read(request.company, conversation, request.user.id)
         
         return Response({'marked_read': count})
 
@@ -314,7 +332,6 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer = MessageSerializer(messages_list, many=True, context={'request': request})
         return Response(serializer.data)
 
-from django.utils import timezone
 
 @extend_schema_view(
     reaction=extend_schema(tags=['Messenger'], summary="Add or remove emoji reaction"),
@@ -402,17 +419,20 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
             pass
 
         # Rate limit: 15 previews/minute per (company, user)
+        # Uses atomic cache.add + cache.incr pattern to prevent race conditions.
         if not request.company:
             return err('no_company', 'Company context required', status.HTTP_400_BAD_REQUEST)
         rl_key = f"lp:rl:{request.company.id}:{request.user.id}"
-        rl = cache.get(rl_key)
-        now = time.time()
-        if rl and now - rl.get('t', 0) < 60 and rl.get('c', 0) >= 15:
-            return err('rate_limited', 'Rate limit exceeded', status.HTTP_429_TOO_MANY_REQUESTS)
-        if not rl or now - rl.get('t', 0) >= 60:
-            cache.set(rl_key, {'c': 1, 't': now}, timeout=60)
-        else:
-            cache.set(rl_key, {'c': rl.get('c', 0) + 1, 't': rl.get('t', now)}, timeout=60)
+        # cache.add returns True only when the key did not exist (atomic)
+        if not cache.add(rl_key, 1, timeout=60):
+            try:
+                count = cache.incr(rl_key)
+            except ValueError:
+                # Key expired between add and incr — reset
+                cache.set(rl_key, 1, timeout=60)
+                count = 1
+            if count > 15:
+                return err('rate_limited', 'Rate limit exceeded', status.HTTP_429_TOO_MANY_REQUESTS)
 
         # Check cache first — return immediately if available
         import hashlib

@@ -8,6 +8,7 @@ import { CalendarDays } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Image from "next/image"
+import { fixImageUrl } from "@/lib/utils"
 
 interface PublicArticleCardProps {
     article: Article
@@ -17,8 +18,8 @@ interface PublicArticleCardProps {
 }
 
 export function PublicArticleCard({ article, showVisibilityBadge = false, useDashboardPreview = false, showStatusBadge = false }: PublicArticleCardProps) {
-    const href = (useDashboardPreview && article.is_public === false)
-        ? { pathname: `/artigos/preview/${article.slug}` }
+    const href = (useDashboardPreview)
+        ? `/artigos/preview/${article.slug}`
         : { pathname: `/p/artigos/${article.slug}`, query: { company_slug: article.company_slug } }
 
     return (
@@ -31,7 +32,7 @@ export function PublicArticleCard({ article, showVisibilityBadge = false, useDas
                 <div className="aspect-video relative overflow-hidden bg-muted rounded-t-2xl">
                     {article.image ? (
                         <Image
-                            src={article.image}
+                            src={fixImageUrl(article.image) || ""}
                             alt={article.title || "Imagem do artigo"}
                             fill
                             className="object-cover hover:scale-105 transition-transform duration-300"

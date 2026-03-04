@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Menu, X, LayoutDashboard, MessageSquare, FileText, Settings, ShieldCheck, Box, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -34,6 +34,7 @@ export function MobileNav() {
     const [isOpen, setIsOpen] = React.useState(false)
     const [isLoggingOut, setIsLoggingOut] = React.useState(false)
     const pathname = usePathname()
+    const router = useRouter()
     const { isModuleActive } = useModules()
     const { logo, companyName } = useTheme()
     const { user } = useAuth()
@@ -53,7 +54,7 @@ export function MobileNav() {
             localStorage.removeItem('refreshToken')
             localStorage.removeItem('companySlug')
             toast.success("Você saiu da conta. Até logo!")
-            window.location.href = '/login'
+            router.push('/login')
         }
     }
 

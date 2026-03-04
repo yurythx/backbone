@@ -9,8 +9,8 @@ Acesse: **Settings → Secrets and variables → Actions** no repositório do Gi
 | Secret | Descrição | Como obter |
 |--------|-----------|------------|
 | `DEPLOY_HOST` | IP ou hostname do servidor de produção | Painel do seu VPS/servidor |
-| `DEPLOY_USER` | Usuário SSH (ex: `backbone`, `ubuntu`, `root`) | Configurado no servidor |
-| `DEPLOY_SSH_KEY` | Chave SSH privada (conteúdo do `~/.ssh/id_ed25519`) | `cat ~/.ssh/id_ed25519` |
+| `DEPLOY_USER` | Usuário SSH (ex: `ubuntu`, `backbone`) | Configurado no servidor |
+| `DEPLOY_SSH_KEY` | Chave SSH privada (conteúdo completo do arquivo) | `cat ~/.ssh/backbone_deploy` |
 | `DEPLOY_PORT` | Porta SSH (opcional, padrão: `22`) | `/etc/ssh/sshd_config` |
 | `DEPLOY_PATH` | Caminho do projeto no servidor (ex: `/opt/backbone`) | Onde você fez o `git clone` |
 
@@ -21,7 +21,7 @@ Acesse: **Settings → Secrets and variables → Actions** no repositório do Gi
 ssh-keygen -t ed25519 -C "backbone-github-deploy" -f ~/.ssh/backbone_deploy
 
 # Copiar chave pública para o servidor:
-ssh-copy-id -i ~/.ssh/backbone_deploy.pub usuario@seu-servidor
+ssh-copy-id -i ~/.ssh/backbone_deploy.pub ubuntu@seu-servidor
 
 # O valor de DEPLOY_SSH_KEY é o conteúdo da chave PRIVADA:
 cat ~/.ssh/backbone_deploy
@@ -52,9 +52,12 @@ Configure o environment `production` com reviewer obrigatório:
 
 ## Checklist pré-primeiro-deploy
 
-- [ ] Servidor tem Docker e Docker Compose instalados
-- [ ] Repositório foi clonado em `DEPLOY_PATH`
-- [ ] Arquivo `.env.prod` existe em `DEPLOY_PATH` com todos os valores
-- [ ] `docker compose -f docker-compose.prod.yml up -d` já foi executado manualmente ao menos uma vez
-- [ ] `python manage.py migrate_smtp_passwords` foi executado (se havia senhas SMTP)
-- [ ] Migrations `0010` e `0012` foram aplicadas com backup anterior
+- [ ] Servidor Ubuntu 22.04 com Docker Engine + Docker Compose v2 instalados
+- [ ] Repositório foi clonado em `DEPLOY_PATH` (ex: `/opt/backbone`)
+- [ ] Arquivo `.env.prod` existe em `DEPLOY_PATH` com todos os valores preenchidos
+- [ ] `cloudflared` instalado e serviço rodando (`systemctl status cloudflared`)
+- [ ] DNS configurado no Cloudflare (CNAME apontando para o tunnel)
+- [ ] Primeiro deploy manual executado: `SKIP_BACKUP=1 ./scripts/deploy.sh`
+- [ ] Superusuário criado: `docker compose -f docker-compose.cloudflare.yml --env-file .env.prod exec backend python manage.py createsuperuser`
+- [ ] Health check respondendo: `curl http://localhost:8005/api/core/health/`
+- [ ] Site acessível em: `https://seudominio.com`

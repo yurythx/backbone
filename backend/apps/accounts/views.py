@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.http import HttpResponse
 from .serializers import (
@@ -121,6 +122,9 @@ class CustomTokenRefreshView(generics.GenericAPIView):
 class UserRegistrationView(generics.CreateAPIView):
     serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
+    # SECURITY: Strict rate limit to prevent bot account creation (5 registrations/hour per IP).
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'user_registration'
 
 @extend_schema(tags=['Accounts - Auth'], summary="Request password reset link")
 class PasswordResetRequestView(generics.GenericAPIView):
@@ -169,16 +173,18 @@ class PasswordResetConfirmView(generics.GenericAPIView):
 class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
-    required_permission = 'admin.user_manage'  # A7: RBAC — exige permissão para gerenciar usuários
+    required_permission = 'admin.user_manage'
+    # A1: Feature limit check moved to permission class (runs before body parse, returns 403)
+    feature_limit_code = 'max_users'
     search_fields = ['username', 'email', 'first_name', 'last_name']
     ordering_fields = ['username', 'email', 'first_name', 'last_name', 'date_joined']
 
     def get_permissions(self):
-        # A7: 'me' é liberado para qualquer usuário autenticado (perfil próprio)
-        # As demais actions exigem 'admin.user_manage' via HasRolePermission
-        from .permissions import HasRolePermission
+        from .permissions import HasRolePermission, FeatureLimitPermission
         if self.action in ('me', 'retrieve'):
             return [permissions.IsAuthenticated()]
+        if self.action == 'create':
+            return [permissions.IsAuthenticated(), HasRolePermission(), FeatureLimitPermission()]
         return [permissions.IsAuthenticated(), HasRolePermission()]
 
     def get_queryset(self):
@@ -216,32 +222,22 @@ class UserViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         import logging
         logger = logging.getLogger(__name__)
-        
-        # Se for superusuário, pode definir a company explicitamente no payload
-        # Se não for, usa a company do request (tenant atual)
+
+        # Determine company — superuser can specify explicitly; others use request context
         if self.request.user.is_superuser and 'company' in serializer.validated_data:
             company = serializer.validated_data['company']
         else:
             company = getattr(self.request, 'company', None)
-        
+
         if not company:
             logger.error("USER CREATION FAILED: No company in request context")
             from rest_framework.exceptions import ValidationError
             raise ValidationError("Empresa não identificada no contexto.")
 
-        from shared_kernel.licensing import check_feature_limit
-        can_add, limit, current = check_feature_limit(company, 'max_users')
-        logger.info(f"Checking user limit for company {company.slug}: {current}/{limit} (Can add: {can_add})")
-        
-        # Superusers bypass limits check? Maybe not, strict licensing.
-        # Let's keep strict for now unless explicit bypass requested.
-        if not can_add and not self.request.user.is_superuser:
-            logger.warning(f"USER CREATION FAILED: Limit reached for company {company.slug} ({current}/{limit})")
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(f"Limite de usuários atingido ({current}/{limit}). Faça um upgrade do seu plano.")
-            
+        # A1: Feature limit check is now handled by FeatureLimitPermission in get_permissions().
+        # perform_create() no longer needs to call check_feature_limit() directly.
         serializer.save(company=company)
-        logger.info(f"USER CREATED SUCCESSFULLY for company {company.slug}")
+        logger.info("USER CREATED SUCCESSFULLY for company %s", company.slug)
 
     def perform_update(self, serializer):
         target_user = self.get_object()
@@ -290,7 +286,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     {"detail": "Você não tem permissão para exportar usuários."},
                     status=status.HTTP_403_FORBIDDEN
                 )
-        qs = self.get_queryset()
+        qs = self.get_queryset().select_related('role')  # P1: evitar N+1 query por u.role.name
         rows = ["username,email,first_name,last_name,role"]
         for u in qs:
             role_name = u.role.name if u.role else ""

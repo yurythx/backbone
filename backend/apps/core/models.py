@@ -2,7 +2,15 @@ import uuid
 from django.db import models
 from django.conf import settings
 from shared_kernel.models import BaseTenantModel
+from shared_kernel.utils import tenant_upload_to
 from shared_kernel.validators import validate_image, validate_avatar
+
+
+class CompanyManager(models.Manager):
+    """Default manager — returns only active (non-deactivated) companies."""
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True)
+
 
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -10,16 +18,48 @@ class Company(models.Model):
     slug = models.SlugField(unique=True)
     domain = models.CharField(max_length=255, blank=True, null=True, unique=True)
     branding = models.JSONField(default=dict, blank=True)
-    
+
+    # A4: Soft-delete — deactivate instead of hard-delete to preserve audit trail
+    # and avoid cascading deletes across all tenant data.
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Inactive companies are hidden from the API but data is preserved."
+    )
+    deactivated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set automatically when is_active is flipped to False."
+    )
+
     # Onboarding state
     onboarding_completed = models.BooleanField(default=False)
-    onboarding_step = models.IntegerField(default=1) # 1: Identity, 2: Visual, 3: Connectivity, 4: Domain
-    
+    onboarding_step = models.IntegerField(default=1)  # 1: Identity, 2: Visual, 3: Connectivity, 4: Domain
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Managers
+    objects = CompanyManager()         # default: active companies only
+    all_companies = models.Manager()   # bypass soft-delete (admin, migrations, integrity checks)
+
     def __str__(self):
         return self.name
+
+    def deactivate(self, save=True):
+        """Soft-delete this company. Preserves all tenant data."""
+        from django.utils import timezone
+        self.is_active = False
+        self.deactivated_at = timezone.now()
+        if save:
+            self.save(update_fields=['is_active', 'deactivated_at'])
+
+    def reactivate(self, save=True):
+        """Restore a previously deactivated company."""
+        self.is_active = True
+        self.deactivated_at = None
+        if save:
+            self.save(update_fields=['is_active', 'deactivated_at'])
 
 
 class TenantBranding(models.Model):
@@ -46,14 +86,14 @@ class TenantBranding(models.Model):
         help_text="Nome customizado da empresa (pode diferir do Company.name)"
     )
     logo = models.ImageField(
-        upload_to='branding/logos/',
+        upload_to=tenant_upload_to('branding/logos'),
         blank=True,
         null=True,
         validators=[validate_image],
         help_text="Logo da empresa (PNG/JPEG/WebP, max 10MB)"
     )
     icon = models.ImageField(
-        upload_to='branding/icons/',
+        upload_to=tenant_upload_to('branding/icons'),
         blank=True,
         null=True,
         validators=[validate_avatar],

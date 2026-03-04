@@ -7,7 +7,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # ── Stage 1: Builder ───────────────────────────────────────────
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 # Build-time dependencies (gcc, headers) — not carried to runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -28,7 +28,7 @@ RUN pip install --upgrade pip \
 
 
 # ── Stage 2: Runtime ───────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -38,17 +38,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Runtime-only system packages (no gcc or dev headers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # PostgreSQL client for migrations / pg_isready
     postgresql-client \
-    # netcat for the entrypoint DB wait loop
     netcat-traditional \
-    # Runtime LDAP library (not dev headers)
     libldap-common \
-    libldap-2.4-2 \
+    libldap-2.5-0 \
     libsasl2-2 \
-    # libmagic for python-magic (file type detection)
     libmagic1 \
-    # curl for optional health checks
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -69,10 +64,15 @@ RUN addgroup --system app \
 # Collect static files at build time (dummy env vars — no DB connection needed)
 RUN SECRET_KEY="build-phase-dummy-key" \
     DEBUG=False \
+    BUILDING=True \
+    USE_S3=False \
+    CORS_ALLOWED_ORIGINS="http://localhost" \
     DATABASE_URL="sqlite:///tmp/dummy.sqlite3" \
     REDIS_URL="" \
     FIELD_ENCRYPTION_KEY="" \
     python manage.py collectstatic --noinput --clear
+
+
 
 RUN chmod +x /app/entrypoint.sh
 

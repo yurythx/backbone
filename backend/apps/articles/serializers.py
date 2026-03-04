@@ -36,7 +36,28 @@ class ArticleSerializer(serializers.ModelSerializer):
             # Se for string vazia, trata como None
             if image_val == "":
                 image_val = None
-                
+            
+            # Validação de Segurança de Imagem (ID Harvesting prevention)
+            if isinstance(image_val, str) and image_val:
+                request = self.context.get('request')
+                if request and hasattr(request, 'company') and request.company:
+                    clean_path = image_val
+                    
+                    # Se for URL completa, extrai o path
+                    if '://' in clean_path:
+                        from urllib.parse import urlparse
+                        clean_path = urlparse(clean_path).path
+                    
+                    clean_path = clean_path.lstrip('/')
+                    if clean_path.startswith('media/'):
+                        clean_path = clean_path[6:]
+
+                    expected_prefix = f"tenants/{request.company.slug}/"
+                    allowed_prefixes = [expected_prefix, 'branding/', 'public/']
+                    
+                    if not any(clean_path.startswith(prefix) for prefix in allowed_prefixes):
+                        raise serializers.ValidationError({'image': 'A imagem selecionada não pertence à sua organização.'})
+
             res = super().to_internal_value(mutable_data)
             res['image'] = image_val
             return res

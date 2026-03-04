@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, ArrowLeft, Image as ImageIcon, X, Globe, MessageSquareQuote, Layout, CheckCircle2, XCircle, Send, Sparkles, Link as LinkIcon, Lock } from "lucide-react"
+import { Loader2, ArrowLeft, Image as ImageIcon, X, Globe, MessageSquareQuote, Layout, CheckCircle2, XCircle, Send, Sparkles, Link as LinkIcon, Lock, Trash2 } from "lucide-react"
 import { RichEditor } from "@/components/ui/rich-editor"
 import { PreviewDialog } from "@/components/cms/preview-dialog"
 import { MediaDialog } from "@/features/media/media-dialog"
@@ -31,7 +31,18 @@ import { notify } from "@/lib/notifications"
 import { ArticleHistory } from "@/features/articles/article-history"
 import { ArticleComments } from "@/features/articles/article-comments"
 import { VisibilityToggle } from "@/components/articles/visibility-toggle"
-import { slugify } from "@/lib/utils"
+import { slugify, fixImageUrl } from "@/lib/utils"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const formSchema = z.object({
   title: z.string().min(5, "O título deve ter pelo menos 5 caracteres."),
@@ -173,6 +184,20 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
     }
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/api/articles/articles/${id}/`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      notify.success("Artigo excluído", "O artigo foi removido com sucesso.")
+      if (onSuccess) onSuccess()
+    },
+    onError: (error: unknown) => {
+      notify.error("Falha ao excluir artigo", error instanceof Error ? error.message : String(error))
+    }
+  })
+
   const handleAISuggest = () => {
     const title = form.getValues("title")
     const content = form.getValues("content")
@@ -228,6 +253,31 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
             <>
               <ArticleHistory articleId={initialData.id} />
               <ArticleComments articleId={initialData.id} />
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="icon" className="shadow-sm">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta ação não pode ser desfeita. Isso excluirá permanentemente o artigo &quot;{initialData.title}&quot;.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={() => deleteMutation.mutate(initialData.id)} 
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </>
           )}
           <div className="flex-1 sm:flex-initial">
@@ -323,7 +373,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                       <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] text-gray-500 overflow-hidden">
                         {previewImage ? (
                           <Image
-                            src={previewImage || ""}
+                            src={fixImageUrl(previewImage) || ""}
                             alt="Pré-visualização"
                             width={28}
                             height={28}
@@ -523,7 +573,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                 {previewImage ? (
                   <div className="relative aspect-video rounded-xl overflow-hidden border shadow-inner group">
                     <Image
-                      src={previewImage || ""}
+                      src={fixImageUrl(previewImage) || ""}
                       alt="Preview"
                       fill
                       className="object-cover transition-transform group-hover:scale-105"
@@ -545,19 +595,21 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                 ) : (
                   <MediaDialog
                     onSelect={(url) => {
-                      form.setValue("image", url)
-                      setPreviewImage(url)
+                      const fixed = fixImageUrl(url)
+                      if (fixed) {
+                        form.setValue("image", fixed)
+                        setPreviewImage(fixed)
+                      }
                     }}
-                    trigger={
-                      <div className="aspect-video flex flex-col items-center justify-center border-2 border-dashed rounded-xl cursor-pointer hover:bg-muted/50 hover:border-primary/50 transition-all group">
-                        <div className="h-12 w-12 rounded-full bg-primary/5 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                          <ImageIcon className="h-6 w-6 text-primary" />
-                        </div>
-                        <span className="text-sm font-bold">Selecionar Imagem</span>
-                        <span className="text-[10px] text-muted-foreground mt-1">Recomendado: 1200x630px</span>
+                  >
+                    <div className="border-2 border-dashed border-muted-foreground/20 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all group">
+                      <div className="h-12 w-12 rounded-full bg-muted group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
+                        <ImageIcon className="h-6 w-6 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
-                    }
-                  />
+                      <p className="text-sm font-medium text-foreground">Adicionar imagem de capa</p>
+                      <p className="text-xs text-muted-foreground mt-1">Recomendado: 1200x630px</p>
+                    </div>
+                  </MediaDialog>
                 )}
               </div>
             </div>

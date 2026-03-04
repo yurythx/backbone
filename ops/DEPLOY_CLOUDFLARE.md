@@ -1,128 +1,196 @@
-# 📝 Guia de Deploy - Backbone SaaS com Cloudflare Tunnel
+# 📦 Guia de Deploy — Backbone com Cloudflare Tunnel
 
-## 🎯 Visão Geral
+> **Arquitetura**: Docker Compose (sem Nginx) + Cloudflare Tunnel para SSL/HTTPS  
+> **Servidor**: Ubuntu 22.04 LTS  
+> **Acesso**: Git pull → `./scripts/deploy.sh`
 
-Deploy simplificado do Backbone em produção usando **Cloudflare Tunnel** para SSL/HTTPS.
+---
 
-**Arquitetura**:
-- ✅ Cloudflare Tunnel → Backend (8005) + Frontend (3005)
-- ✅ WhiteNoise serve arquivos estáticos
-- ✅ Sem Nginx (menos overhead!)
+## 🗺️ Visão Geral da Arquitetura
+
+```
+Internet
+   │
+   ▼
+Cloudflare (SSL/DDoS/WAF)
+   │
+   ▼
+cloudflared daemon ─── roteamento por hostname/path
+   │
+   ├── /api, /admin, /ws, /static, /media  →  localhost:8005 (Django/Daphne)
+   │
+   └── /* (resto)                          →  localhost:3005 (Next.js)
+
+localhost:8005 → container backbone_backend (porta interna 8000)
+localhost:3005 → container backbone_frontend (porta interna 3000)
+
+Serviços internos (invisíveis externamente):
+  backbone_db     (PostgreSQL)
+  backbone_redis  (Redis)
+  backbone_minio  (MinIO S3-compatible)
+  backbone_celery (Celery Worker)
+  backbone_celery_beat (Celery Beat)
+```
+
+**Vantagens**:
+- ✅ SSL/HTTPS gerenciado automaticamente pelo Cloudflare
+- ✅ Sem certificados para renovar (sem Let's Encrypt)  
+- ✅ Sem Nginx (menos complexidade)
+- ✅ DDoS protection + WAF gratuitos
+- ✅ Portas 80/443 não precisam estar abertas no servidor
 
 ---
 
 ## 📋 Pré-requisitos
 
-1. **Servidor Ubuntu 22.04 LTS**:
-   - Docker & Docker Compose instalados
-   - 2GB RAM mínimo (4GB recomendado)
-   - 20GB disco
+### Servidor Ubuntu 22.04 LTS
 
-2. **Cloudflare Account**:
-   - Domínio configurado no Cloudflare
-   - Cloudflare Tunnel criado
+- 2 GB RAM mínimo (4 GB recomendado)
+- 20 GB disco
+- Docker Engine + Docker Compose v2
+- Git
 
-3. **Variáveis de Ambiente**:
-   - Copiar `.env.example` para `.env`
-   - Configurar todas as variáveis obrigatórias
+### Cloudflare
+
+- Conta na Cloudflare
+- Domínio configurado na Cloudflare (nameservers apontando para CF)
 
 ---
 
-## 🚀 Passo 1: Configurar Cloudflare Tunnel
+## 🔧 Passo 1: Preparar o Servidor
 
-### 1.1 Instalar cloudflared
+### 1.1 Instalar Docker
+
+```bash
+# Instalar dependências
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+
+# Adicionar repositório Docker
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Adicionar usuário atual ao grupo docker (evita usar sudo)
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### 1.2 Configurar Firewall (UFW)
+
+```bash
+# Bloquear tudo por padrão
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# Permitir apenas SSH
+sudo ufw allow 22/tcp
+
+# Ativar
+sudo ufw enable
+
+# Verificar
+sudo ufw status
+```
+
+> ⚠️ **IMPORTANTE**: Não abra as portas 8005, 3005, 5432, 6379, 9000.  
+> O Cloudflare Tunnel conecta via loopback (`127.0.0.1`), nada precisa ser exposto.
+
+---
+
+## ☁️ Passo 2: Configurar Cloudflare Tunnel
+
+### 2.1 Instalar cloudflared
 
 ```bash
 wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 sudo dpkg -i cloudflared-linux-amd64.deb
+cloudflared --version
 ```
 
-### 1.2 Autenticar
+### 2.2 Autenticar na Cloudflare
 
 ```bash
 cloudflared tunnel login
 ```
 
-### 1.3 Criar Tunnel
+> Abrirá uma URL para você autorizar no browser. Após autorizar, um arquivo de credenciais será salvo em `~/.cloudflared/cert.pem`.
+
+### 2.3 Criar o Tunnel
 
 ```bash
 cloudflared tunnel create backbone-prod
 ```
 
-Anote o **Tunnel ID** gerado (ex: `abc123-def456-ghi789`).
+Anote o **Tunnel ID** retornado (ex: `a1b2c3d4-e5f6-7890-abcd-ef1234567890`).
 
-### 1.4 Configurar DNS
+### 2.4 Configurar DNS no Cloudflare Dashboard
 
-No **Cloudflare Dashboard** → DNS → Add Record:
+Acesse **Cloudflare Dashboard → Seu Domínio → DNS → Add Record**:
 
-```
-Type: CNAME
-Name: @ (ou subdomain desejado)
-Target: {TUNNEL_ID}.cfargotunnel.com
-Proxied: Yes (ícone laranja ativado)
-```
+| Campo   | Valor                                     |
+|---------|-------------------------------------------|
+| Type    | `CNAME`                                   |
+| Name    | `@` (raiz) ou seu subdomínio              |
+| Target  | `{TUNNEL_ID}.cfargotunnel.com`            |
+| Proxied | ✅ Sim (ícone laranja ativado)             |
 
-### 1.5 Criar arquivo de configuração
+Se quiser `www` também:
+
+| Campo   | Valor                                     |
+|---------|-------------------------------------------|
+| Type    | `CNAME`                                   |
+| Name    | `www`                                     |
+| Target  | `{TUNNEL_ID}.cfargotunnel.com`            |
+| Proxied | ✅ Sim                                    |
+
+### 2.5 Criar arquivo de configuração do Tunnel
 
 ```bash
 sudo mkdir -p /etc/cloudflared
 sudo nano /etc/cloudflared/config.yml
 ```
 
-**Conteúdo** (substitua `seudominio.com` e `{TUNNEL_ID}`):
+**Conteúdo** (substitua `TUNNEL_ID` e `seudominio.com`):
 
 ```yaml
-tunnel: {TUNNEL_ID}
-credentials-file: /root/.cloudflared/{TUNNEL_ID}.json
+tunnel: TUNNEL_ID
+credentials-file: /root/.cloudflared/TUNNEL_ID.json
 
 ingress:
-  # Backend API
-  - hostname: seudominio.com
-    path: ^/api(/.*)?$
+  # ── Backend (Django/Daphne) ──────────────────────────────
+  # API, Admin, WebSockets, Static, Media
+  - hostname: api.projetoravenna.cloud
     service: http://localhost:8005
-  
-  # Django Admin
-  - hostname: seudominio.com
-    path: ^/admin(/.*)?$
-    service: http://localhost:8005
-  
-  # WebSocket (Chat)
-  - hostname: seudominio.com
-    path: ^/ws(/.*)?$
-    service: http://localhost:8005
-  
-  # Arquivos estáticos (WhiteNoise)
-  - hostname: seudominio.com
-    path: ^/static(/.*)?$
-    service: http://localhost:8005
-  
-  # Media files
-  - hostname: seudominio.com
-    path: ^/media(/.*)?$
-    service: http://localhost:8005
-  
-  # Health check
-  - hostname: seudominio.com
-    path: ^/health(/.*)?$
-    service: http://localhost:8005
-  
-  # Frontend (Next.js) - catch-all
-  - hostname: seudominio.com
+
+  # ── Frontend (Next.js) — catch-all ──────────────────────
+  - hostname: projetoravenna.cloud
     service: http://localhost:3005
-  
-  # Fallback 404
+
+  # Também rotear www para o frontend
+  - hostname: www.projetoravenna.cloud
+    service: http://localhost:3005
+
+  # Fallback obrigatório
   - service: http_status:404
 ```
 
-### 1.6 Instalar como Serviço
+### 2.6 Instalar como serviço do sistema
 
 ```bash
 sudo cloudflared service install
-sudo systemctl start cloudflared
 sudo systemctl enable cloudflared
+sudo systemctl start cloudflared
 ```
 
-### 1.7 Verificar Status
+### 2.7 Verificar status
 
 ```bash
 sudo systemctl status cloudflared
@@ -131,232 +199,179 @@ sudo journalctl -u cloudflared -f
 
 ---
 
-## 🐳 Passo 2: Deploy da Aplicação
+## 🚀 Passo 3: Deploy da Aplicação
 
-### 2.1 Clonar Repositório
+### 3.1 Clonar o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/backbone.git
-cd backbone
+sudo mkdir -p /opt/backbone
+sudo chown $USER:$USER /opt/backbone
+cd /opt/backbone
+
+git clone https://github.com/seu-usuario/backbone.git .
 ```
 
-### 2.2 Configurar Variáveis de Ambiente
+### 3.2 Configurar variáveis de ambiente
 
 ```bash
-cp backend/.env.example backend/.env
-nano backend/.env
+cp .env.prod.example .env.prod
+nano .env.prod
 ```
 
-**Variáveis OBRIGATÓRIAS**:
+Preencha **todos** os valores marcados com `CHANGE_ME`:
 
 ```bash
-# Django
-DEBUG=False
-SECRET_KEY=GERE_UM_SECRET_KEY_FORTE_AQUI_50_CARACTERES
-ALLOWED_HOSTS=seudominio.com,www.seudominio.com
-CSRF_TRUSTED_ORIGINS=https://seudominio.com,https://www.seudominio.com
-CORS_ALLOWED_ORIGINS=https://seudominio.com
+# Gerar SECRET_KEY
+docker run --rm python:3.12-slim python -c \
+  "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 
-# Database
-DATABASE_URL=postgres://postgres:SENHA_FORTE_AQUI@db:5432/backbone_db
-POSTGRES_DB=backbone_db
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=SENHA_FORTE_AQUI
-
-# Redis
-REDIS_URL=redis://redis:6379/0
-
-# MinIO
-USE_S3=True
-AWS_S3_ENDPOINT_URL=http://minio:9000
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=SENHA_MINIO_FORTE_AQUI
-AWS_STORAGE_BUCKET_NAME=backbone-media
-AWS_ACCESS_KEY_ID=minioadmin
-AWS_SECRET_ACCESS_KEY=SENHA_MINIO_FORTE_AQUI
-
-# Frontend
-NEXT_PUBLIC_API_URL=https://seudominio.com/api
+# Gerar FIELD_ENCRYPTION_KEY
+docker run --rm python:3.12-slim python -c \
+  "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-> 💡 **Gerar SECRET_KEY**:
-> ```bash
-> docker-compose -f docker-compose.prod.yml run --rm backend python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-> ```
-
-### 2.3 Build e Start
+### 3.3 Tornar scripts executáveis
 
 ```bash
-docker-compose -f docker-compose.prod.yml up -d --build
+chmod +x scripts/deploy.sh scripts/backup.sh scripts/restore.sh
 ```
 
-Aguarde ~5-10 minutos para o build completo.
-
-### 2.4 Verificar Containers
+### 3.4 Primeiro deploy
 
 ```bash
-docker-compose -f docker-compose.prod.yml ps
+# Primeiro deploy pula o backup (banco ainda não existe)
+SKIP_BACKUP=1 ./scripts/deploy.sh
 ```
 
-Todos devem estar **Up** e **healthy**.
-
-### 2.5 Rodar Migrações
+### 3.5 Criar superusuário
 
 ```bash
-docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
-docker-compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
-```
-
-### 2.6 Criar Superusuário
-
-```bash
-docker-compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
-```
-
-### 2.7 Popular Dados Iniciais
-
-```bash
-docker-compose -f docker-compose.prod.yml exec backend python manage.py seed_plans
+docker compose -f docker-compose.prod.yml --env-file .env.prod \
+  exec backend python manage.py createsuperuser
 ```
 
 ---
 
-## ✅ Passo 3: Verificação
+## ✅ Passo 4: Verificação
 
-### 3.1 Health Check Local
+### 4.1 Health check local (no servidor)
 
 ```bash
+# Backend
 curl http://localhost:8005/api/core/health/
+
+# Resposta esperada:
+# {"status": "healthy", "database": "ok", "redis": "ok", "minio": "ok"}
+
+# Frontend
+curl -sI http://localhost:3005 | head -5
 ```
 
-Deve retornar:
+### 4.2 Verificar containers
 
-```json
-{
-  "status": "healthy",
-  "database": "ok",
-  "redis": "ok",
-  "minio": "ok"
-}
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 ```
 
-### 3.2 Acessar pela Internet
+Todos devem estar **Up** e **healthy**.
 
-- **Site**: https://seudominio.com
-- **Admin**: https://seudominio.com/admin
-- **API Docs**: https://seudominio.com/api/schema/swagger-ui/
-- **Health**: https://seudominio.com/health/
+### 4.3 Acessar via internet
+
+| Serviço       | URL                                |
+|---------------|------------------------------------|
+| Site          | `https://seudominio.com`           |
+| Admin         | `https://seudominio.com/admin`     |
+| API Docs      | `https://seudominio.com/api/schema/swagger-ui/` |
+| Health        | `https://seudominio.com/api/core/health/` |
+
+---
+
+## 🔄 Deploys Subsequentes
+
+### Via script (recomendado)
+
+```bash
+cd /opt/backbone
+./scripts/deploy.sh
+```
+
+### Via GitHub Actions (automático)
+
+Push na branch `main` → dispara o workflow automaticamente.
+
+```bash
+# No seu computador local:
+git push origin main
+```
+
+Ou via tag versionada:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+### Restart rápido (sem rebuild)
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod restart backend
+```
 
 ---
 
 ## 📊 Monitoramento
 
-### Logs em Tempo Real
+### Logs em tempo real
 
 ```bash
-# Todos os containers
-docker-compose -f docker-compose.prod.yml logs -f
+# Todos os serviços
+docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f
 
-# Backend apenas
-docker-compose -f docker-compose.prod.yml logs -f backend
+# Apenas backend
+docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f backend
 
-# Cloudflare Tunnel
+# Tunnel Cloudflare
 sudo journalctl -u cloudflared -f
 ```
 
-### Status dos Serviços
+### Status dos serviços
 
 ```bash
-# Docker
-docker-compose -f docker-compose.prod.yml ps
-
-# Cloudflare
+docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 sudo systemctl status cloudflared
 ```
 
 ---
 
-## 🔄 Atualizações
-
-### Atualizar Código
-
-```bash
-cd backbone
-git pull origin main
-docker-compose -f docker-compose.prod.yml down
-docker-compose -f docker-compose.prod.yml up -d --build
-docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
-docker-compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
-```
-
-### Restart Rápido
-
-```bash
-docker-compose -f docker-compose.prod.yml restart
-```
-
----
-
-## 🔐 Segurança
-
-### Firewall (UFW)
-
-```bash
-# Permitir SSH
-sudo ufw allow 22/tcp
-
-# Negar tudo exceto SSH
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-
-# Ativar
-sudo ufw enable
-```
-
-> ⚠️ **IMPORTANTE**: Não exponha portas 8005 e 3005 publicamente. Cloudflare Tunnel acessa via localhost.
-
-### Headers de Segurança
-
-WhiteNoise adiciona automaticamente:
-- `X-Content-Type-Options: nosniff`
-- Cache headers otimizados
-
-Django settings já possui:
-- `SECURE_BROWSER_XSS_FILTER`
-- `X_FRAME_OPTIONS`
-- CSP Middleware
-
-### Rate Limiting
-
-Configurado no backend:
-- **Tenant**: 1000 requests/day
-- **Anon**: 100 requests/day
-
-Cloudflare adiciona:
-- DDoS protection
-- Bot detection
-- WAF (Web Application Firewall)
-
----
-
 ## 🗄️ Backup
 
-### Backup Manual do Banco
+### Backup manual
 
 ```bash
-docker-compose -f docker-compose.prod.yml exec db pg_dump -U postgres backbone_db > backup_$(date +%Y%m%d).sql
+# Banco de dados
+BACKUP_DIR=/opt/backbone-backups ./scripts/backup.sh
+
+# Ou direto:
+docker compose -f docker-compose.prod.yml --env-file .env.prod \
+  exec -T db pg_dump -U backbone_user backbone_prod | gzip > backup_$(date +%F).sql.gz
 ```
 
 ### Restore
 
 ```bash
-cat backup_20260206.sql | docker-compose -f docker-compose.prod.yml exec -T db psql -U postgres backbone_db
+zcat backup_YYYY-MM-DD.sql.gz | \
+  docker compose -f docker-compose.prod.yml --env-file .env.prod \
+  exec -T db psql -U backbone_user backbone_prod
 ```
 
-### Backup MinIO (Mídia)
+### Agendamento automático (cron)
 
 ```bash
-docker-compose -f docker-compose.prod.yml exec minio mc mirror /data/backbone-media ./backup_media/
+# Adicionar ao crontab do servidor
+crontab -e
+
+# Backup diário às 3h da manhã (retém por 7 dias)
+0 3 * * * cd /opt/backbone && BACKUP_DIR=/opt/backbone-backups RETENTION_DAYS=7 ./scripts/backup.sh >> /var/log/backbone-backup.log 2>&1
 ```
 
 ---
@@ -367,88 +382,89 @@ docker-compose -f docker-compose.prod.yml exec minio mc mirror /data/backbone-me
 
 ```bash
 # Verificar logs
-sudo journalctl -u cloudflared -n 50
+sudo journalctl -u cloudflared -n 100
 
-# Restart
+# Reiniciar tunnel
 sudo systemctl restart cloudflared
 
 # Info do tunnel
-cloudflared tunnel info {TUNNEL_ID}
+cloudflared tunnel info backbone-prod
+
+# Testar localmente
+curl http://localhost:8005/api/core/health/
 ```
 
-### 502 Bad Gateway
+### 502 Bad Gateway via Cloudflare
 
 ```bash
-# Verificar se backend está rodando
-docker-compose -f docker-compose.prod.yml ps backend
+# Verificar se o backend está rodando
+docker compose -f docker-compose.prod.yml --env-file .env.prod ps backend
 
 # Logs
-docker-compose -f docker-compose.prod.yml logs backend --tail=100
+docker compose -f docker-compose.prod.yml --env-file .env.prod logs backend --tail=100
 
 # Restart
-docker-compose -f docker-compose.prod.yml restart backend
+docker compose -f docker-compose.prod.yml --env-file .env.prod restart backend
 ```
 
-### Banco de dados corrompido
+### Container não sobe (unhealthy)
 
 ```bash
-# Acessar PostgreSQL
-docker-compose -f docker-compose.prod.yml exec db psql -U postgres -d backbone_db
+# Ver o motivo
+docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+docker inspect backbone_backend | grep -A 10 Health
 
-# Verificar integridade
-\dt
-SELECT COUNT(*) FROM core_company;
+# Logs detalhados
+docker compose -f docker-compose.prod.yml --env-file .env.prod logs backend
 ```
 
-### Frontend não carrega
+### Erro de migração
 
 ```bash
-# Verificar logs
-docker-compose -f docker-compose.prod.yml logs frontend
+docker compose -f docker-compose.prod.yml --env-file .env.prod \
+  exec backend python manage.py showmigrations
 
-# Rebuild
-docker-compose -f docker-compose.prod.yml up -d --build frontend
+docker compose -f docker-compose.prod.yml --env-file .env.prod \
+  exec backend python manage.py migrate --noinput --verbosity=2
+```
+
+### WebSocket (chat) não funciona
+
+Verifique se o Cloudflare tem **WebSockets habilitado**:  
+Dashboard → Network → WebSockets → **On**
+
+---
+
+## ⚙️ GitHub Actions — Configuração dos Secrets
+
+Acesse: **Settings → Secrets and variables → Actions** do repositório.
+
+| Secret         | Descrição                                          |
+|----------------|----------------------------------------------------|
+| `DEPLOY_HOST`  | IP ou hostname do servidor                         |
+| `DEPLOY_USER`  | Usuário SSH (ex: `ubuntu`)                         |
+| `DEPLOY_SSH_KEY` | Conteúdo da chave SSH privada                    |
+| `DEPLOY_PORT`  | Porta SSH (padrão: `22`)                           |
+| `DEPLOY_PATH`  | Caminho do projeto (ex: `/opt/backbone`)           |
+
+### Gerar chave SSH para deploy
+
+```bash
+# No seu computador local:
+ssh-keygen -t ed25519 -C "backbone-github-deploy" -f ~/.ssh/backbone_deploy
+
+# Copiar chave pública para o servidor:
+ssh-copy-id -i ~/.ssh/backbone_deploy.pub ubuntu@seu-servidor
+
+# O valor de DEPLOY_SSH_KEY é o conteúdo da chave PRIVADA:
+cat ~/.ssh/backbone_deploy
 ```
 
 ---
 
-## 📞 Performance Tips
+## 📚 Referências
 
-### 1. Habilitar Cloudflare Cache
-
-No Cloudflare Dashboard → Caching:
-- **Cache Level**: Standard
-- **Browser Cache TTL**: Respect Existing Headers
-- **Always Online**: On
-
-### 2. Minify Assets
-
-No Cloudflare Dashboard → Speed → Optimization:
-- ✅ Auto Minify (HTML, CSS, JS)
-- ✅ Brotli compression
-
-### 3. Database Tuning
-
-Para produção com tráfego alto, ajuste PostgreSQL:
-
-```bash
-# backend/docker-compose.prod.yml
-db:
-  environment:
-    POSTGRES_SHARED_BUFFERS: 256MB
-    POSTGRES_EFFECTIVE_CACHE_SIZE: 1GB
-    POSTGRES_MAX_CONNECTIONS: 100
-```
-
----
-
-## 📚 Recursos
-
-- **Cloudflare Tunnel Docs**: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/
-- **WhiteNoise Docs**: http://whitenoise.evans.io/
-- **Django Deployment**: https://docs.djangoproject.com/en/4.2/howto/deployment/
-
----
-
-**🎉 Pronto! Seu Backbone está rodando em produção de forma segura e otimizada!**
-
+- [Cloudflare Tunnel Docs](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/)
+- [Docker Compose Docs](https://docs.docker.com/compose/)
+- [Django Deployment Checklist](https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/)
+- [WhiteNoise](https://whitenoise.readthedocs.io/)

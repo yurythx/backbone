@@ -62,21 +62,22 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
     }
   })
 
-  const getInitialCompanySlug = () => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('companySlug') || ""
-    }
-    return ""
-  }
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       username: "",
       password: "",
-      companySlug: getInitialCompanySlug(),
+      companySlug: "",
     },
   })
+
+  // Load saved slug on client side only to avoid hydration mismatch
+  useEffect(() => {
+    const savedSlug = localStorage.getItem('companySlug')
+    if (savedSlug) {
+      form.setValue('companySlug', savedSlug)
+    }
+  }, [form])
 
   // Synchronize branding when companies load if we have a slug
   useEffect(() => {

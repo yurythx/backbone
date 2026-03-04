@@ -1,3 +1,5 @@
+import sys
+import warnings
 import environ
 import os
 from pathlib import Path
@@ -22,9 +24,6 @@ if not SECRET_KEY:
     )
 
 DEBUG = env("DEBUG")
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
-
-import sys
 TESTING = 'test' in sys.argv or 'test_coverage' in sys.argv or '--test' in sys.argv
 
 INSTALLED_APPS = [
@@ -108,11 +107,13 @@ REST_FRAMEWORK = {
         # SECURITY: Adjusted to realistic values to prevent abuse
         # tenant: authenticated users per company (1000 req/day = ~1 req/90sec)
         # anon: unauthenticated requests (100 req/day for onboarding, public endpoints)
-        'tenant': '1000/day', 
+        'tenant': '1000/day',
         'anon': '100/day',
         # Scoped throttles
         'link_preview': '15/min',
         'public_articles': '60/min',
+        # SECURITY: Strict limit on user registration to prevent bot account creation
+        'user_registration': '5/hour',
     }
 }
 
@@ -176,13 +177,15 @@ if not DEBUG and not CORS_ALLOWED_ORIGINS:
     )
 
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[
-    "https://backbone.projetoravenna.cloud",
-    "https://api.backbone.projetoravenna.cloud",
+    "https://projetoravenna.cloud",
+    "https://api.projetoravenna.cloud",
     "http://192.168.1.121:3005",
     "http://192.168.1.121:8005",
     "http://localhost:3000",
     "http://localhost:3005",
     "http://localhost:8005",
+    "http://127.0.0.1:3005",
+    "http://127.0.0.1:8005",
 ])
 
 # Trust X-Forwarded-Host from Cloudflare/Proxy
@@ -190,8 +193,8 @@ USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
-    "api.backbone.projetoravenna.cloud",
-    "backbone.projetoravenna.cloud",
+    "api.projetoravenna.cloud",
+    "projetoravenna.cloud",
     "192.168.1.121",
     "localhost",
     "127.0.0.1"
@@ -238,24 +241,52 @@ if USE_S3:
     AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
     AWS_S3_SIGNATURE_VERSION = "s3v4"
     
-    # Static files on S3
-    # AWS_STATIC_LOCATION = 'static'
-    # STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-    
     # Media files on S3
-    AWS_MEDIA_LOCATION = 'media'
+    AWS_MEDIA_LOCATION = ''
+    
+    # Modern Django 4.2+ STORAGES setting
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "location": AWS_MEDIA_LOCATION,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+    
+    # Backward compatibility
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     
-    # Configuração para Proxy de Media (MinIO interno -> API externa)
-    # Gera URLs como: https://api.backbone.../media/caminho/arquivo.jpg
-    # O endpoint /media/ na API fará o proxy para o MinIO
-    AWS_S3_CUSTOM_DOMAIN = f'{ALLOWED_HOSTS[0]}/media' 
-    AWS_QUERYSTRING_AUTH = False # Não assinar URLs (o proxy autentica ou é público)
+    # Configuração de Domínio e URLs (Proxy ou Direto)
+    media_host = env("MEDIA_HOST", default=None)
+    if not media_host:
+        if DEBUG:
+            media_host = 'localhost:8005'
+        else:
+            media_host = ALLOWED_HOSTS[0] if ALLOWED_HOSTS else 'localhost'
     
-    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+    media_base_path = env("MEDIA_BASE_PATH", default='media')
+    AWS_S3_CUSTOM_DOMAIN = f"{media_host}/{media_base_path}".rstrip('/')
+    
+    AWS_QUERYSTRING_AUTH = False
+    
+    media_proto = 'http' if DEBUG else 'https'
+    MEDIA_URL = f'{media_proto}://{AWS_S3_CUSTOM_DOMAIN}/'
 else:
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+
 
 # Email Configuration
 EMAIL_BACKEND = env.str("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
@@ -264,7 +295,7 @@ EMAIL_PORT = env.int("EMAIL_PORT", default=1025)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
 EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", default="")
-DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="Backbone <noreply@backbone.io>")
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="Backbone <noreply@projetoravenna.cloud>")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 FRONTEND_URL = env.str("FRONTEND_URL", default="http://localhost:3005")
 
@@ -299,10 +330,14 @@ DATABASES = {
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 
 if REDIS_URL:
-    # Ensure it doesn't end with a slash or DB number for easier appending
-    # If the URL already has a DB (e.g., /0), we strip it to get the base
-    import re
-    REDIS_BASE = re.sub(r'/[0-9]+$', '', REDIS_URL.rstrip('/'))
+    # D4: Parse REDIS_URL robustly using urllib instead of fragile regex.
+    # Strips any DB number suffix so we can assign logical DBs explicitly below.
+    from urllib.parse import urlparse as _urlparse
+    _parsed = _urlparse(REDIS_URL)
+    # Reconstruct base URL: scheme + auth (if any) + host + port (without path/db)
+    _auth = f"{_parsed.username}:{_parsed.password}@" if _parsed.username else ""
+    _port = f":{_parsed.port}" if _parsed.port else ""
+    REDIS_BASE = f"{_parsed.scheme}://{_auth}{_parsed.hostname}{_port}"
 
     
     CHANNEL_LAYERS = {
@@ -438,9 +473,19 @@ LOGGING = {
 
 # Web Push (VAPID) Settings
 # Generate keys with: pywebpush generate-vapid-keys
-VAPID_PUBLIC_KEY = env('VAPID_PUBLIC_KEY', default='BBA-PLACEHOLDER-FOR-VAPID-PUBLIC-KEY-MUST-BE-65-CHARS-LONG-BASE64')
-VAPID_PRIVATE_KEY = env('VAPID_PRIVATE_KEY', default='-PLACEHOLDER-FOR-VAPID-PRIVATE-KEY-BASE64')
+VAPID_PUBLIC_KEY = env('VAPID_PUBLIC_KEY', default=None)
+VAPID_PRIVATE_KEY = env('VAPID_PRIVATE_KEY', default=None)
 VAPID_ADMIN_EMAIL = env('VAPID_ADMIN_EMAIL', default='admin@backbone.com')
+
+# Warn if VAPID keys are missing in production (web push will silently fail without them)
+if not DEBUG and not TESTING and not VAPID_PUBLIC_KEY:
+    warnings.warn(
+        "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are not set. "
+        "Web push notifications will be disabled. "
+        "Generate keys with: pywebpush generate-vapid-keys",
+        UserWarning,
+        stacklevel=2,
+    )
 
 # AI Settings
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
@@ -461,7 +506,10 @@ if SENTRY_DSN:
             CeleryIntegration(),
         ],
         traces_sample_rate=0.1,
-        send_default_pii=True,
+        # SECURITY: send_default_pii=False — LGPD/GDPR compliance.
+        # Sentry will NOT automatically attach user IPs, email or usernames.
+        # User context is added manually via StructuredLoggingMiddleware (id + username only).
+        send_default_pii=False,
         environment=env("SENTRY_ENVIRONMENT", default="production"),
     )
 
@@ -473,8 +521,12 @@ CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
-CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=DEBUG)
-CELERY_TASK_EAGER_PROPAGATES = env.bool("CELERY_TASK_EAGER_PROPAGATES", default=DEBUG)
+# IMPORTANT: CELERY_TASK_ALWAYS_EAGER must be driven by TESTING flag, NOT DEBUG.
+# Running eager in dev (DEBUG=True) masks serialization and timing bugs that
+# only surface in production with a real Celery worker.
+# Override with CELERY_TASK_ALWAYS_EAGER=True in .env only when intentionally testing tasks.
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=TESTING)
+CELERY_TASK_EAGER_PROPAGATES = env.bool("CELERY_TASK_EAGER_PROPAGATES", default=TESTING)
 CELERY_TASK_IGNORE_RESULT = True
 
 CELERY_BEAT_SCHEDULE = {
@@ -487,6 +539,16 @@ CELERY_BEAT_SCHEDULE = {
 # Field Encryption (for sensitive data like SMTP passwords)
 # Generate key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 FIELD_ENCRYPTION_KEY = env('FIELD_ENCRYPTION_KEY', default=None)
+
+# SECURITY: In production, encryption key is mandatory.
+# Without it, SMTP and LDAP passwords are stored as empty bytes (silently unprotected).
+# BUILDING=True is set by the Dockerfile during collectstatic — secrets are never available at build time.
+BUILDING = env.bool('BUILDING', default=False)
+if not DEBUG and not TESTING and not BUILDING and not FIELD_ENCRYPTION_KEY:
+    raise ImproperlyConfigured(
+        "FIELD_ENCRYPTION_KEY must be set in production. "
+        "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+    )
 
 # Content Security Policy (CSP)
 from .csp_config import *  # noqa

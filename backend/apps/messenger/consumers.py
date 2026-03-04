@@ -1,9 +1,12 @@
 import json
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.core.cache import cache
 from shared_kernel.tenant_context import set_current_company
 from .models import Conversation
+
+logger = logging.getLogger(__name__)
 
 
 class PresenceConsumer(AsyncWebsocketConsumer):
@@ -71,7 +74,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
                     if msg_type == 'set_status':
                         await self.broadcast_status(new_status)
         except Exception as e:
-            print(f"Error in PresenceConsumer receive: {e}")
+            logger.exception("Error in PresenceConsumer.receive", extra={"user_id": getattr(self.user, 'id', None)})
 
     async def broadcast_status(self, status):
         if hasattr(self, 'room_group_name'):

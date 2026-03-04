@@ -1,4 +1,8 @@
+import logging
 from rest_framework import permissions
+from rest_framework.exceptions import PermissionDenied
+
+logger = logging.getLogger(__name__)
 
 # Definição centralizada de permissões e papéis padrão
 
@@ -60,6 +64,7 @@ DEFAULT_ROLES = {
     }
 }
 
+
 class HasRolePermission(permissions.BasePermission):
     """
     Verifica se o usuário tem a permissão exigida pela view (definida em 'required_permission').
@@ -80,3 +85,113 @@ class HasRolePermission(permissions.BasePermission):
 
         # Verifica se o slug da permissão está na lista de permissões da role
         return required_permission in request.user.role.permissions
+
+
+class ActionRolePermission(permissions.BasePermission):
+    """
+    Permission class que suporta permissões diferenciadas por action DRF.
+
+    Ao invés de mutar `self.required_permission` dentro de `perform_create` /
+    `perform_update` / `perform_destroy` (antipadrão — mutação de estado compartilhado
+    que é frágil em servidores concorrentes), esta classe lê o mapa `action_permissions`
+    declarado na view:
+
+        class ArticleViewSet(ModelViewSet):
+            permission_classes = [IsAuthenticated, HasModuleAccess, ActionRolePermission]
+            action_permissions = {
+                'list':           'articles.article_view',
+                'retrieve':       'articles.article_view',
+                'create':         'articles.article_create',
+                'update':         'articles.article_edit',
+                'partial_update': 'articles.article_edit',
+                'destroy':        'articles.article_delete',
+                # Custom actions:
+                'publish':        'articles.article_publish',
+                'submit_for_review': 'articles.article_create',
+            }
+
+    Se a action não estiver no mapa, cai no `required_permission` padrão da view.
+    Se nenhum dos dois estiver definido, acesso liberado para qualquer autenticado.
+    """
+
+    def has_permission(self, request, view):
+        if request.user.is_superuser:
+            return True
+
+        # Resolve a permissão: action-specific > required_permission padrão
+        action = getattr(view, 'action', None)
+        action_permissions = getattr(view, 'action_permissions', {})
+        required = action_permissions.get(action) or getattr(view, 'required_permission', None)
+
+        if not required:
+            return True
+
+        if not hasattr(request.user, 'role') or not request.user.role:
+            return False
+
+        return required in request.user.role.permissions
+
+
+class FeatureLimitPermission(permissions.BasePermission):
+    """
+    A1: Centralises feature-limit (licensing) checks in a DRF permission class.
+
+    Previously, views called check_feature_limit() inside perform_create() and raised
+    ValidationError — semantically wrong (400 vs 403) and leaks business logic into
+    the serializer lifecycle.
+
+    Usage:
+        class UserViewSet(ModelViewSet):
+            permission_classes = [IsAuthenticated, FeatureLimitPermission]
+            feature_limit_code = 'max_users'
+
+    The permission is evaluated only on write actions (create).
+    Read actions (list, retrieve) always pass.
+    Superusers always bypass the limit.
+    Raises HTTP 403 with a descriptive message when limit is reached.
+    """
+
+    # Actions that trigger the license check
+    _write_actions = frozenset(['create'])
+
+    def has_permission(self, request, view):
+        action = getattr(view, 'action', None)
+        if action not in self._write_actions:
+            return True  # No-op for reads
+
+        if request.user.is_superuser:
+            return True  # Superusers bypass license limits
+
+        feature_code = getattr(view, 'feature_limit_code', None)
+        if not feature_code:
+            return True  # No limit configured on this view
+
+        company = getattr(request, 'company', None)
+        if not company:
+            logger.warning(
+                "FeatureLimitPermission: no company context for action '%s'", action
+            )
+            return True  # Cannot check without company — do not block
+
+        try:
+            from shared_kernel.licensing import check_feature_limit
+            can_add, limit, current = check_feature_limit(company, feature_code)
+        except Exception:
+            logger.exception(
+                "FeatureLimitPermission: error in check_feature_limit for '%s'", feature_code
+            )
+            return True  # Fail open for licensing errors
+
+        if not can_add:
+            limit_display = "ilimitado" if limit == -1 else str(limit)
+            self.message = (
+                f"Limite de {feature_code.replace('max_', '')} atingido "
+                f"({current}/{limit_display}). Faça um upgrade do seu plano."
+            )
+            logger.info(
+                "FeatureLimitPermission: limit reached for '%s' on '%s' (%d/%s)",
+                feature_code, company.slug, current, limit_display,
+            )
+            return False
+
+        return True

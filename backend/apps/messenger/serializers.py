@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from .models import Conversation, Message, MessageReaction, ConversationPreference
+from .models import Conversation, Message, MessageReaction, ConversationPreference, ContactBlock
 
 User = get_user_model()
 
@@ -157,3 +157,22 @@ class ConversationSerializer(serializers.ModelSerializer):
         if pref is None:
             return {'is_muted': False, 'is_pinned': False}
         return ConversationPreferenceSerializer(pref).data
+
+
+class ContactBlockSerializer(serializers.ModelSerializer):
+    blocker_username = serializers.CharField(source='blocker.username', read_only=True)
+    blocked_username = serializers.CharField(source='blocked.username', read_only=True)
+
+    class Meta:
+        model = ContactBlock
+        fields = ['id', 'blocker', 'blocker_username', 'blocked', 'blocked_username', 'created_at']
+        read_only_fields = ['blocker', 'created_at']
+
+    def validate_blocked(self, value):
+        if value == self.context['request'].user:
+            raise serializers.ValidationError("Você não pode bloquear a si mesmo.")
+        return value
+
+    def create(self, validated_data):
+        validated_data['blocker'] = self.context['request'].user
+        return super().create(validated_data)

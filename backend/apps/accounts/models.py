@@ -5,7 +5,11 @@ from django.contrib.auth.models import AbstractUser, UserManager
 from shared_kernel.models import BaseTenantModel
 from shared_kernel.tenant_context import get_current_company
 
+from shared_kernel.utils import tenant_upload_to
+
+
 class TenantUserManager(UserManager):
+
     def get_queryset(self):
         company = get_current_company()
         qs = super().get_queryset()
@@ -42,7 +46,8 @@ class User(AbstractUser, BaseTenantModel):
         blank=True,
         related_name='users'
     )
-    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True, help_text="Foto de perfil do usuário")
+    avatar = models.ImageField(upload_to=tenant_upload_to('avatars'), null=True, blank=True, help_text="Foto de perfil do usuário")
+
     last_seen = models.DateTimeField(null=True, blank=True, help_text="Última vez visto online")
     status = models.CharField(
         max_length=20,

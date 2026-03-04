@@ -152,30 +152,14 @@ class UserSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
-        
-        # Se 'role' estiver no validated_data, o super().update() vai tentar atribuí-lo diretamente
-        # Mas se o queryset da role não incluir a role atual (por tenant isolation), pode falhar
-        # ou se o serializer field não estiver esperando isso.
-        # Como definimos role = PrimaryKeyRelatedField(queryset=Role.objects.all()), ele deve aceitar.
-        
-        # O problema 'Invalid pk "1" - object does not exist' geralmente ocorre quando
-        # o PrimaryKeyRelatedField tenta validar o ID recebido contra o queryset, e não encontra.
-        # No teste, criamos a Role, mas talvez o contexto do request/viewset esteja filtrando?
-        # Não, o serializer usa Role.objects.all().
-        
-        # Vamos garantir que a role seja tratada corretamente
-        if 'role' in validated_data:
-            role = validated_data['role']
-            # Se role for uma instância (o que o DRF retorna após validar), ok.
-            # Se for ID, precisamos buscar. Mas o validated_data já deve ter a instância.
-            pass
-
+        # `role` is validated and resolved to a Role instance by to_internal_value().
+        # super().update() handles assignment directly via the validated instance.
         user = super().update(instance, validated_data)
 
         if password:
             user.set_password(password)
-            user.save()
-            
+            user.save(update_fields=['password'])
+
         return user
 
 

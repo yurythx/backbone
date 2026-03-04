@@ -1,10 +1,19 @@
 """
 Celery tasks for the articles app.
 """
+import logging
 from celery import shared_task
 
+logger = logging.getLogger(__name__)
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=30)
+
+@shared_task(
+    name='articles.notify_article_published',
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    ignore_result=True,
+)
 def notify_article_published(self, article_id):
     """
     Sends push notifications to all active users of a company when an article is published.
@@ -27,7 +36,46 @@ def notify_article_published(self, article_id):
                     link=f"/artigos/{article.slug}"
                 )
             except Exception:
-                pass  # falha individual não deve derrubar a task inteira
+                pass  # individual failure must not abort the entire task
 
     except Exception as exc:
         raise self.retry(exc=exc)
+
+
+@shared_task(
+    name='articles.record_article_view',
+    ignore_result=True,
+    # Low priority — losing a view count is acceptable; no retries needed.
+    max_retries=0,
+)
+def record_article_view_async(article_id, user_id=None, ip_address=None):
+    """
+    P3: Persists an ArticleView entry asynchronously.
+
+    The cache-based deduplication check is done synchronously in record_view()
+    (cheap cache GET) before this task is dispatched, so duplicate entries
+    are prevented without adding DB write latency to the request cycle.
+    """
+    from .models import Article, ArticleView
+
+    try:
+        article = Article.all_objects.select_related('company').get(pk=article_id)
+    except Article.DoesNotExist:
+        logger.warning("record_article_view_async: Article %s not found", article_id)
+        return
+
+    user = None
+    if user_id is not None:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.all_objects.get(pk=user_id)
+        except User.DoesNotExist:
+            pass
+
+    ArticleView.objects.create(
+        company=article.company,
+        article=article,
+        user=user,
+        ip_address=ip_address,
+    )

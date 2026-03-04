@@ -206,25 +206,27 @@ class ArticleService:
 
     @staticmethod
     def record_view(user, article, ip_address=None):
-        from .models import ArticleView
         from django.core.cache import cache
 
-        # M1: Deduplicação — evita registrar múltiplas views do mesmo IP/usuário em 1h
-        # Best-effort: se o cache não estiver disponível, registra a view normalmente
+        # P3: Deduplication check — synchronous (cheap cache GET, no DB hit).
+        # Only the actual INSERT is dispatched async via Celery below.
         try:
             user_key = f"user:{user.id}" if user and user.is_authenticated else f"ip:{ip_address}"
             cache_key = f"article_view:{article.id}:{user_key}"
             if cache.get(cache_key):
-                return  # view já registrada recentemente, ignora
-            cache.set(cache_key, True, timeout=3600)  # 1 hora de cooldown
+                return  # view already counted recently — skip
+            cache.set(cache_key, True, timeout=3600)  # 1 hour dedup window
         except Exception:
-            pass  # cache indisponível — prossegue com o registro
+            pass  # cache unavailable — proceed to record
 
-        ArticleView.objects.create(
-            company=article.company,
-            article=article,
-            user=user if user and user.is_authenticated else None,
-            ip_address=ip_address
+        # Dispatch the DB insert asynchronously (no latency added to request)
+        from .tasks import record_article_view_async
+        record_article_view_async.apply_async(
+            kwargs={
+                'article_id': str(article.id),
+                'user_id': user.id if user and getattr(user, 'is_authenticated', False) else None,
+                'ip_address': ip_address,
+            }
         )
 
 

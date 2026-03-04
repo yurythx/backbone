@@ -7,8 +7,16 @@ from .models import PushSubscription
 
 logger = logging.getLogger(__name__)
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, ignore_result=True)
 def send_push_notification(self, subscription_id, title, message, link=None, icon=None):
+    # S7: Guard — do not attempt push if VAPID keys are not configured.
+    if not settings.VAPID_PRIVATE_KEY or not settings.VAPID_PUBLIC_KEY:
+        logger.warning(
+            "Push notification skipped: VAPID keys not configured. "
+            "Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in environment."
+        )
+        return "Push skipped: VAPID keys not configured"
+
     try:
         sub = PushSubscription.objects.get(pk=subscription_id, is_active=True)
     except PushSubscription.DoesNotExist:
@@ -33,7 +41,7 @@ def send_push_notification(self, subscription_id, title, message, link=None, ico
         data["icon"] = icon
 
     try:
-        response = webpush(
+        webpush(
             subscription_info=subscription_info,
             data=json.dumps(data),
             vapid_private_key=settings.VAPID_PRIVATE_KEY,
@@ -43,14 +51,13 @@ def send_push_notification(self, subscription_id, title, message, link=None, ico
         )
         return f"Push sent to {sub.user.username}"
     except WebPushException as e:
-        logger.error(f"Push failed for {sub.user.username}: {e}")
+        logger.exception(f"Push failed for {sub.user.username}")
         # If 410 Gone, the subscription is no longer valid
         if e.response is not None and e.response.status_code == 410:
             sub.is_active = False
             sub.save(update_fields=['is_active'])
             return f"Subscription for {sub.user.username} marked as inactive (410 Gone)"
-        
-        # Retry for other issues
+        # Retry for transient failures (5xx, network errors)
         raise self.retry(exc=e, countdown=60)
 
 

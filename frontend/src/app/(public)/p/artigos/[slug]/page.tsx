@@ -1,12 +1,6 @@
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, CalendarDays, User } from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
 import { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import Image from 'next/image'
+import { PublicArticleViewer } from "@/components/public/public-article-viewer"
 
 interface Props {
     params: Promise<{ slug: string }>
@@ -27,6 +21,16 @@ async function getArticle(slug: string, companySlug?: string) {
         const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
         const effectiveCompany = companySlug || envCompany
 
+        // Se effectiveCompany não estiver definido, NÃO enviar o header
+        // A API pública deve lidar com isso (retornar 404 ou buscar globalmente se permitido)
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        }
+        
+        if (effectiveCompany) {
+            headers['X-Company-Slug'] = effectiveCompany
+        }
+
         if (process.env.NODE_ENV === 'development') {
             console.log(`[PublicArticle] Fetching article: ${apiUrl}/api/articles/public/articles/${cleanSlug}/ (Company: ${effectiveCompany})`)
         }
@@ -34,14 +38,12 @@ async function getArticle(slug: string, companySlug?: string) {
         const qs = effectiveCompany ? `?company_slug=${encodeURIComponent(effectiveCompany)}` : ''
         const res = await fetch(`${apiUrl}/api/articles/public/articles/${cleanSlug}/${qs}`, {
             next: { revalidate: 300 }, // Cache for 5 minutes
-            headers: {
-                'Content-Type': 'application/json',
-                ...(effectiveCompany ? { 'X-Company-Slug': effectiveCompany } : {})
-            }
+            headers
         })
 
         if (!res.ok) {
-            if (res.status === 404) {
+            // Se falhar com contexto, tenta sem contexto (caso seja um artigo global/compartilhado)
+            if (res.status === 404 && effectiveCompany) {
                 console.warn(`[PublicArticle] Not found with tenant context: ${cleanSlug}. Retrying without context...`)
                 const retry = await fetch(`${apiUrl}/api/articles/public/articles/${cleanSlug}/`, {
                     next: { revalidate: 300 },
@@ -122,18 +124,16 @@ export default async function PublicArticleDetailPage({ params, searchParams }: 
     const sp = searchParams ? await searchParams : undefined
     const article = await getArticle(slug, sp?.company_slug)
 
-    if (!article) {
-        notFound()
-    }
-
-    const imageUrl = article.cover_image || article.image
-
-    const jsonLd = {
+    // Se não encontrou artigo público, não retornamos 404 imediatamente
+    // Passamos null para o componente cliente tentar buscar com autenticação
+    
+    // JSON-LD só é gerado se tivermos o artigo no servidor (SEO)
+    const jsonLd = article ? {
         '@context': 'https://schema.org',
         '@type': 'BlogPosting',
         headline: article.title,
         description: article.meta_description || article.excerpt,
-        image: imageUrl ? [imageUrl] : [],
+        image: article.cover_image || article.image ? [article.cover_image || article.image] : [],
         datePublished: article.published_at || article.created_at,
         dateModified: article.updated_at,
         author: [{
@@ -145,99 +145,24 @@ export default async function PublicArticleDetailPage({ params, searchParams }: 
             name: article.company_name || 'Backbone SaaS',
             logo: {
                 '@type': 'ImageObject',
-                url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/favicon.ico`, // Ideally company logo
+                url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/favicon.ico`,
             },
         },
         mainEntityOfPage: {
             '@type': 'WebPage',
             '@id': `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/p/artigos/${slug}`,
         },
-    }
+    } : null
 
     return (
-        <article className="max-w-4xl mx-auto py-10" role="article" aria-labelledby="article-title">
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-            />
-            <Button
-                variant="ghost"
-                size="sm"
-                asChild
-                className="mb-8 p-0 hover:bg-transparent text-muted-foreground hover:text-primary transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-md"
-            >
-                <Link href="/p/artigos" className="flex items-center gap-2" aria-label="Voltar para lista de artigos">
-                    <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
-                    Voltar para artigos
-                </Link>
-            </Button>
-
-            <header className="space-y-8 mb-12">
-                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                    {article.category_name && (
-                        <div className="px-3 py-1 rounded-full bg-primary/10 text-primary font-bold text-[10px] uppercase tracking-wider">
-                            {article.category_name}
-                        </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 opacity-70" aria-hidden="true" />
-                        <span>{format(new Date(article.created_at), "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
-                    </div>
-                    {article.author_name && (
-                        <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                                <User className="h-3 w-3" aria-hidden="true" />
-                            </div>
-                            <span className="font-medium text-foreground">{article.author_name}</span>
-                        </div>
-                    )}
-                </div>
-
-                <h1 id="article-title" className="text-4xl md:text-6xl font-black tracking-tighter leading-[1.1] text-foreground">
-                    {article.title}
-                </h1>
-
-                {article.excerpt && (
-                    <p className="text-xl md:text-2xl text-muted-foreground leading-relaxed font-medium italic border-l-4 pl-8 border-primary/30">
-                        {article.excerpt}
-                    </p>
-                )}
-            </header>
-
-            {imageUrl && (
-                <div className="aspect-[21/9] relative rounded-[32px] overflow-hidden mb-16 shadow-2xl shadow-primary/5 border border-primary/5">
-                    <Image
-                        src={imageUrl}
-                        alt={article.title || 'Imagem'}
-                        fill
-                        className="object-cover hover:scale-105 transition-transform duration-700"
-                        sizes="(max-width: 768px) 100vw, 75vw"
-                    />
-                </div>
+        <>
+            {jsonLd && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+                />
             )}
-
-            <div
-                className="prose prose-lg md:prose-xl dark:prose-invert max-w-none 
-                prose-headings:font-black prose-headings:tracking-tight
-                prose-a:text-primary prose-a:font-bold hover:prose-a:underline
-                prose-img:rounded-3xl prose-blockquote:border-primary prose-blockquote:bg-primary/5 prose-blockquote:p-6 prose-blockquote:rounded-2xl"
-                dangerouslySetInnerHTML={{ __html: article.content }}
-            />
-
-            <footer className="mt-20 pt-10 border-t border-border/50">
-                <ul className="flex flex-wrap gap-2" role="list" aria-label="Tags do artigo">
-                    {Array.isArray(article.tags) && article.tags.map((tag: string | { name?: string }, idx: number) => {
-                        const label = typeof tag === 'string' ? tag : tag?.name
-                        return (
-                            <li key={idx} role="listitem">
-                                <Badge variant="outline" className="rounded-full px-4 py-1.5 bg-muted/30 hover:bg-primary/10 hover:text-primary transition-colors cursor-default border-none">
-                                    #{label}
-                                </Badge>
-                            </li>
-                        )
-                    })}
-                </ul>
-            </footer>
-        </article>
+            <PublicArticleViewer initialArticle={article} slug={slug} />
+        </>
     )
 }

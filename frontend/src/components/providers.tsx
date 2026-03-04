@@ -11,10 +11,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('SW scope:', registration.scope)
-          }
+          // SW registered successfully
         })
+
         .catch((err) => {
           if (process.env.NODE_ENV === 'development') {
             console.log('SW registration failed:', err)

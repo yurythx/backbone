@@ -5,12 +5,12 @@ import { useSearchParams } from "next/navigation"
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import axios from "axios"
-import { ArticleForm } from "@/features/articles/article-form"
 import { TagList } from "@/features/articles/tag-list"
 import { ArticleAnalytics } from "@/features/articles/article-analytics"
 import { Article, Category } from "@/types"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { PublicArticleCard } from "@/components/public/article-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Search, BookOpen, Plus } from "lucide-react"
@@ -20,9 +20,6 @@ import { useRouter } from "next/navigation"
 
 function ArtigosPageContent() {
     const searchParams = useSearchParams()
-    const initialView = searchParams.get('action') === 'create' ? 'create' : 'grid'
-    const [view, setView] = useState<'grid' | 'create' | 'edit'>(initialView)
-    const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') ?? "")
     const [visibility, setVisibility] = useState<'all' | 'private'>(() => (searchParams.get('v') === 'private' ? 'private' : 'all'))
@@ -132,6 +129,7 @@ function ArtigosPageContent() {
         },
         enabled: !isLoading && !!me && visibility === 'all',
     })
+    
     type PublicArticle = {
         id: number
         title: string
@@ -206,26 +204,6 @@ function ArtigosPageContent() {
     }, [searchParams])
 
     useEffect(() => {
-        const action = searchParams.get('action')
-        const slug = searchParams.get('slug')
-        if (action === 'edit' && slug) {
-            ;(async () => {
-                try {
-                    const res = await api.get('/api/articles/articles/', { params: { slug } })
-                    const payload = res.data?.results ?? res.data
-                    const found: Article | null = Array.isArray(payload) ? (payload[0] ?? null) : (payload ?? null)
-                    if (found) {
-                        setSelectedArticle(found)
-                        setView('edit')
-                    }
-                } catch {
-                    // ignore
-                }
-            })()
-        }
-    }, [searchParams])
-
-    useEffect(() => {
         if (!isLoading && !me) {
             router.push('/login')
         }
@@ -233,16 +211,6 @@ function ArtigosPageContent() {
 
     if (isLoading || !me) {
         return <div className="flex items-center justify-center h-full">Carregando...</div>
-    }
-
-    const handleSuccess = () => {
-        setView('grid')
-        setSelectedArticle(null)
-    }
-
-    const handleCancel = () => {
-        setView('grid')
-        setSelectedArticle(null)
     }
 
     return (
@@ -386,16 +354,6 @@ function ArtigosPageContent() {
                             >
                                 {(isFetchingNextPage || isFetchingNextPagePublic) ? 'Carregando...' : 'Carregar mais'}
                             </button>
-                        </div>
-                    )}
-
-                    {(view === 'create' || view === 'edit') && (
-                        <div className="mt-10">
-                            <ArticleForm
-                                initialData={selectedArticle}
-                                onSuccess={handleSuccess}
-                                onCancel={handleCancel}
-                            />
                         </div>
                     )}
                 </TabsContent>

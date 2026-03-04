@@ -55,12 +55,12 @@ A maneira mais fácil de rodar a aplicação é utilizando Docker Compose, que s
     ```bash
     docker-compose up -d --build
     ```
-4.  **Acessar a API**: `http://localhost:8000`
+4.  **Acessar a API**: `http://localhost:8005`
 
 ### Serviços Disponíveis
-*   **API**: `http://localhost:8000`
+*   **API**: `http://localhost:8005`
 *   **MinIO Console** (Arquivos): `http://localhost:9001` (User/Pass: `minioadmin`)
-*   **Swagger/Docs**: `http://localhost:8000/api/schema/swagger-ui/`
+*   **Swagger/Docs**: `http://localhost:8005/api/schema/swagger-ui/`
 
 ---
 

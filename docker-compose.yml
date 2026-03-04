@@ -3,15 +3,15 @@ services:
     image: postgres:16
     container_name: backbone_postgres
     environment:
-      POSTGRES_DB: backbone_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-backbone_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -44,15 +44,25 @@ services:
       timeout: 5s
       retries: 5
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      # NOTE: These are dev-only credentials. Override via .env for staging.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
 
   createbuckets:
     image: minio/mc
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
+    # D2: Bucket is created as PRIVATE (no anonymous access).
+    # Files must be served via the backend MediaProxyView (authenticated presigned URLs).
+    # Do NOT add 'anonymous set public' — it exposes all user files without auth.
     entrypoint: >
-      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin; /usr/bin/mc mb myminio/backbone-media; /usr/bin/mc anonymous set public myminio/backbone-media; exit 0; "
+      /bin/sh -c "
+        /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+        /usr/bin/mc mb --ignore-existing myminio/backbone-media;
+        echo 'Bucket backbone-media is ready (private)';
+        exit 0;
+      "
 
   backend:
     image: backbone_backend
@@ -70,34 +80,51 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    # SECURITY: Do NOT hardcode secrets here. Use a .env file or environment variables.
+    # Copy .env.docker.example to .env.docker and fill in the values for local dev.
+    env_file:
+      - path: ./backend/.env.docker
+        required: false # Falls back to inline env below if file not present
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/backbone_db
+      # These are non-secret dev defaults — override via .env.docker for real secrets.
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-backbone_db}
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=True
-      - SECRET_KEY=django-insecure-docker-key
+      # IMPORTANT: Set a real SECRET_KEY via .env.docker in staging/production!
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-LOCAL-DEV-ONLY-do-not-use-in-production}
       # MinIO Configuration
       - USE_S3=True
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - AWS_STORAGE_BUCKET_NAME=backbone-media
       - AWS_S3_ENDPOINT_URL=http://minio:9000
       - AWS_S3_REGION_NAME=us-east-1
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   celery_worker:
+    # Reuses the image built by the 'backend' service — no separate build step needed.
+    # Run `docker-compose build backend` first, then `docker-compose up celery_worker`.
     image: backbone_backend
-    build: ./backend
     container_name: backbone_celery_worker
     command: celery -A config worker -l info
     volumes:
       - ./backend:/app
+    env_file:
+      - path: ./backend/.env.docker
+        required: false
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/backbone_db
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-backbone_db}
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=True
-      - SECRET_KEY=django-insecure-docker-key
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-LOCAL-DEV-ONLY-do-not-use-in-production}
       - USE_S3=True
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - AWS_STORAGE_BUCKET_NAME=backbone-media
       - AWS_S3_ENDPOINT_URL=http://minio:9000
       - AWS_S3_REGION_NAME=us-east-1
@@ -107,17 +134,20 @@ services:
       - redis
 
   celery_beat:
+    # Reuses the image built by the 'backend' service — no separate build step needed.
     image: backbone_backend
-    build: ./backend
     container_name: backbone_celery_beat
     command: celery -A config beat -l info
     volumes:
       - ./backend:/app
+    env_file:
+      - path: ./backend/.env.docker
+        required: false
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/backbone_db
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-backbone_db}
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=True
-      - SECRET_KEY=django-insecure-docker-key
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-LOCAL-DEV-ONLY-do-not-use-in-production}
     depends_on:
       - backend
       - db
@@ -140,6 +170,8 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:8005
       - INTERNAL_API_URL=http://backend:8000
       - WATCHPACK_POLLING=true
+    extra_hosts:
+      - "localhost:host-gateway"
     depends_on:
       - backend
 

@@ -48,15 +48,21 @@ class Command(BaseCommand):
             self.stdout.write(f'  [.] Plan {plan.name} already exists')
         
         # 3. DEFAULT TENANT (Empresa Raiz)
-        company, created = Company.objects.get_or_create(
-            slug='raiz',
-            defaults={
-                'name': 'Empresa Raiz', 
-                'domain': 'raiz.localhost',
-                'onboarding_completed': True,
-                'onboarding_step': 4
-            }
-        )
+        company = Company.objects.filter(domain='raiz.localhost').first()
+        created = False
+        
+        if not company:
+            company, created = Company.objects.get_or_create(
+                slug='raiz',
+                defaults={
+                    'name': 'Empresa Raiz', 
+                    'domain': 'raiz.localhost',
+                    'onboarding_completed': True,
+                    'onboarding_step': 4
+                }
+            )
+        else:
+            self.stdout.write(f'  [.] Company {company.name} (domain: {company.domain}) already exists')
         
         if created:
              self.stdout.write(self.style.SUCCESS(f'  [+] Created Company: {company.name}'))
@@ -257,7 +263,7 @@ class Command(BaseCommand):
         
         # 3. Verificar Empresa Padrão
         try:
-            support_company = Company.objects.get(slug='raiz')
+            support_company = Company.objects.get(domain='raiz.localhost')
             self.stdout.write(self.style.SUCCESS(f'  ✓ Root Company: {support_company.name} (ID: {support_company.id})'))
             
             # 3.1 Verificar Branding
@@ -270,7 +276,7 @@ class Command(BaseCommand):
         
         # 4. Verificar Licença
         try:
-            license = License.objects.get(company__slug='raiz')
+            license = License.objects.get(company__domain='raiz.localhost')
             if not license.is_active:
                 warnings.append('Root company license is inactive')
             else:

@@ -1,78 +1,137 @@
 #!/bin/bash
+# ============================================================
+# BACKBONE — Script de Deploy (Cloudflare Tunnel)
+# ============================================================
+# Uso:
+#   ./scripts/deploy.sh
+#
+# Variáveis de controle:
+#   SKIP_BACKUP=1   — pula o backup antes do deploy
+#   SKIP_SEED=1     — pula os seeds de dados
+#   COMPOSE_FILE=docker-compose.prod.yml  (padrão)
+# ============================================================
 
 set -Eeuo pipefail
-trap 'echo -e "\033[0;31mError on line $LINENO. Aborting.\033[0m"' ERR
+trap 'echo -e "\033[0;31mErro na linha $LINENO. Abortando.\033[0m"' ERR
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+ENV_FILE="${ENV_FILE:-.env.prod}"
 
-echo -e "${BLUE}Starting deployment for Backbone SaaS...${NC}"
+echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Backbone — Deploy para Produção    ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
 
-if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-  COMPOSE_CMD=(docker compose -f "$COMPOSE_FILE")
+# ── Verificar Docker Compose ──────────────────────────────────
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE_CMD=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 elif command -v docker-compose >/dev/null 2>&1; then
-  COMPOSE_CMD=(docker-compose -f "$COMPOSE_FILE")
+  COMPOSE_CMD=(docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 else
-  echo -e "${YELLOW}Docker Compose not found. Install docker compose v2 or docker-compose v1.${NC}"
+  echo -e "${RED}[ERRO] Docker Compose não encontrado. Instale docker compose v2.${NC}"
   exit 1
 fi
 
+# ── Verificar arquivos obrigatórios ───────────────────────────
 if [ ! -f "$COMPOSE_FILE" ]; then
-  echo -e "${YELLOW}Compose file '$COMPOSE_FILE' not found.${NC}"
+  echo -e "${RED}[ERRO] Compose file '$COMPOSE_FILE' não encontrado.${NC}"
   exit 1
 fi
 
+if [ ! -f "$ENV_FILE" ]; then
+  echo -e "${RED}[ERRO] Arquivo '$ENV_FILE' não encontrado.${NC}"
+  echo -e "${YELLOW}Crie-o com: cp .env.prod.example .env.prod${NC}"
+  exit 1
+fi
+
+# Validar sintaxe do compose
 "${COMPOSE_CMD[@]}" config >/dev/null
 
+# ── Passo 0: Backup ───────────────────────────────────────────
 BACKUP_FILE="./backups/backup_$(date +%F_%H-%M-%S).sql"
 mkdir -p ./backups
+
 if [ "${SKIP_BACKUP:-0}" != "1" ]; then
-  echo -e "${YELLOW}Step 0: Creating database backup at ${BACKUP_FILE}...${NC}"
-  if "${COMPOSE_CMD[@]}" ps -q db >/dev/null 2>&1 && [ -n "$("${COMPOSE_CMD[@]}" ps -q db)" ]; then
-    "${COMPOSE_CMD[@]}" exec -T db pg_dump -U postgres backbone_db > "$BACKUP_FILE" || true
-    echo -e "${GREEN}Backup step finished.${NC}"
+  echo -e "${YELLOW}[Passo 0] Criando backup do banco em ${BACKUP_FILE}...${NC}"
+  DB_RUNNING=$("${COMPOSE_CMD[@]}" ps -q db 2>/dev/null || echo "")
+  if [ -n "$DB_RUNNING" ]; then
+    # Obtém usuário e banco do .env.prod
+    DB_USER=$(grep -E '^POSTGRES_USER=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_user")
+    DB_NAME=$(grep -E '^POSTGRES_DB=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_prod")
+    "${COMPOSE_CMD[@]}" exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE" || true
+    echo -e "${GREEN}✓ Backup concluído: ${BACKUP_FILE}${NC}"
   else
-    echo -e "${YELLOW}DB service not running. Skipping backup.${NC}"
+    echo -e "${YELLOW}⚠ Banco não está rodando. Pulando backup.${NC}"
   fi
+else
+  echo -e "${YELLOW}⚠ Backup pulado (SKIP_BACKUP=1).${NC}"
 fi
 
-echo -e "${BLUE}Step 1: Pulling latest changes from git...${NC}"
+# ── Passo 1: Pull do código ───────────────────────────────────
+echo -e "${BLUE}[Passo 1] Puxando código mais recente do Git...${NC}"
 git pull origin main
 
-echo -e "${BLUE}Step 2: Rebuilding images and starting containers...${NC}"
-"${COMPOSE_CMD[@]}" pull
-"${COMPOSE_CMD[@]}" up -d --build
+# ── Passo 2: Build e (re)start ────────────────────────────────
+echo -e "${BLUE}[Passo 2] Build e start dos containers...${NC}"
+"${COMPOSE_CMD[@]}" build --no-cache backend frontend
+"${COMPOSE_CMD[@]}" up -d --remove-orphans
 
-echo -e "${BLUE}Step 3: Running backend migrations and collectstatic...${NC}"
+# ── Passo 3: Migrações e static ───────────────────────────────
+echo -e "${BLUE}[Passo 3] Aguardando backend ficar saudável...${NC}"
+for i in $(seq 1 30); do
+  if curl -sf http://localhost:8005/api/core/health/ >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Backend pronto!${NC}"
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo -e "${RED}[ERRO] Backend não ficou saudável após 60s. Verifique os logs:${NC}"
+    echo -e "  docker compose -f $COMPOSE_FILE logs backend --tail=50"
+    exit 1
+  fi
+  echo "  aguardando... ($i/30)"
+  sleep 2
+done
+
+echo -e "${BLUE}[Passo 3.1] Rodando migrações...${NC}"
 "${COMPOSE_CMD[@]}" exec -T backend python manage.py migrate --noinput
+
+echo -e "${BLUE}[Passo 3.2] Coletando arquivos estáticos...${NC}"
 "${COMPOSE_CMD[@]}" exec -T backend python manage.py collectstatic --noinput
 
-echo -e "${BLUE}Step 3.0: Running Django deploy checks...${NC}"
+echo -e "${BLUE}[Passo 3.3] Verificações de deploy do Django...${NC}"
 "${COMPOSE_CMD[@]}" exec -T backend python manage.py check --deploy || true
 
-echo -e "${BLUE}Step 3.1: Seeding System Data...${NC}"
+# ── Passo 4: Seeds ────────────────────────────────────────────
 if [ "${SKIP_SEED:-0}" != "1" ]; then
+  echo -e "${BLUE}[Passo 4] Seedando dados iniciais...${NC}"
   "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_system || true
+  "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_cms    || true
+  "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_pages  || true
+  echo -e "${GREEN}✓ Seeds concluídos.${NC}"
 else
-  echo -e "${YELLOW}Seeding skipped by SKIP_SEED=1.${NC}"
+  echo -e "${YELLOW}⚠ Seeds pulados (SKIP_SEED=1).${NC}"
 fi
 
-echo -e "${BLUE}Step 3.2: Seeding Tenant Data...${NC}"
-if [ "${SKIP_SEED:-0}" != "1" ]; then
-  "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_cms || true
-fi
-
-echo -e "${BLUE}Step 3.3: Seeding Default Pages...${NC}"
-if [ "${SKIP_SEED:-0}" != "1" ]; then
-  "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_pages || true
-fi
-
-echo -e "${BLUE}Step 4: Cleaning up old docker images...${NC}"
+# ── Passo 5: Limpeza de imagens antigas ───────────────────────
+echo -e "${BLUE}[Passo 5] Limpando imagens Docker antigas...${NC}"
 docker image prune -f
 
-echo -e "${GREEN}Deployment completed successfully!${NC}"
+# ── Resumo ────────────────────────────────────────────────────
+echo ""
+echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║     Deploy concluído com sucesso!    ║${NC}"
+echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
+echo ""
+echo -e "  Backend:  http://localhost:8005/api/core/health/"
+echo -e "  Frontend: http://localhost:3005"
+echo -e ""
+echo -e "  Logs:     docker compose -f $COMPOSE_FILE logs -f"
+echo -e "  Status:   docker compose -f $COMPOSE_FILE ps"
+echo ""
+
 exit 0

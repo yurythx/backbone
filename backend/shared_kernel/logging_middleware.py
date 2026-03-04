@@ -3,11 +3,40 @@ import uuid
 
 logger = logging.getLogger('django.request')
 
+# S8: Headers that must NEVER appear in logs in plain text.
+_SENSITIVE_HEADERS = frozenset([
+    'authorization',
+    'cookie',
+    'x-api-key',
+    'proxy-authorization',
+])
+
+
+def _sanitize_headers(headers: dict) -> dict:
+    """
+    Returns a copy of `headers` with sensitive values redacted.
+    Preserves the auth scheme (e.g., 'Bearer') for diagnostics without leaking tokens.
+    """
+    safe = {}
+    for key, value in headers.items():
+        lower_key = key.lower()
+        if lower_key in _SENSITIVE_HEADERS:
+            if lower_key == 'authorization' and ' ' in value:
+                scheme = value.split(' ', 1)[0]  # e.g. "Bearer"
+                safe[key] = f"{scheme} [REDACTED]"
+            else:
+                safe[key] = '[REDACTED]'
+        else:
+            safe[key] = value
+    return safe
+
 
 class StructuredLoggingMiddleware:
     """
-    Middleware para adicionar Request ID e contexto do usuário a cada log.
-    Compatível com Sentry SDK v1 e v2.
+    Middleware to add Request ID and user context to every log entry.
+    Compatible with Sentry SDK v1 and v2.
+
+    SECURITY: Authorization and Cookie headers are always redacted before logging.
     """
 
     def __init__(self, get_response):
@@ -29,6 +58,7 @@ class StructuredLoggingMiddleware:
                 sentry_sdk.set_user({
                     "id": request.user.id,
                     "username": request.user.username,
+                    # S8: Never include email or other PII in Sentry user context
                 })
         except Exception:
             # Never let Sentry instrumentation break the request pipeline
@@ -40,4 +70,3 @@ class StructuredLoggingMiddleware:
         response['X-Request-ID'] = request_id
 
         return response
-

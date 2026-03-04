@@ -25,6 +25,7 @@ import { NotificationBell } from "@/components/layout/notification-bell"
 import { usePresence } from "@/hooks/use-presence"
 import { GlobalSearch } from "@/components/layout/global-search"
 import Image from "next/image"
+import { fixImageUrl } from "@/lib/utils"
 
 
 const navItems = [
@@ -100,7 +101,7 @@ export function Header() {
               <div className="h-10 w-10 relative flex items-center justify-center overflow-hidden rounded-xl bg-primary/10 shadow-inner">
                 {logo ? (
                   <Image
-                    src={logo}
+                    src={fixImageUrl(logo) || ""}
                     alt={companyName || "Logo"}
                     width={28}
                     height={28}
@@ -218,7 +219,7 @@ export function Header() {
               <Button variant="ghost" size="icon" className="relative rounded-full h-10 w-10 border bg-muted/30 hover:bg-muted/50 transition-all shadow-sm p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" aria-label="Abrir menu do usuário">
                 {me?.avatar ? (
                   <div className="relative h-full w-full">
-                    <Image src={me.avatar} alt="Avatar" fill className="object-cover rounded-full" sizes="40px" />
+                    <Image src={fixImageUrl(me.avatar) || ""} alt="Avatar" fill className="object-cover rounded-full" sizes="40px" />
                     <span
                       className={cn(
                         "absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background shadow-sm transition-colors",

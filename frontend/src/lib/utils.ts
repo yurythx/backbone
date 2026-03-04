@@ -42,3 +42,12 @@ export function slugify(text: string): string {
     .replace(/^-+/, '')              // Trim - from start of text
     .replace(/-+$/, '');             // Trim - from end of text
 }
+
+export function fixImageUrl(url: string | null | undefined): string | undefined {
+    if (!url) return undefined
+    // Em desenvolvimento, corrige HTTPS local para HTTP para evitar timeouts no Next.js
+    if (process.env.NODE_ENV === 'development' && typeof url === 'string' && url.startsWith('https://localhost:8005')) {
+        return url.replace('https://', 'http://')
+    }
+    return url
+}

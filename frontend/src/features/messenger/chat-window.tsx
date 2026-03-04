@@ -163,6 +163,10 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
       }
       try {
         const findRes = await api.get<Conversation>(`/api/messenger/conversations/find_by_participant/?username=${contact.username}`)
+        // Se retornar 204 (No Content), significa que não existe conversa. Lança erro para cair no catch e criar.
+        if (findRes.status === 204 || !findRes.data) {
+            throw new Error("Conversation not found")
+        }
         return findRes.data
       } catch {
         const createRes = await api.post<Conversation>('/api/messenger/conversations/', {
