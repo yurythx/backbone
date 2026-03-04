@@ -63,15 +63,24 @@ class TenantMiddleware:
             cache_key_host = f"company_host:{host}"
             company = get_company_from_cache(cache_key_host) if use_cache else None
             if not company:
-                # Procura exato pelo domínio (ex: minhaempresa.com)
+                # Procura exato pelo domínio (ex: minhaempresa.com ou api.minhaempresa.com)
                 company = Company.objects.filter(models.Q(domain__iexact=host)).first()
                 
-                # 3. Se não achou pelo domínio exato, tenta pelo subdomínio
                 if not company:
+                    # Tenta remover prefixos conhecidos (api., app., www.) para achar o domínio base
                     parts = host.split('.')
-                    if len(parts) > 1:
-                        sub_slug = parts[0]
-                        company = Company.objects.filter(slug=sub_slug).first()
+                    if len(parts) >= 3:
+                        # Ex: api.projetoravenna.cloud -> projetoravenna.cloud
+                        base_host = ".".join(parts[1:])
+                        company = Company.objects.filter(models.Q(domain__iexact=base_host)).first()
+                        
+                        # Se ainda não achou, tenta o slug pelo primeiro componente (ex: ravenna.plataforma.com -> slug 'ravenna')
+                        if not company:
+                            sub_slug = parts[0]
+                            company = Company.objects.filter(slug=sub_slug).first()
+                    elif len(parts) == 2:
+                        # Se for apenas 'dominio.com', tenta como slug
+                        company = Company.objects.filter(slug=parts[0]).first()
                 
                 if company and use_cache:
                     set_company_in_cache(company, cache_key_host)

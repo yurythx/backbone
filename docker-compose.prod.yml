@@ -110,6 +110,27 @@ services:
           memory: 512m
 
   # ──────────────────────────────────────────────────────────
+  # MINIO BUCKET CREATOR
+  # Garante que o bucket 'backbone-media' exista na inicialização.
+  # ──────────────────────────────────────────────────────────
+  createbuckets:
+    image: minio/mc:latest
+    container_name: backbone_minio_setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+        /usr/bin/mc mb --ignore-existing myminio/${AWS_STORAGE_BUCKET_NAME:-backbone-media};
+        echo 'Bucket ${AWS_STORAGE_BUCKET_NAME:-backbone-media} is ready';
+        exit 0;
+      "
+    networks:
+      - backbone_internal
+    restart: "no" # Roda apenas uma vez na inicialização
+
+  # ──────────────────────────────────────────────────────────
   # BACKEND (Django/Daphne)
   # Bind em 127.0.0.1 → não acessível externamente!
   # Cloudflare Tunnel conecta via http://localhost:8005
