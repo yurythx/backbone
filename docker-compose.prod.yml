@@ -123,11 +123,9 @@ services:
     command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
     environment:
       <<: *backend-env
+    # Acesso via Cloudflare Tunnel na rede interna
     networks:
       - backbone_internal
-    ports:
-      # Bind apenas no loopback — nunca expor ao mundo!
-      - "127.0.0.1:8005:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -206,9 +204,24 @@ services:
           memory: 256m
 
   # ──────────────────────────────────────────────────────────
+  # CLOUDFLARE TUNNEL
+  # Conecta seu ambiente local à internet sem abrir portas no firewall.
+  # ──────────────────────────────────────────────────────────
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: backbone_tunnel
+    restart: unless-stopped
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - backbone_internal
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+  # ──────────────────────────────────────────────────────────
   # FRONTEND (Next.js)
-  # Bind em 127.0.0.1 → não acessível externamente!
-  # Cloudflare Tunnel conecta via http://localhost:3005
   # ──────────────────────────────────────────────────────────
   frontend:
     build:
@@ -222,9 +235,7 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       API_URL_INTERNAL: http://backbone_backend:8000
       NODE_ENV: production
-    ports:
-      # Bind apenas no loopback — nunca expor ao mundo!
-      - "127.0.0.1:3005:3005"
+    # Removido 'ports' - o tunnel acessa via rede interna
     depends_on:
       backend:
         condition: service_healthy
