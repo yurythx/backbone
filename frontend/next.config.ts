@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   experimental: {
-    reactCompiler: true,
+    reactCompiler: false,
   },
   async rewrites() {
     // Em desenvolvimento local (fora do Docker), 'backend' não resolve.

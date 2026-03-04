@@ -26,6 +26,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# Limpar qualquer resíduo antes do build
+RUN rm -rf .next node_modules/.cache
+
 RUN npm run build
 
 # Production image, copy all the files and run next
