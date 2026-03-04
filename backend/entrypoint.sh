@@ -11,11 +11,13 @@ fi
 
 # Run migrations
 echo "Running migrations..."
-python manage.py migrate --noinput
+python manage.py migrate --noinput || python manage.py migrate --noinput --fake-initial
 
-# Collect static files (needed because volume mount overwrites build-time staticfiles)
+# Collect static files
+echo "Cleaning old static files..."
+rm -rf /app/staticfiles/*
 echo "Collecting static files..."
-python manage.py collectstatic --noinput
+python manage.py collectstatic --noinput --clear
 
 # Exec the container's main process
 exec "$@"
