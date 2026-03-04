@@ -115,7 +115,7 @@ for i in $(seq 1 30); do
 done
 
 echo -e "${BLUE}[Passo 3.1] Rodando migrações...${NC}"
-"${COMPOSE_CMD[@]}" exec -T backend python manage.py migrate --noinput
+"${COMPOSE_CMD[@]}" exec -T backend python manage.py migrate --noinput || "${COMPOSE_CMD[@]}" exec -T backend python manage.py migrate --noinput --fake-initial
 
 echo -e "${BLUE}[Passo 3.2] Coletando arquivos estáticos...${NC}"
 "${COMPOSE_CMD[@]}" exec -T backend python manage.py collectstatic --noinput
