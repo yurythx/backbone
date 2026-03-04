@@ -1,261 +1,136 @@
-# 🦴 Backbone - Multi-Tenant SaaS Platform
+# 🦴 Backbone - Plataforma SaaS Multi-Tenant
 
-> Enterprise-grade, white-label SaaS platform with built-in CMS, licensing, and multi-tenancy support.
-
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Django](https://img.shields.io/badge/django-5.0+-green.svg)](https://www.djangoproject.com/)
-[![Next.js](https://img.shields.io/badge/next.js-14+-black.svg)](https://nextjs.org/)
+> Plataforma SaaS white-label de nível empresarial com CMS integrado, licenciamento e suporte a múltiplos tenants (clientes).
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Início Rápido (Deploy Oficial)
+
+A forma oficial e mais rápida de colocar o Backbone em produção é utilizando o nosso script de automação.
 
 ```bash
-# Clone and navigate
-git clone <repository_url>
+# 1. Clone o repositório
+git clone <url_do_repositorio>
 cd backbone
 
-# Start with Docker Compose
-docker-compose up -d --build
+# 2. Configure o ambiente de produção
+cp .env.prod.example .env.prod
+# Edite as variáveis conforme necessário
+nano .env.prod
 
-# Access
-Frontend: http://localhost:3005
-Backend API: http://localhost:8005
-Admin: http://localhost:8005/admin
+# 3. Execute o Deploy
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
 ```
 
-Docs index: see [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)
+### 🌍 Acesso Pós-Deploy
+*   **Frontend**: `https://projetoravenna.cloud`
+*   **Backend API**: `https://api.projetoravenna.cloud`
+*   **Admin**: `https://api.projetoravenna.cloud/admin`
+
+Para detalhes sobre a configuração do Cloudflare Tunnel, veja o guia: [Manual Cloudflare](ops/DEPLOY_CLOUDFLARE.md)
 
 ---
 
-## ✨ Features
+## ✨ Funcionalidades
 
 ### 🏢 Multi-Tenancy & White-Label
-- **Company Isolation**: Complete data separation per tenant
-- **Custom Branding**: Colors, logos, fonts, custom CSS/JS
-- **Dynamic Theming**: Real-time theme switching
-- **Google Fonts Integration**: Custom typography per tenant
+- **Isolamento de Empresas**: Separação completa de dados por cliente.
+- **Branding Personalizado**: Cores, logos, fontes e CSS/JS customizados por tenant.
+- **Temas Dinâmicos**: Troca de tema em tempo real.
+- **Integração Google Fonts**: Tipografia personalizada para cada empresa.
 
-### 📝 Content Management System (CMS)
-- **Pages & Articles**: Rich text editor (Tiptap)
-- **Categories & Tags**: Organized content structure
-- **SEO Optimization**: Meta tags, sitemaps, robots.txt
-- **Media Management**: MinIO-powered file storage
-- **Comments System**: Engagement features
+### 📝 CMS (Sistema de Gestão de Conteúdo)
+- **Páginas & Artigos**: Editor rich text potente (Tiptap).
+- **Categorias & Tags**: Organização estruturada de conteúdo.
+- **Otimização SEO**: Meta tags, sitemaps e robots.txt automáticos.
+- **Gestão de Mídia**: Armazenamento via MinIO/S3.
+- **Sistema de Comentários**: Engajamento de usuários.
 
-### 👥 User Management
-- **JWT Authentication**: Secure token-based auth
-- **LDAP Authentication**: Multi-tenant LDAP integration
-- **Role-Based Access Control (RBAC)**: Granular permissions
-- **User Invitations**: Team collaboration
-- **Onboarding System**: Guided setup for new tenants
-- **Profile Management**: Avatar, preferences, API keys
-- **Password Reset**: Email-based recovery
+### 👥 Gestão de Usuários
+- **Autenticação JWT**: Tokens seguros para API e Frontend.
+- **Autenticação LDAP**: Integração corporativa multi-tenant.
+- **RBAC (Controle de Acesso)**: Permissões granulares por cargo.
+- **Onboarding**: Fluxo guiado para novas empresas.
 
-### 💳 Licensing & Monetization
-- **Tiered Plans**: Free, Pro, Enterprise
-- **Feature Gating**: Middleware-based access control
-- **License Management**: Subscription tracking
+### 💳 Licenciamento & Monetização
+- **Planos em Camadas**: Free, Pro e Enterprise.
+- **Gating de Funcionalidades**: Controle de acesso a módulos via middleware.
+- **Gestão de Licenças**: Rastreamento de assinaturas.
 
-### 📊 Analytics & Insights
-- **Dashboard Metrics**: Traffic, performance, engagement
-- **Audit Logging**: Complete activity trail
-- **Prometheus Monitoring**: System health metrics
-
-### 💬 Communication
-- **Messenger**: Real-time chat (WebSockets)
-- **Web Push Notifications**: VAPID-based notifications
-- **Webhooks**: Event-driven integrations
-
-### 🔐 Security
-- **CSP Headers**: Content Security Policy
-- **CORS Configuration**: Cross-origin management
-- **API Keys**: Programmatic access control
+### 💬 Comunicação
+- **Messenger**: Chat em tempo real via WebSockets.
+- **Notificações Push**: Suporte a notificações VAPID no navegador.
+- **Webhooks**: Integrações baseadas em eventos.
 
 ---
 
-## 🏗️ Tech Stack
+## 🏗️ Stack Tecnológica
 
-| Layer | Technology |
+| Camada | Tecnologia |
 |-------|------------|
 | **Backend** | Django 5.0, Django REST Framework |
-| **Frontend** | Next.js 14, React 18, TypeScript |
-| **Database** | PostgreSQL 16 |
-| **Cache** | Redis 7 |
-| **Storage** | MinIO (S3-compatible) |
-| **Task Queue** | Celery + Redis |
-| **WebSockets** | Django Channels |
-| **Monitoring** | Prometheus + Grafana |
+| **Frontend** | Next.js 15, React 19, TypeScript |
+| **Banco de Dados** | PostgreSQL 16 |
+| **Cache & Broker** | Redis 7 |
+| **Storage** | MinIO (padrão S3) |
+| **Fila de Tarefas** | Celery |
+| **WebSockets** | Django Channels (Daphne) |
+| **Infra** | Docker, Cloudflare Tunnel |
 
 ---
 
-## 📂 Project Structure
+## 📂 Estrutura do Projeto
 
 ```
 backbone/
-├── backend/                 # Django API
-│   ├── apps/               # Django apps
-│   │   ├── accounts/       # Authentication & users
-│   │   ├── api_keys/       # API key management
-│   │   ├── articles/       # CMS articles
-│   │   ├── core/           # Core models & utilities
-│   │   ├── licensing/      # Subscription management
-│   │   ├── media/          # File uploads
-│   │   ├── messenger/      # Real-time chat
-│   │   ├── module_manager/ # White-label modules
-│   │   ├── notifications/  # Push notifications
-│   │   ├── pages/          # CMS pages
-│   │   ├── seo/            # SEO tools
-│   │   └── webhooks/       # Webhook subscriptions
-│   ├── config/             # Django settings
-│   ├── requirements.txt    # Production dependencies
-│   └── requirements-dev.txt # Dev dependencies
-├── frontend/               # Next.js app
+├── backend/                 # API Django (Python)
+│   ├── apps/               # Aplicações específicas
+│   ├── config/             # Configurações globais (settings)
+│   └── requirements.txt    # Dependências
+├── frontend/               # Aplicação Next.js (TypeScript)
 │   ├── src/
-│   │   ├── app/            # Next.js 14 App Router
-│   │   ├── components/     # Reusable UI components
-│   │   ├── features/       # Feature-specific code
-│   │   └── lib/            # Utilities & configs
-├── docs/                   # Documentation (product-focused)
-│   ├── SYSTEM_OVERVIEW.md
-│   ├── MULTI_TENANT_CHEATSHEET.md
-│   ├── MESSENGER.md
-│   ├── ARTICLES.md
-│   ├── NOTIFICATIONS.md
-│   ├── MODULES.md
-│   └── PAGES.md
-├── scripts/                # Utilities (backup, restore)
-└── docker-compose.yml      # Local development
+│   │   ├── app/            # App Router
+│   │   └── components/     # Componentes UI
+├── docs/                   # Documentação técnica e de produto
+├── scripts/                # Scripts de automação (Deploy, Backup)
+└── docker-compose.prod.yml # Orquestração oficial de produção
 ```
 
 ---
 
-## 📚 Documentation
+## 🔧 Desenvolvimento Local
 
-- Index: [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)
-- Multi-tenant cheatsheet: [docs/MULTI_TENANT_CHEATSHEET.md](docs/MULTI_TENANT_CHEATSHEET.md)
-- Modules:
-  - [docs/MESSENGER.md](docs/MESSENGER.md)
-  - [docs/ARTICLES.md](docs/ARTICLES.md)
-  - [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)
-  - [docs/MODULES.md](docs/MODULES.md)
-  - [docs/PAGES.md](docs/PAGES.md)
+Se você deseja rodar o projeto para desenvolvimento:
 
----
-
-## 🔧 Development
-
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.11+ (for local dev)
-- Node.js 20+ (for local dev)
-
-### Local Setup
 ```bash
-# Backend (local)
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt -r requirements-dev.txt
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver 8005
-
-# Frontend (local)
-cd frontend
-npm install
-npm run dev
-```
-
-### Docker Setup (Recommended)
-```bash
+# Usando Docker Compose de Dev
 docker-compose up -d --build
-docker-compose exec backend python manage.py migrate
-docker-compose exec backend python manage.py createsuperuser
-```
 
-### Seed Data
-```bash
-docker-compose exec backend python manage.py seed_cms
-docker-compose exec backend python manage.py seed_plans
+# Backend disponível em: http://localhost:8005
+# Frontend disponível em: http://localhost:3005
 ```
 
 ---
 
-## 🧪 Testing
+## 🧪 Testes
 
 ```bash
-# Backend tests
+# Testes do Backend
 cd backend
 pytest
 
-# Frontend tests
+# Testes do Frontend
 cd frontend
 npm test
-
-# E2E tests
-npm run test:e2e
 ```
 
 ---
 
-## 📦 Deployment
+## 📄 Licença
 
-### Production (Automated Script)
-
-For a quick and automated deployment on a VPS (Ubuntu/Debian), use the script at `scripts/deploy.sh`.
-
-1. **Configure Environment**:
-   Copy the example config and fill in your details:
-   ```bash
-   cp .env.prod.example .env
-   nano .env
-   ```
-
-2. **Run Deployment**:
-   Give execution permissions and run the script:
-   ```bash
-   chmod +x deploy.sh
-   ./deploy.sh
-   ```
-
-   This script will automatically:
-   - Backup the database (if running)
-   - Pull the latest code
-   - Rebuild containers
-   - Run migrations and collect static files
-   - Seed initial data
-
-### Production (Manual / Cloudflare Tunnel)
-See [ops/DEPLOY_CLOUDFLARE.md](ops/DEPLOY_CLOUDFLARE.md) for detailed instructions on manual deployment or using Cloudflare Tunnels.
-
-```bash
-docker-compose -f docker-compose.prod.yml build
-docker-compose -f docker-compose.prod.yml up -d
-```
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome. Please open an issue or submit a pull request with clear description and rationale.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- Django REST Framework
-- Next.js Team
-- shadcn/ui components
-- Tailwind CSS
-
----
-
-**Built with ❤️ for modern SaaS applications**
+**Desenvolvido com ❤️ para aplicações SaaS modernas.**

@@ -4,22 +4,33 @@
 
 ---
 
-## 💎 Apresentação do Ecossistema
+## 🚀 Guia de Início Rápido: Produção em 1 Clique
 
-O **Backbone** não é apenas um software; é uma infraestrutura completa de **Software as a Service (SaaS)**. Ele permite que você gerencie múltiplas empresas (Tenants) em uma única instância, oferecendo isolamento total de dados, personalização de marca e controle granular de funcionalidades.
+O deploy do Backbone foi projetado para ser **simples, seguro e automatizado**. O ponto de partida para qualquer ambiente de produção é o nosso script de elite: `deploy.sh`.
 
-### 🌟 Diferenciais que encantam:
-*   🏢 **Arquitetura Multi-Tenant Pura**: Isolamento lógico via `company_id` com performance otimizada.
-*   🛡️ **Segurança de Elite**: Proteção contra DDoS e WAF via Cloudflare, com acesso via Túneis Criptografados.
-*   🎨 **White-Label Total**: Cores, logos e temas personalizados por empresa em tempo real.
-*   💬 **Comunicação Ativa**: Chat em tempo real (WebSockets) e notificações Push integradas.
-*   ⚡ **Performance Extrema**: Backend em Django 5.0 com processamento assíncrono (Celery) e Frontend em Next.js 15.
+### 🏁 Passo 0: O Coração do Ambiente (.env.prod)
+Antes de rodar o script, prepare as definições do seu ecossistema.
+```bash
+cp .env.prod.example .env.prod
+nano .env.prod
+# Defina: 
+#   ALLOWED_HOSTS=api.projetoravenna.cloud,projetoravenna.cloud
+#   NEXT_PUBLIC_API_URL=https://api.projetoravenna.cloud
+```
+
+### ⚡ Passo 1: O Comando de Deploy
+Execute a automação que cuida de tudo: backup, sincronização de código, build, migrações e seeds.
+```bash
+chmod +x scripts/deploy.sh
+# Primeiro deploy (ignora backup inicial)
+SKIP_BACKUP=1 ./scripts/deploy.sh
+```
 
 ---
 
-## 🎨 Fluxograma Arquitetural — Cloudflare Edge
+## 🎨 Arquitetura Visual — Jornada do Dado
 
-Este diagrama ilustra a jornada de um dado, desde a borda do Cloudflare até o coração dos nossos containers no seu servidor Ubuntu.
+Este diagrama ilustra como o tráfego flui da internet até os seus containers através do **Cloudflare Tunnel**, garantindo segurança máxima sem expor portas do servidor.
 
 ```mermaid
 graph TD
@@ -33,9 +44,9 @@ graph TD
     User((🌐 Usuário Final))
 
     %% Cloudflare Layer
-    subgraph Cloudflare_Edge ["☁️ Cloudflare Global Network (HTTPS/WAF/DDoS)"]
+    subgraph Cloudflare_Edge ["☁️ Rede Global Cloudflare (HTTPS/WAF/DDoS)"]
         CF_DNS["DNS: *.projetoravenna.cloud"]
-        CF_Tunnel["Cloudflare Tunnel (Encrypted)"]
+        CF_Tunnel["Cloudflare Tunnel (Criptografado)"]
     end
 
     %% On-Premise / VPS Layer
@@ -78,60 +89,33 @@ graph TD
 
 ---
 
-## 🚀 Passo a Passo: Do Código ao Deploy Real
+## 💎 Funcionalidades Estrelares
 
-Siga este roteiro direto para colocar o **Backbone** no ar em minutos.
+O **Backbone** entrega uma experiência premium desde o primeiro acesso.
 
-### 1️⃣ Preparação do Porto (No Servidor)
-Garanta que seu servidor Ubuntu tenha o Docker instalado e as portas 80/443 fechadas (segurança total!). O acesso será pelo túnel.
-
-```bash
-# Atualize e instale o Docker
-sudo apt update && sudo apt install -y docker.io docker-compose-v2
-```
-
-### 2️⃣ O Coração do Ambiente (.env.prod)
-Copie o exemplo e defina suas chaves secretas. Este arquivo é a alma da segurança do seu sistema.
-
-```bash
-cp .env.prod.example .env.prod
-nano .env.prod
-# Defina: 
-#   ALLOWED_HOSTS=api.projetoravenna.cloud,projetoravenna.cloud
-#   NEXT_PUBLIC_API_URL=https://api.projetoravenna.cloud
-```
-
-### 3️⃣ O Comando de Elite (Deploy)
-Execute o script de automação que preparamos. Ele fará todo o trabalho pesado por você.
-
-```bash
-chmod +x scripts/deploy.sh
-# Primeiro deploy (pula o backup já que o banco está vazio)
-SKIP_BACKUP=1 ./scripts/deploy.sh
-```
-
-### 4️⃣ Ativação do Túnel Cloudflare
-No painel da Cloudflare (Zero Trust), aponte os hostnames para as portas locais:
-*   `projetoravenna.cloud` ➡️ `http://localhost:3005`
-*   `api.projetoravenna.cloud` ➡️ `http://localhost:8005` (A porta 8005 do host mapeia para 8000 do container).
+*   🏢 **Arquitetura Multi-Tenant**: Isolamento nativo de dados entre clientes.
+*   🛡️ **Segurança Zero Trust**: Acesso via túnel seguro, sem portas 80/443 expostas.
+*   🎨 **Experiência White-Label**: Personalize cores, logos e fontes em tempo real.
+*   💬 **Comunicação Ativa**: Chat em tempo real e notificações Push nativas.
+*   🔄 **CI/CD Integrado**: Pronto para deploy automático via GitHub Actions.
 
 ---
 
-## 🛠️ Stack Tecnológica
+## 🛠️ Stack Tecnológica de Elite
 
-| Camada | Tecnologia | Papel Principal |
+| Camada | Tecnologia | Propósito |
 | :--- | :--- | :--- |
-| **Frontend** | `Next.js 15` | UX fluida, SSR e SEO amigável. |
-| **Backend** | `Django 5.0` | Lógica de negócios e Multi-tenancy. |
-| **Real-time** | `Daphne/Channels` | Mensageria WebSocket instantânea. |
-| **Database** | `PostgreSQL 16` | Persistência de dados robusta e relacional. |
-| **Cache** | `Redis 7` | Velocidade em cache e broker para Celery. |
-| **Storage** | `MinIO` | Uploads compatíveis com padrão S3. |
-| **Gateway**| `Cloudflare` | Segurança máxima e tunnelamento Zero Trust. |
+| **Frontend** | `Next.js 15` | Performance SSR e SEO impecável. |
+| **Backend** | `Django 5.0` | Estabilidade e segurança DRF. |
+| **Tempo Real** | `Daphne/WS` | Chat e presencial instantâneos. |
+| **Banco** | `Postgres 16` | Robustez e integridade de dados. |
+| **Cache** | `Redis 7` | Velocidade em cache e broker Celery. |
+| **Storage** | `MinIO` | Arquivos com padrão S3 integrado. |
+| **Infra** | `Cloudflare` | Segurança e tunnelamento de borda. |
 
 ---
 
-### 📬 Contato e Suporte
-Desenvolvido com excelência técnica para ser a fundação do seu próximo grande SaaS.
+### 📬 Informações de Mantenabilidade
+Toda a documentação técnica detalhada pode ser encontrada na pasta `/docs`.
 
 **Backbone — A estrutura que suporta o seu crescimento.**

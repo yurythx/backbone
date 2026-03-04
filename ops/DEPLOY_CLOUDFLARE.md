@@ -6,6 +6,19 @@
 
 ---
 
+## 🚀 Início Rápido (Deploy Automatizado)
+
+Se você já tem o servidor preparado com Docker e o Tunnel configurado, o deploy é resumido a:
+
+```bash
+cd /opt/backbone
+git pull origin main
+# Execute o script que cuida de tudo
+./scripts/deploy.sh
+```
+
+---
+
 ## 🗺️ Visão Geral da Arquitetura
 
 ```
