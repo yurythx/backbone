@@ -86,15 +86,20 @@ class ArticleSerializer(serializers.ModelSerializer):
         status_value = attrs.get('status', None)
 
         if is_public:
-            # is_public=True só é permitido para artigos publicados
-            # (ao criar, status pode não vir no payload — só é relevante na edição)
+            # Se o status estiver vindo no payload, ele deve ser 'published'
             if status_value is not None and status_value != Article.STATUS_PUBLISHED:
                 raise serializers.ValidationError({
                     'is_public': (
-                        'Um artigo só pode ser marcado como público quando seu status for "Publicado". '
-                        f'Status atual: "{status_value}".'
+                        'Para ser Público, o status deve ser "Publicado".'
                     )
                 })
+            
+            # Se o status não veio no payload (edição parcial), verificamos o objeto atual
+            if self.instance and status_value is None:
+                if self.instance.status != Article.STATUS_PUBLISHED:
+                    raise serializers.ValidationError({
+                        'is_public': 'Este artigo não pode ser público porque ainda não foi publicado.'
+                    })
 
             # Artigos públicos exigem conteúdo completo para SEO
             if not attrs.get('title'):
