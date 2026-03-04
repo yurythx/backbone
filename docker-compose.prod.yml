@@ -204,14 +204,50 @@ services:
           memory: 256m
 
   # ──────────────────────────────────────────────────────────
-  # CLOUDFLARE TUNNEL
-  # Conecta seu ambiente local à internet sem abrir portas no firewall.
+  # CLOUDFLARE TUNNEL (Seguro e Resiliente)
   # ──────────────────────────────────────────────────────────
-  tunnel:
-    image: cloudflare/cloudflared:latest
+  cloudflared:
+    image: cloudflare/cloudflared:2025.9.1
     container_name: backbone_tunnel
     restart: unless-stopped
-    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:?TUNNEL_TOKEN is required}
+      - TUNNEL_METRICS=0.0.0.0:2000
+
+    # Segurança: Impede escrita no sistema de arquivos do container
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # Saúde: Verifica se o túnel está operacional
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:2000/ready" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # Recursos: Evita consumo excessivo de RAM/CPU
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          memory: 64M
+
+    # Logs: Rotatividade para não encher o disco
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
     networks:
       - backbone_internal
     depends_on:
