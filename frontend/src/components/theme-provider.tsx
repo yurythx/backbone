@@ -91,7 +91,7 @@ function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
         root.style.removeProperty('--secondary');
         root.style.removeProperty('--secondary-foreground');
       }
-      
+
       // ✅ CORREÇÃO: Agora resolvedTheme tem o valor correto ('dark' ou 'light')
       if (themeConfig.backgroundColor && resolvedTheme !== 'dark') {
         root.style.setProperty('--background', themeConfig.backgroundColor);
@@ -164,9 +164,10 @@ export function ThemeProvider({
       resetToTenantTheme: themeConfig.resetToTenantTheme,
     }}>
       <NextThemesProvider {...props}>
-        {/* Renderiza o componente de efeitos DENTRO do provider */}
-        <ThemeEffects themeConfig={themeConfig} />
-        {children}
+        <>
+          <ThemeEffects themeConfig={themeConfig} />
+          {children}
+        </>
       </NextThemesProvider>
     </ThemeConfigContext.Provider>
   )
