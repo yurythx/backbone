@@ -36,19 +36,19 @@ interface Version {
 }
 
 interface ArticleHistoryProps {
-    articleId: number
+    articleSlug: string
 }
 
-export function ArticleHistory({ articleId }: ArticleHistoryProps) {
+export function ArticleHistory({ articleSlug }: ArticleHistoryProps) {
     const { toast } = useToast()
     const queryClient = useQueryClient()
     const [selectedVersion, setSelectedVersion] = React.useState<Version | null>(null)
     const [isOpen, setIsOpen] = React.useState(false)
 
     const { data: versions, isLoading } = useQuery({
-        queryKey: ['article-history', articleId],
+        queryKey: ['article-history', articleSlug],
         queryFn: async () => {
-            const res = await api.get<Version[]>(`/api/articles/articles/${articleId}/history/`)
+            const res = await api.get<Version[]>(`/api/articles/articles/${articleSlug}/history/`)
             return res.data
         },
         enabled: isOpen
@@ -56,7 +56,7 @@ export function ArticleHistory({ articleId }: ArticleHistoryProps) {
 
     const revertMutation = useMutation({
         mutationFn: async (versionId: number) => {
-            await api.post(`/api/articles/articles/${articleId}/revert/`, { version_id: versionId })
+            await api.post(`/api/articles/articles/${articleSlug}/revert/`, { version_id: versionId })
         },
         onSuccess: () => {
             toast({
@@ -65,7 +65,7 @@ export function ArticleHistory({ articleId }: ArticleHistoryProps) {
             })
             // I4: usa queryKey sem parâmetros extras para invalidar todas as variantes da query de artigos
             queryClient.invalidateQueries({ queryKey: ['articles'] })
-            queryClient.invalidateQueries({ queryKey: ['article-history', articleId] })
+            queryClient.invalidateQueries({ queryKey: ['article-history', articleSlug] })
             setSelectedVersion(null)
             setIsOpen(false)
         },

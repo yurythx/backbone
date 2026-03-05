@@ -129,8 +129,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
   }
 
   const reviewMutation = useMutation({
-    mutationFn: async ({ action, id }: { action: 'submit' | 'publish' | 'reject', id: number }) => {
-      await api.post(`/api/articles/articles/${id}/${action}/`)
+    mutationFn: async ({ action, slug }: { action: 'submit' | 'publish' | 'reject', slug: string }) => {
+      await api.post(`/api/articles/articles/${slug}/${action}/`)
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['articles'] })
@@ -155,7 +155,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       }
 
       if (initialData) {
-        await api.put(`/api/articles/articles/${initialData.id}/`, payload)
+        // Use the initial slug, as changing the slug in the form won't affect the lookup URL until saved
+        await api.put(`/api/articles/articles/${initialData.slug}/`, payload)
       } else {
         await api.post('/api/articles/articles/', payload)
       }
@@ -187,8 +188,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await api.delete(`/api/articles/articles/${id}/`)
+    mutationFn: async (slug: string) => {
+      await api.delete(`/api/articles/articles/${slug}/`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['articles'] })
@@ -234,16 +235,16 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
           {initialData && (
             <>
               {initialData.status === 'draft' && (
-                <Button variant="outline" onClick={() => reviewMutation.mutate({ action: 'submit', id: initialData.id })}>
+                <Button variant="outline" onClick={() => reviewMutation.mutate({ action: 'submit', slug: initialData.slug })}>
                   <Send className="mr-2 h-4 w-4" /> Enviar para Revisão
                 </Button>
               )}
               {initialData.status === 'pending' && (
                 <>
-                  <Button variant="destructive" onClick={() => reviewMutation.mutate({ action: 'reject', id: initialData.id })}>
+                  <Button variant="destructive" onClick={() => reviewMutation.mutate({ action: 'reject', slug: initialData.slug })}>
                     <XCircle className="mr-2 h-4 w-4" /> Rejeitar
                   </Button>
-                  <Button variant="default" className="bg-green-600 hover:bg-green-700" onClick={() => reviewMutation.mutate({ action: 'publish', id: initialData.id })}>
+                  <Button variant="default" className="bg-green-600 hover:bg-green-700" onClick={() => reviewMutation.mutate({ action: 'publish', slug: initialData.slug })}>
                     <CheckCircle2 className="mr-2 h-4 w-4" /> Aprovar
                   </Button>
                 </>
@@ -253,7 +254,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
 
           {initialData && (
             <>
-              <ArticleHistory articleId={initialData.id} />
+              <ArticleHistory articleSlug={initialData.slug} />
               <ArticleComments articleId={initialData.id} />
 
               <AlertDialog>
@@ -272,7 +273,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => deleteMutation.mutate(initialData.id)}
+                      onClick={() => deleteMutation.mutate(initialData.slug)}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                       {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}

@@ -51,7 +51,7 @@ class Article(BaseTenantModel):
     content = models.TextField()
     excerpt = models.TextField(blank=True, help_text="Resumo do artigo")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='articles')
     tags = models.ManyToManyField(Tag, blank=True)
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)

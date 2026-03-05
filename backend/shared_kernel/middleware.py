@@ -1,5 +1,8 @@
 from django.db import models
 from shared_kernel.tenant_context import set_current_company
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TenantMiddleware:
     def __init__(self, get_response):
