@@ -101,16 +101,16 @@ class ArticleSerializer(serializers.ModelSerializer):
                         'is_public': 'Este artigo não pode ser público porque ainda não foi publicado.'
                     })
 
-            # Artigos públicos exigem conteúdo completo para SEO
-            if not attrs.get('title'):
+            # Artigos públicos exigem conteúdo completo para SEO (apenas se enviados)
+            if 'title' in attrs and not attrs.get('title'):
                 raise serializers.ValidationError({
                     'title': 'Artigos públicos devem ter título preenchido.'
                 })
-            if not attrs.get('content'):
+            if 'content' in attrs and not attrs.get('content'):
                 raise serializers.ValidationError({
                     'content': 'Artigos públicos devem ter conteúdo preenchido.'
                 })
-            if not attrs.get('excerpt'):
+            if 'excerpt' in attrs and not attrs.get('excerpt'):
                 raise serializers.ValidationError({
                     'excerpt': 'Artigos públicos devem ter resumo preenchido para melhor SEO.'
                 })
