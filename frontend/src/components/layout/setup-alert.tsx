@@ -2,7 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
-import { AlertCircle, ArrowRight, Settings } from "lucide-react"
+import { useState } from "react"
+import { AlertCircle, ArrowRight, Settings, X } from "lucide-react"
 import Link from "next/link"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -10,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth"
 
 export function SetupAlert() {
     const { user } = useAuth()
+    const [isVisible, setIsVisible] = useState(true)
 
     // Only show for admins/staff
     const isAdmin = user?.is_superuser || user?.role_details?.name === 'Administrador'
@@ -23,7 +25,7 @@ export function SetupAlert() {
         enabled: !!user && isAdmin
     })
 
-    if (!isAdmin || !branding) return null
+    if (!isVisible || !isAdmin || !branding) return null
 
     // Check for critical missing setup
     const isDefaultLogo = !branding.logo
@@ -34,8 +36,8 @@ export function SetupAlert() {
     if (!needsSetup) return null
 
     return (
-        <div className="mx-auto max-w-7xl px-6 md:px-8 pt-6">
-            <Alert className="bg-primary/5 border-primary/20 rounded-2xl shadow-sm border-dashed">
+        <div className="mx-auto max-w-7xl px-6 md:px-8 pt-6 relative group">
+            <Alert className="bg-primary/5 border-primary/20 rounded-2xl shadow-sm border-dashed pr-12">
                 <AlertCircle className="h-5 w-5 text-primary" />
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
                     <div>
@@ -50,6 +52,14 @@ export function SetupAlert() {
                         </Button>
                     </Link>
                 </div>
+
+                <button
+                    onClick={() => setIsVisible(false)}
+                    className="absolute top-4 right-4 p-1 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                    title="Fechar aviso"
+                >
+                    <X className="h-4 w-4" />
+                </button>
             </Alert>
         </div>
     )

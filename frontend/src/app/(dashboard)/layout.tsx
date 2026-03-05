@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { PresenceHeartbeat } from "@/components/layout/presence-heartbeat"
 import { PresenceProvider } from "@/hooks/use-presence"
-import { PushNotificationManager } from "@/components/notifications/PushNotificationManager"
 
 
 export default function DashboardLayout({
@@ -81,7 +80,6 @@ export default function DashboardLayout({
     <PresenceProvider>
       <DashboardShell>
         <PresenceHeartbeat />
-        <PushNotificationManager />
         {children}
       </DashboardShell>
 
