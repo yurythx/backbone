@@ -12,10 +12,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.WARNING('Starting CMS seeding...'))
 
-        companies = Company.objects.filter(slug='empresa-raiz')
+        # Look for root company by slug (stable) or production slug. 
+        # Falls back to the first available company if neither found.
+        companies = Company.objects.filter(slug__in=['raiz', 'projetoravenna'])
         
         if not companies.exists():
-             self.stdout.write(self.style.ERROR('Company "Empresa Raiz" not found. Please ensure it exists before seeding.'))
+             companies = Company.objects.filter(is_active=True)[:1]
+             
+        if not companies.exists():
+             self.stdout.write(self.style.ERROR('No active company found for CMS seeding.'))
              return
 
         for company in companies:

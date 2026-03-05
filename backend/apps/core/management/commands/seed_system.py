@@ -48,21 +48,20 @@ class Command(BaseCommand):
             self.stdout.write(f'  [.] Plan {plan.name} already exists')
         
         # 3. DEFAULT TENANT (Empresa Raiz)
-        company = Company.objects.filter(domain='raiz.localhost').first()
+        company = Company.all_companies.filter(slug='raiz').first()
         created = False
         
         if not company:
-            company, created = Company.objects.get_or_create(
+            company = Company.all_companies.create(
                 slug='raiz',
-                defaults={
-                    'name': 'Empresa Raiz', 
-                    'domain': 'raiz.localhost',
-                    'onboarding_completed': True,
-                    'onboarding_step': 4
-                }
+                name='Empresa Raiz', 
+                domain='raiz.localhost',
+                onboarding_completed=True,
+                onboarding_step=4
             )
+            created = True
         else:
-            self.stdout.write(f'  [.] Company {company.name} (domain: {company.domain}) already exists')
+            self.stdout.write(f'  [.] Company {company.name} (slug: {company.slug}) already exists')
         
         if created:
              self.stdout.write(self.style.SUCCESS(f'  [+] Created Company: {company.name}'))
@@ -263,7 +262,7 @@ class Command(BaseCommand):
         
         # 3. Verificar Empresa Padrão
         try:
-            support_company = Company.objects.get(domain='raiz.localhost')
+            support_company = Company.all_companies.filter(slug='raiz').first() or Company.all_companies.get(slug='projetoravenna')
             self.stdout.write(self.style.SUCCESS(f'  ✓ Root Company: {support_company.name} (ID: {support_company.id})'))
             
             # 3.1 Verificar Branding
@@ -271,22 +270,24 @@ class Command(BaseCommand):
                 warnings.append('Root company has no branding configured')
             else:
                 self.stdout.write(self.style.SUCCESS(f'  ✓ Branding configured'))
-        except Company.DoesNotExist:
-            issues.append('Root company not found (slug: raiz)')
+        except (Company.DoesNotExist, AttributeError):
+            issues.append('Root company not found (slug: raiz or projetoravenna)')
         
         # 4. Verificar Licença
         try:
-            license = License.objects.get(company__domain='raiz.localhost')
-            if not license.is_active:
+            license = License.objects.filter(company=support_company).first()
+            if license and not license.is_active:
                 warnings.append('Root company license is inactive')
-            else:
+            elif license:
                 self.stdout.write(self.style.SUCCESS(f'  ✓ License: {license.plan.name} (Active: {license.is_active})'))
-        except License.DoesNotExist:
-            issues.append('No license for root company')
+            else:
+                 issues.append('No license for root company')
+        except Exception:
+            issues.append('Error checking license')
 
         
         # 5. Verificar Superuser
-        superuser_count = User.objects.filter(is_superuser=True).count()
+        superuser_count = User.all_objects.filter(is_superuser=True).count()
         if superuser_count == 0:
             issues.append('No superuser found')
         else:

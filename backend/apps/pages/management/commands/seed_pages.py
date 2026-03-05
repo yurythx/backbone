@@ -45,7 +45,7 @@ class Command(BaseCommand):
             self.stdout.write(f"Processando empresa: {company.name}")
             for page_data in DEFAULT_PAGES:
                 slug = slugify(page_data["slug"])
-                page, created = Page.objects.get_or_create(
+                page, created = Page.all_objects.get_or_create(
                     company=company,
                     slug=slug,
                     defaults={
