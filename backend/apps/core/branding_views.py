@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -30,7 +30,7 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         return self._get_current_branding()
 
     @tenant_cached(timeout=3600, key_prefix='branding_public')
-    @action(detail=False, methods=['get'], permission_classes=[])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[])
     def public_current(self, request):
         """Obtém branding do tenant atual (público)"""
         return self._get_current_branding()
@@ -234,7 +234,7 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': f'Falha ao enviar e-mail: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[])
     def palettes(self, request):
         """Lista paletas de cores disponíveis"""
         palettes = [

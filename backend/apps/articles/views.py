@@ -266,7 +266,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         instance.delete()
 
     @action(detail=True, methods=['get'])
-    def history(self, request, pk=None):
+    def history(self, request, slug=None):
         """
         Retorna o histórico de versões do artigo.
         """
@@ -287,7 +287,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     @action(detail=True, methods=['post'])
-    def revert(self, request, pk=None):
+    def revert(self, request, slug=None):
         """
         Reverte o artigo para uma versão específica.
         """
@@ -304,7 +304,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=400)
 
     @action(detail=True, methods=['post'], url_path='submit')
-    def submit_for_review(self, request, pk=None):
+    def submit_for_review(self, request, slug=None):
         article = self.get_object()
         try:
             ArticleService.submit_for_review(request.user, article)
@@ -313,7 +313,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=400)
 
     @action(detail=True, methods=['post'], url_path='publish')
-    def publish(self, request, pk=None):
+    def publish(self, request, slug=None):
         self.required_permission = 'articles.article_publish'
         if not HasRolePermission().has_permission(request, self):
              from rest_framework.exceptions import PermissionDenied
@@ -327,7 +327,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=400)
 
     @action(detail=True, methods=['post'], url_path='reject')
-    def reject(self, request, pk=None):
+    def reject(self, request, slug=None):
         article = self.get_object()
         reason = request.data.get('reason', '')
         try:
@@ -392,7 +392,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
-    def analytics_detail(self, request, pk=None):
+    def analytics_detail(self, request, slug=None):
         """
         Retorna estatísticas detalhadas de um artigo específico.
         """
@@ -400,11 +400,14 @@ class ArticleViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         
         thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
-        article = Article.objects.filter(pk=pk, company=request.company).annotate(
+        
+        # Use get_object logic but with pre-annotation
+        queryset = self.get_queryset().filter(slug=slug).annotate(
             total_views=Count('views'),
             views_last_30_days=Count('views', filter=Q(views__viewed_at__gte=thirty_days_ago)),
             unique_visitors=Count('views__ip_address', distinct=True)
-        ).first()
+        )
+        article = queryset.first()
         
         if not article:
              return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)

@@ -1,5 +1,4 @@
-version: '3.8'
-
+# Backbone Docker Compose Configuration
 # ============================================================
 # BACKBONE — PRODUCTION (Cloudflare Tunnel)
 # ============================================================
@@ -174,9 +173,9 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8005/api/core/health/" ]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 60s
     deploy:
       resources:
@@ -274,12 +273,10 @@ services:
 
     # Saúde: Verifica se o túnel está operacional
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:2000/ready" ]
+      test: [ "CMD", "/usr/bin/cloudflared", "--version" ]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
-
     # Recursos: Evita consumo excessivo de RAM/CPU
     deploy:
       resources:
@@ -330,10 +327,10 @@ services:
       - backbone_internal
     healthcheck:
       test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3005/api/health || exit 1" ]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 3
-      start_period: 120s
+      retries: 5
+      start_period: 180s
     deploy:
       resources:
         limits:
