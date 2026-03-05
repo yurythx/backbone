@@ -132,6 +132,14 @@ class ArticleService:
             'slug': article.slug,
             'status': article.status
         })
+        
+        # Invalida cache de leitura
+        from django.core.cache import cache
+        c_slug = article.company.slug
+        cache.delete(f"art_det:{c_slug}:{article.slug}")
+        cache.delete(f"article_pub_detail:{c_slug}:{article.slug}")
+        cache.delete(f"art_p_det:{c_slug}:{article.slug}")
+
         return article
 
     @staticmethod
@@ -205,25 +213,28 @@ class ArticleService:
         trigger_webhooks(company, 'article.deleted', article_data)
 
     @staticmethod
-    def record_view(user, article, ip_address=None):
+    def record_view(user, article=None, ip_address=None, article_id=None):
         from django.core.cache import cache
+        
+        target_id = article_id or (str(article.id) if article else None)
+        if not target_id:
+            return
 
-        # P3: Deduplication check — synchronous (cheap cache GET, no DB hit).
-        # Only the actual INSERT is dispatched async via Celery below.
+        # P3: Deduplication check
         try:
             user_key = f"user:{user.id}" if user and user.is_authenticated else f"ip:{ip_address}"
-            cache_key = f"article_view:{article.id}:{user_key}"
+            cache_key = f"article_view:{target_id}:{user_key}"
             if cache.get(cache_key):
-                return  # view already counted recently — skip
-            cache.set(cache_key, True, timeout=3600)  # 1 hour dedup window
+                return
+            cache.set(cache_key, True, timeout=3600)
         except Exception:
-            pass  # cache unavailable — proceed to record
+            pass
 
-        # Dispatch the DB insert asynchronously (no latency added to request)
+        # Dispatch async
         from .tasks import record_article_view_async
         record_article_view_async.apply_async(
             kwargs={
-                'article_id': str(article.id),
+                'article_id': str(target_id),
                 'user_id': user.id if user and getattr(user, 'is_authenticated', False) else None,
                 'ip_address': ip_address,
             }

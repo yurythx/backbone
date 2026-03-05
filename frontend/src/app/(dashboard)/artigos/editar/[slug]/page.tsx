@@ -14,9 +14,8 @@ export default function EditarArtigoPage() {
   const { data: article, isLoading, isError } = useQuery({
     queryKey: ["article", slug],
     queryFn: async () => {
-      const res = await api.get(`/api/articles/articles/`, { params: { slug } })
-      const payload = res.data?.results ?? res.data
-      return Array.isArray(payload) ? payload[0] ?? null : payload ?? null
+      const res = await api.get(`/api/articles/articles/${slug}/`)
+      return res.data
     },
     enabled: Boolean(slug),
   })
@@ -34,11 +33,11 @@ export default function EditarArtigoPage() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
         <h2 className="text-xl font-bold">Artigo não encontrado</h2>
-        <button 
-            onClick={() => router.push('/artigos')}
-            className="text-primary hover:underline"
+        <button
+          onClick={() => router.push('/artigos')}
+          className="text-primary hover:underline"
         >
-            Voltar para a lista
+          Voltar para a lista
         </button>
       </div>
     )

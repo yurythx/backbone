@@ -62,22 +62,25 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
         return qs.select_related('category', 'author', 'company').prefetch_related('tags').order_by('-published_at')
     
     def retrieve(self, request, *args, **kwargs):
-        """
-        Detalhe de artigo público com registro de visualização.
-        """
+        slug = kwargs.get('slug')
+        company = getattr(request, 'company', None)
+        c_slug = company.slug if company else 'public'
+        cache_key = f"art_p_det:{c_slug}:{slug}"
+        
+        cached = cache.get(cache_key)
+        if cached:
+            ArticleService.record_view(None, article_id=cached.get('id'), ip_address=request.META.get('REMOTE_ADDR'))
+            return Response(cached)
+
         try:
             instance = self.get_object()
         except Article.MultipleObjectsReturned:
-            return Response(
-                {"error": "Multiple articles found with this slug. Please provide 'company_slug' parameter."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Multiple found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Registrar visualização mesmo para usuários não autenticados
-        user = request.user if request.user.is_authenticated else None
-        ArticleService.record_view(user, instance, request.META.get('REMOTE_ADDR'))
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        ArticleService.record_view(request.user if request.user.is_authenticated else None, instance, request.META.get('REMOTE_ADDR'))
+        data = self.get_serializer(instance).data
+        cache.set(cache_key, data, timeout=300)
+        return Response(data)
 
 @extend_schema_view(
     list=extend_schema(tags=['Articles']),
@@ -209,10 +212,20 @@ class ArticleViewSet(viewsets.ModelViewSet):
         ).select_related('category', 'author', 'company').prefetch_related('tags').order_by('-published_at')
 
     def retrieve(self, request, *args, **kwargs):
+        slug = kwargs.get('slug')
+        company_slug = request.company.slug if request.company else 'unassigned'
+        cache_key = f"art_det:{company_slug}:{slug}"
+        
+        cached = cache.get(cache_key)
+        if cached:
+            ArticleService.record_view(request.user, article_id=cached.get('id'), ip_address=request.META.get('REMOTE_ADDR'))
+            return Response(cached)
+
         instance = self.get_object()
         ArticleService.record_view(request.user, instance, request.META.get('REMOTE_ADDR'))
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        data = self.get_serializer(instance).data
+        cache.set(cache_key, data, timeout=60) # Cache mais curto para editores
+        return Response(data)
 
     def perform_create(self, serializer):
         # Permission already verified by ActionRolePermission before this point.

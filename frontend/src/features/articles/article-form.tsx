@@ -74,7 +74,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       const res = await api.get<Category[] | { results: Category[] }>('/api/articles/categories/')
       const data = Array.isArray(res.data) ? res.data : res.data.results || []
       return Array.isArray(data) ? data : []
-    }
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutos
   })
 
   const { data: allTags } = useQuery<Tag[]>({
@@ -83,7 +84,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       const res = await api.get<Tag[] | { results: Tag[] }>('/api/articles/tags/')
       const data = Array.isArray(res.data) ? res.data : res.data.results || []
       return Array.isArray(data) ? data : []
-    }
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutos
   })
 
   const [lockSlug, setLockSlug] = useState(!initialData)
@@ -253,7 +255,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
             <>
               <ArticleHistory articleId={initialData.id} />
               <ArticleComments articleId={initialData.id} />
-              
+
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" size="icon" className="shadow-sm">
@@ -269,8 +271,8 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction 
-                      onClick={() => deleteMutation.mutate(initialData.id)} 
+                    <AlertDialogAction
+                      onClick={() => deleteMutation.mutate(initialData.id)}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                       {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}
