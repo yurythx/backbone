@@ -3,6 +3,8 @@
 import * as React from "react"
 import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from "next-themes"
 import { useThemeConfig } from "@/hooks/use-theme-config"
+import { getContrastColor } from "@/lib/utils"
+import type { TenantBranding, UserThemePreference } from "@/types"
 
 interface ThemeContextType {
   logo: string;
@@ -23,7 +25,7 @@ interface ThemeContextType {
   };
   currentPalette: string;
   isLoading: boolean;
-  isPublicRoute: boolean; // Novo campo
+  isPublicRoute: boolean;
   refreshConfig: () => Promise<void>;
   updatePalette: (palette: string) => Promise<void>;
   resetToTenantTheme: () => Promise<void>;
@@ -39,10 +41,7 @@ export function useTheme() {
   return context
 }
 
-import { getContrastColor } from "@/lib/utils"
-import type { TenantBranding, UserThemePreference } from "@/types"
-
-// ✅ NOVO: Componente interno para lidar com efeitos que dependem do contexto
+// Internal helper for dynamic theme effects
 interface ThemeConfigShape {
   currentPalette: string
   isPublicRoute: boolean
@@ -158,16 +157,16 @@ export function ThemeProvider({
       socialLinks: themeConfig.socialLinks,
       currentPalette: themeConfig.currentPalette,
       isLoading: themeConfig.isLoading,
-      isPublicRoute: themeConfig.isPublicRoute, // Novo campo
+      isPublicRoute: themeConfig.isPublicRoute,
       refreshConfig: themeConfig.refreshConfig,
       updatePalette: themeConfig.updatePalette,
       resetToTenantTheme: themeConfig.resetToTenantTheme,
     }}>
       <NextThemesProvider {...props}>
-        <>
+        <div style={{ display: 'contents' }}>
           <ThemeEffects themeConfig={themeConfig} />
           {children}
-        </>
+        </div>
       </NextThemesProvider>
     </ThemeConfigContext.Provider>
   )

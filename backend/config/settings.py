@@ -199,7 +199,14 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
 
 # SECURITY: Deployment security settings
 if not DEBUG:
-    SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+    # O Cloudflare Tunnel/Proxy já lida com HTTPS. 
+    # Ativamos True apenas se quisermos que o Django force o redirect,
+    # mas isso pode quebrar healthchecks internos via HTTP.
+    SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
+    SECURE_REDIRECT_EXEMPT = [
+        r'^health/$',
+        r'^api/core/health/$',
+    ]
     SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=True)
     CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=True)
     SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31536000)  # 1 year
