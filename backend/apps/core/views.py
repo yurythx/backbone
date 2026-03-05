@@ -163,7 +163,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = AuditLog.objects.all().order_by('-created_at')
+        queryset = AuditLog.objects.select_related('user').all().order_by('-created_at')
         
         # Filtros básicos via query params
         user_id = self.request.query_params.get('user')
@@ -195,14 +195,20 @@ class DashboardStatsView(generics.GenericAPIView):
     @extend_schema(tags=['Core'], responses={200: DashboardStatsSerializer})
     def get(self, request):
         company = request.company
-        User = get_user_model()
+        if not company:
+            return Response({"error": "No company context"}, status=400)
+            
+        from django.core.cache import cache
+        cache_key = f"dash_stats:{company.id}"
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
 
-        # Datetime helpers
+        User = get_user_model()
+        # ... rests of the data fetching ...
         now = timezone.now()
         thirty_days_ago = now - timedelta(days=30)
-        # sixty_days_ago is not used; removed to satisfy lint
 
-        # 1. Analytics de Visualizações (Série Temporal)
         views_history = (
             ArticleView.objects.filter(company=company, viewed_at__gte=thirty_days_ago)
             .annotate(date=TruncDate('viewed_at'))
@@ -211,7 +217,6 @@ class DashboardStatsView(generics.GenericAPIView):
             .order_by('date')
         )
 
-        # 2. Contadores e Crescimento
         total_users = User.objects.filter(company=company).count()
         new_users_month = User.objects.filter(company=company, date_joined__gte=thirty_days_ago).count()
         
@@ -222,7 +227,6 @@ class DashboardStatsView(generics.GenericAPIView):
         total_messages = Message.objects.filter(company=company).count()
         new_messages_month = Message.objects.filter(company=company, created_at__gte=thirty_days_ago).count()
 
-        # 3. Distribuição por Categoria
         categories_popularity = (
             Category.objects.filter(company=company)
             .annotate(article_count=Count('article'))
@@ -230,7 +234,6 @@ class DashboardStatsView(generics.GenericAPIView):
             .order_by('-article_count')[:5]
         )
 
-        # 4. Atividade Recente (Mais rica)
         recent_activity = AuditLog.objects.filter(company=company).select_related('user').order_by('-created_at')[:10]
         activity_data = [
             {
@@ -273,7 +276,8 @@ class DashboardStatsView(generics.GenericAPIView):
                 "last_backup": (now - timedelta(hours=4)).isoformat()
             }
         }
-
+        
+        cache.set(cache_key, stats, timeout=60)
         return Response(stats)
 
 class SitemapView(generics.GenericAPIView):

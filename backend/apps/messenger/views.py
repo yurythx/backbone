@@ -42,7 +42,7 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
             # Users see everyone in the same company
             qs = User.objects.filter(company=self.request.company).exclude(id=self.request.user.id)
         
-        return qs.order_by('username')
+        return qs.prefetch_related('groups').order_by('username')
 
 @extend_schema_view(
     list=extend_schema(tags=['Messenger']),
