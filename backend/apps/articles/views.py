@@ -31,6 +31,7 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ArticlePublicSerializer
     permission_classes = [permissions.AllowAny]
     lookup_field = 'slug'
+    lookup_url_kwarg = 'slug'
     filterset_class = PublicArticleFilter
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['published_at', 'created_at']
@@ -96,6 +97,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     required_permission = 'articles.category_manage'
     module_code = 'articles'
     lookup_field = 'slug'
+    lookup_url_kwarg = 'slug'
     pagination_class = None
     
 
@@ -166,6 +168,8 @@ class TagViewSet(viewsets.ModelViewSet):
     reject=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
 )
 class ArticleViewSet(viewsets.ModelViewSet):
+    lookup_field = 'slug'
+    lookup_url_kwarg = 'slug'
     serializer_class = ArticleSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
     module_code = 'articles'

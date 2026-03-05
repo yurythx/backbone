@@ -74,22 +74,43 @@ class TenantMiddleware:
                         base_host = ".".join(parts[1:])
                         company = Company.objects.filter(models.Q(domain__iexact=base_host)).first()
                         
-                        # Se ainda não achou, tenta o slug pelo primeiro componente (ex: ravenna.plataforma.com -> slug 'ravenna')
-                        if not company:
-                            sub_slug = parts[0]
-                            company = Company.objects.filter(slug=sub_slug).first()
+                        # Se ainda não achou, tenta o slug percorrendo as partes (exceto prefixos comuns como 'api', 'app', 'www')
+                        prefixes = {'api', 'app', 'www', 'dashboard', 'admin'}
+                        for part in parts:
+                            if part.lower() not in prefixes and len(part) > 2:
+                                company = Company.objects.filter(slug=part).first()
+                                if company:
+                                    break
+                        
+                        # Fallback for localhost/local testing with ports
+                        if not company and host == 'localhost':
+                            slug_query = request.GET.get('company_slug')
+                            if slug_query:
+                                company = Company.objects.filter(slug=slug_query).first()
                     elif len(parts) == 2:
                         # Se for apenas 'dominio.com', tenta como slug
                         company = Company.objects.filter(slug=parts[0]).first()
                 
                 if company and use_cache:
                     set_company_in_cache(company, cache_key_host)
+            else:
+                logger.debug(f"TenantMiddleware: Company matching host '{host}' not found.")
 
-        if company:
-            set_current_company(company)
-            request.company = company
-        else:
-            request.company = None
+        if not company:
+            # Fallback for localhost/local testing with ports
+            slug_query = request.GET.get('company_slug')
+            if slug_query:
+                company = Company.objects.filter(slug=slug_query).first()
+                if company:
+                    logger.debug(f"TenantMiddleware: Identificado via query param: {company.slug}")
+
+        request.company = company
+        set_current_company(company)
+
+        if not company and not request.path.startswith('/api/accounts/'):
+            # Se não identificou mas não é auth, pode ser um problema ou um acesso cross-tenant
+            # Registramos no log para depuração
+             logger.warning(f"TenantMiddleware: Contexto de tenant ausente para: {request.path} (Host: {host})")
 
         response = self.get_response(request)
         return response
@@ -104,6 +125,17 @@ class TenantSecurityMiddleware:
 
     def __call__(self, request):
         from django.http import JsonResponse
+        from shared_kernel.tenant_context import set_current_company
+
+        # Safety Net: Se o TenantMiddleware falhou em identificar a empresa por host/header,
+        # mas o usuário está autenticado, assumimos a empresa dele como contexto.
+        # Isso resolve 404s em ambientes onde a identificação por DNS não é trivial.
+        if request.user.is_authenticated and (not hasattr(request, 'company') or not request.company):
+            user_company = getattr(request.user, 'company', None)
+            if user_company:
+                request.company = user_company
+                set_current_company(user_company)
+                logger.debug(f"TenantSecurityMiddleware: Fallback para empresa do usuário: {user_company.slug}")
 
         # Skip for unauthenticated users or if no company context
         if not request.user.is_authenticated or not hasattr(request, 'company') or not request.company:

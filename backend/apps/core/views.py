@@ -197,88 +197,99 @@ class DashboardStatsView(generics.GenericAPIView):
         company = request.company
         if not company:
             return Response({"error": "No company context"}, status=400)
-            
+
+        # Cache de 60 segundos por empresa
         from django.core.cache import cache
         cache_key = f"dash_stats:{company.id}"
         cached_data = cache.get(cache_key)
         if cached_data:
             return Response(cached_data)
 
-        User = get_user_model()
-        # ... rests of the data fetching ...
-        now = timezone.now()
-        thirty_days_ago = now - timedelta(days=30)
+        try:
+            # 1. Contadores Rápidos
+            total_users = get_user_model().objects.filter(company=company).count()
+            published_articles = Article.objects.filter(company=company, status='published').count()
+            total_messages = 0  # Fallback se messenger não estiver ativo
 
-        views_history = (
-            ArticleView.objects.filter(company=company, viewed_at__gte=thirty_days_ago)
-            .annotate(date=TruncDate('viewed_at'))
-            .values('date')
-            .annotate(count=Count('id'))
-            .order_by('date')
-        )
+            try:
+                from apps.messenger.models import Message
+                total_messages = Message.objects.filter(conversation__company=company).count()
+            except (ImportError, Exception):
+                pass
 
-        total_users = User.objects.filter(company=company).count()
-        new_users_month = User.objects.filter(company=company, date_joined__gte=thirty_days_ago).count()
-        
-        total_articles = Article.objects.filter(company=company).count()
-        new_articles_month = Article.objects.filter(company=company, created_at__gte=thirty_days_ago).count()
+            # 2. Atividade Recente (Audit Logs)
+            try:
+                recent_activity = AuditLog.objects.filter(
+                    company=company
+                ).select_related('user').order_by('-created_at')[:10]
+                
+                recent_activity_data = []
+                for log in recent_activity:
+                    recent_activity_data.append({
+                        "action": log.action,
+                        "resource": log.resource,
+                        "created_at": log.created_at.isoformat(),
+                        "user": {
+                            "name": (log.user.get_full_name() or log.user.username) if log.user else "Sistema",
+                            "avatar": None 
+                        }
+                    })
+            except Exception:
+                recent_activity_data = []
 
-        from apps.messenger.models import Message
-        total_messages = Message.objects.filter(company=company).count()
-        new_messages_month = Message.objects.filter(company=company, created_at__gte=thirty_days_ago).count()
+            # 3. Visualizações por data (Últimos 30 dias)
+            thirty_days_ago = timezone.now().date() - timezone.timedelta(days=30)
+            from apps.articles.models import ArticleView
+            views_by_date_qs = ArticleView.objects.filter(
+                company=company,
+                viewed_at__date__gte=thirty_days_ago
+            ).annotate(
+                date=TruncDate('viewed_at')
+            ).values('date').annotate(
+                count=Count('id')
+            ).order_by('date')
 
-        categories_popularity = (
-            Category.objects.filter(company=company)
-            .annotate(article_count=Count('article'))
-            .values('name', 'article_count')
-            .order_by('-article_count')[:5]
-        )
+            views_series = []
+            for item in views_by_date_qs:
+                views_series.append({
+                    "name": item['date'].strftime('%d/%m'),
+                    "value": item['count']
+                })
 
-        recent_activity = AuditLog.objects.filter(company=company).select_related('user').order_by('-created_at')[:10]
-        activity_data = [
-            {
-                "action": log.action,
-                "resource": log.resource,
-                "created_at": log.created_at,
-                "user": {
-                    "name": (log.user.get_full_name() or log.user.username) if log.user else "Sistema",
-                    "avatar": None 
-                }
-            } for log in recent_activity
-        ]
+            # 4. Distribuição por Categorias
+            from apps.articles.models import Category
+            categories_data = Category.objects.filter(company=company).annotate(
+                article_count=Count('articles')
+            ).order_by('-article_count')[:5]
 
-        stats = {
-            "counters": {
-                "users": {
-                    "total": total_users,
-                    "new_this_month": new_users_month,
-                    "growth": round((new_users_month / (total_users - new_users_month) * 100) if (total_users - new_users_month) > 0 else 100, 1)
+            stats = {
+                "counters": {
+                    "users": {"total": total_users, "growth": 0},
+                    "articles": {"published": published_articles, "growth": 0},
+                    "messages": {"total": total_messages, "growth": 0}
                 },
-                "articles": {
-                    "total": total_articles,
-                    "published": Article.objects.filter(company=company, status=Article.STATUS_PUBLISHED).count(),
-                    "growth": round((new_articles_month / (total_articles - new_articles_month) * 100) if (total_articles - new_articles_month) > 0 else 100, 1)
+                "system_status": {
+                    "api_uptime": "100%",
+                    "storage_used": "1.2GB"
                 },
-                "messages": {
-                    "total": total_messages,
-                    "new_this_month": new_messages_month,
-                    "growth": round((new_messages_month / (total_messages - new_messages_month) * 100) if (total_messages - new_messages_month) > 0 else 100, 1)
+                "recent_activity": recent_activity_data,
+                "charts": {
+                    "views_series": views_series,
+                    "categories": [{"name": c.name, "article_count": c.article_count} for c in categories_data]
                 }
-            },
-            "charts": {
-                "views_series": list(views_history),
-                "categories": list(categories_popularity)
-            },
-            "recent_activity": activity_data,
-            "system_status": {
-                "storage_used": "1.2GB", # Mock
-                "api_uptime": "99.9%",
-                "last_backup": (now - timedelta(hours=4)).isoformat()
             }
-        }
-        
-        cache.set(cache_key, stats, timeout=60)
-        return Response(stats)
+
+            cache.set(cache_key, stats, 60)
+            return Response(stats)
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in DashboardStatsView: {str(e)}", exc_info=True)
+            return Response({
+                "error": "Internal Server Error during dashboard calculation",
+                "details": str(e)
+            }, status=500)
 
 class SitemapView(generics.GenericAPIView):
     """

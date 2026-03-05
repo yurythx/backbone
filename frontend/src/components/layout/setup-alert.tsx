@@ -11,7 +11,15 @@ import { useAuth } from "@/hooks/use-auth"
 
 export function SetupAlert() {
     const { user } = useAuth()
-    const [isVisible, setIsVisible] = useState(true)
+    const [isVisible, setIsVisible] = useState(() => {
+        if (typeof window === 'undefined') return true
+        return localStorage.getItem('hideSetupAlert') !== 'true'
+    })
+
+    const hidePermanently = () => {
+        setIsVisible(false)
+        localStorage.setItem('hideSetupAlert', 'true')
+    }
 
     // Only show for admins/staff
     const isAdmin = user?.is_superuser || user?.role_details?.name === 'Administrador'
@@ -46,7 +54,7 @@ export function SetupAlert() {
                             Personalize a identidade da sua empresa (Logo, Nome e Cores) para remover este aviso.
                         </AlertDescription>
                     </div>
-                    <Link href="/admin/branding">
+                    <Link href="/settings?tab=branding">
                         <Button size="sm" className="rounded-xl gap-2 font-semibold">
                             <Settings className="h-4 w-4" /> Configurar Identidade <ArrowRight className="h-4 w-4" />
                         </Button>
@@ -54,9 +62,9 @@ export function SetupAlert() {
                 </div>
 
                 <button
-                    onClick={() => setIsVisible(false)}
+                    onClick={hidePermanently}
                     className="absolute top-4 right-4 p-1 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-                    title="Fechar aviso"
+                    title="Fechar aviso permanentemente"
                 >
                     <X className="h-4 w-4" />
                 </button>

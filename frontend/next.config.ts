@@ -26,6 +26,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: '/admin/branding',
+        destination: '/settings?tab=branding',
+        permanent: true,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

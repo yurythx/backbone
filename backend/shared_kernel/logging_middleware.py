@@ -1,5 +1,19 @@
-import logging
 import uuid
+import logging
+import threading
+
+_local = threading.local()
+
+class ContextLoggerFilter(logging.Filter):
+    """
+    Injeta request_id, user_id e tenant (company_slug) em todos os logs 
+    que passarem por este filtro.
+    """
+    def filter(self, record):
+        record.request_id = getattr(_local, 'request_id', None)
+        record.user_id = getattr(_local, 'user_id', None)
+        record.tenant = getattr(_local, 'tenant', None)
+        return True
 
 logger = logging.getLogger('django.request')
 
@@ -48,25 +62,40 @@ class StructuredLoggingMiddleware:
         request.request_id = request_id
 
         # Add context to Sentry if SDK is installed
-        # — Compatible with both SDK v1 (configure_scope) and v2 (set_tag/set_user)
+        company_slug = None
+        user_id = None
+        if hasattr(request, 'company') and request.company:
+            company_slug = request.company.slug
+        if hasattr(request, 'user') and getattr(request.user, 'is_authenticated', False):
+            user_id = request.user.id
+
+        # Update thread-local context
+        _local.request_id = request_id
+        _local.user_id = user_id
+        _local.tenant = company_slug
+
         try:
             import sentry_sdk
             sentry_sdk.set_tag("request_id", request_id)
-            if hasattr(request, 'company') and request.company:
-                sentry_sdk.set_tag("company", request.company.slug)
-            if hasattr(request, 'user') and getattr(request.user, 'is_authenticated', False):
+            if company_slug:
+                sentry_sdk.set_tag("company", company_slug)
+            if user_id:
                 sentry_sdk.set_user({
-                    "id": request.user.id,
+                    "id": user_id,
                     "username": request.user.username,
-                    # S8: Never include email or other PII in Sentry user context
                 })
         except Exception:
-            # Never let Sentry instrumentation break the request pipeline
             pass
 
-        response = self.get_response(request)
+        try:
+            response = self.get_response(request)
+        finally:
+            # Clear local context to avoid leakage between threads in pool
+            _local.request_id = None
+            _local.user_id = None
+            _local.tenant = None
 
-        # Expose request ID in response header for client-side correlation
+        # Expose request ID in response header
         response['X-Request-ID'] = request_id
 
         return response

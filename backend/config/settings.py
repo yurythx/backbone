@@ -464,11 +464,17 @@ LOGGING = {
             'format': '%(levelname)s %(asctime)s %(module)s %(message)s %(request_id)s %(user_id)s %(tenant)s',
         }
     },
+    'filters': {
+        'context': {
+            '()': 'shared_kernel.logging_middleware.ContextLoggerFilter',
+        }
+    },
     'handlers': {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'json' if not DEBUG else 'verbose',
+            'filters': ['context'],
         },
     },
     'loggers': {
