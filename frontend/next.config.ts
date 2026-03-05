@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     // Em desenvolvimento local (fora do Docker), 'backend' não resolve.
     // Usamos localhost:8005 como fallback seguro para dev local.
-    const apiUrl = process.env.INTERNAL_API_URL || 'http://localhost:8005';
+    const apiUrl = process.env.API_URL_INTERNAL || process.env.INTERNAL_API_URL || 'http://localhost:8005';
     return [
       {
         source: '/media/:path*',

@@ -137,9 +137,6 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
-    'ENUM_NAME_OVERRIDES': {
-        'StatusEnum': 'apps.core.models.StatusChoices',
-    },
     'COMPONENT_NO_READ_ONLY_FIELDS': True,
     'CONTACT': {
         'name': 'Backbone Team',
@@ -199,6 +196,18 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
     "localhost",
     "127.0.0.1"
 ])
+
+# SECURITY: Deployment security settings
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+    SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=True)
+    CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=True)
+    SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31536000)  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 CORS_ALLOW_HEADERS = [
     "accept",

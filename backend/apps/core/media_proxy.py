@@ -2,6 +2,7 @@ import mimetypes
 import logging
 from django.http import StreamingHttpResponse, Http404, HttpResponse
 from django.core.files.storage import default_storage
+from rest_framework import serializers
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.conf import settings
@@ -9,6 +10,8 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 # Registrar mimetypes comuns que podem faltar em algumas distros
+from drf_spectacular.utils import extend_schema
+
 mimetypes.add_type('image/webp', '.webp')
 mimetypes.add_type('image/svg+xml', '.svg')
 
@@ -33,6 +36,7 @@ class MediaProxyView(APIView):
             return [AllowAny()]
         return [IsAuthenticated()]
 
+    @extend_schema(responses={200: serializers.FileField()})
     def get(self, request, path):
         # Proteção básica contra path traversal
         if '..' in path:

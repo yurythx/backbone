@@ -10,6 +10,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
+
+class HealthCheckSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    timestamp = serializers.FloatField()
+    database = serializers.CharField()
+    redis = serializers.CharField()
+    minio = serializers.CharField()
+    celery = serializers.CharField()
+    response_time_ms = serializers.FloatField()
+
+@extend_schema(responses={200: HealthCheckSerializer})
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def health_check(request):

@@ -5,6 +5,8 @@ import { ThemeProvider } from "./theme-provider"
 import { useState, useEffect } from "react"
 import { Toaster } from "sonner"
 
+import { PresenceProvider } from "@/hooks/use-presence"
+
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -41,20 +43,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
-        {children}
-        <Toaster
-          position="bottom-right"
-          expand={true}
-          richColors
-          closeButton
-          theme="system"
-          toastOptions={{
-            style: {
-              borderRadius: '12px',
-              padding: '16px',
-            },
-          }}
-        />
+        <PresenceProvider>
+          {children}
+          <Toaster
+            position="bottom-right"
+            expand={true}
+            richColors
+            closeButton
+            theme="system"
+            toastOptions={{
+              style: {
+                borderRadius: '12px',
+                padding: '16px',
+              },
+            }}
+          />
+        </PresenceProvider>
       </QueryClientProvider>
 
     </ThemeProvider>

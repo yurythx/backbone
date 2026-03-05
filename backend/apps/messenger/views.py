@@ -20,7 +20,10 @@ User = get_user_model()
 
 @extend_schema_view(
     list=extend_schema(tags=['Messenger']),
-    retrieve=extend_schema(tags=['Messenger']),
+    retrieve=extend_schema(
+        tags=['Messenger'],
+        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+    ),
 )
 class ContactViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ContactSerializer
@@ -30,24 +33,35 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
     
 
     def get_queryset(self):
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return User.all_objects.none()
+
         # User.objects (TenantUserManager) already filters by company.
         # Superusers use all_objects for global visibility if no company context is set.
         # If company context is set, they should be restricted to that company by default.
-        if self.request.user.is_superuser:
+        if user.is_superuser:
             if self.request.company:
-                qs = User.objects.exclude(id=self.request.user.id)
+                qs = User.objects.exclude(id=user.id)
             else:
-                qs = User.all_objects.exclude(id=self.request.user.id)
+                qs = User.all_objects.exclude(id=user.id)
         else:
             # Users see everyone in the same company
-            qs = User.objects.filter(company=self.request.company).exclude(id=self.request.user.id)
+            qs = User.objects.filter(company=self.request.company).exclude(id=user.id)
         
         return qs.prefetch_related('groups').order_by('username')
 
 @extend_schema_view(
     list=extend_schema(tags=['Messenger']),
     create=extend_schema(tags=['Messenger']),
-    destroy=extend_schema(tags=['Messenger']),
+    retrieve=extend_schema(
+        tags=['Messenger'],
+        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+    ),
+    destroy=extend_schema(
+        tags=['Messenger'],
+        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+    ),
 )
 class ContactBlockViewSet(viewsets.ModelViewSet):
     serializer_class = ContactBlockSerializer
@@ -55,18 +69,33 @@ class ContactBlockViewSet(viewsets.ModelViewSet):
     module_code = 'messenger'
 
     def get_queryset(self):
-        return ContactBlock.objects.filter(blocker=self.request.user)
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return ContactBlock.objects.none()
+        return ContactBlock.objects.filter(blocker=user)
 
     def perform_create(self, serializer):
         serializer.save(blocker=self.request.user, company=self.request.company)
 
 @extend_schema_view(
     list=extend_schema(tags=['Messenger']),
-    retrieve=extend_schema(tags=['Messenger']),
+    retrieve=extend_schema(
+        tags=['Messenger'],
+        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+    ),
     create=extend_schema(tags=['Messenger']),
-    update=extend_schema(tags=['Messenger']),
-    partial_update=extend_schema(tags=['Messenger']),
-    destroy=extend_schema(tags=['Messenger']),
+    update=extend_schema(
+        tags=['Messenger'],
+        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+    ),
+    partial_update=extend_schema(
+        tags=['Messenger'],
+        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+    ),
+    destroy=extend_schema(
+        tags=['Messenger'],
+        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+    ),
 )
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
@@ -94,6 +123,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if not user or not user.is_authenticated:
+            return Conversation.all_objects.none()
+
         from django.db.models import Count, Q, Prefetch, OuterRef, Subquery
         from .models import ConversationPreference
         
@@ -121,7 +153,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             .annotate(
                 unread_count=Count(
                     'messages',
-                    filter=Q(messages__is_read=False) & ~Q(messages__sender=user) & Q(messages__is_deleted=False)
+                    filter=Q(messages__is_read=False) & ~Q(messages__sender_id=user.id) & Q(messages__is_deleted=False)
                 ),
                 # Annotate last message details using Subqueries (Performance #26)
                 last_msg_id=Subquery(last_msg_qs.values('id')[:1]),
@@ -243,13 +275,17 @@ class ConversationViewSet(viewsets.ModelViewSet):
     def mark_all_read(self, request, pk=None):
         """Mark all messages in this conversation as read for the current user."""
         conversation = self.get_object()
-        unread_messages = conversation.messages.filter(is_read=False).exclude(sender=request.user)
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "Auth required"}, status=401)
+
+        unread_messages = conversation.messages.filter(is_read=False).exclude(sender_id=user.id)
         
         count = unread_messages.count()
         if count > 0:
             unread_messages.update(is_read=True)
             # Broadcast read status
-            MessengerService.broadcast_all_read(request.company, conversation, request.user.id)
+            MessengerService.broadcast_all_read(request.company, conversation, user.id)
         
         return Response({'marked_read': count})
 
@@ -356,11 +392,12 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
         # Users can only interact with messages in conversations they are part of.
         # Always filter by company to enforce tenant isolation (#18 security fix).
         # Use all_objects to include soft-deleted messages in the chat history.
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return Message.all_objects.none()
+
         manager = Message.all_objects
-
-
-
-        qs = manager.filter(conversation__participants=self.request.user)
+        qs = manager.filter(conversation__participants=user)
         if self.request.company:
             qs = qs.filter(conversation__company=self.request.company)
         return qs

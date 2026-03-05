@@ -200,6 +200,10 @@ class DashboardStatsView(generics.GenericAPIView):
 
         # Cache de 60 segundos por empresa
         from django.core.cache import cache
+        company = request.company
+        if not company:
+            return Response({"error": "No company context found"}, status=status.HTTP_400_BAD_REQUEST)
+            
         cache_key = f"dash_stats:{company.id}"
         cached_data = cache.get(cache_key)
         if cached_data:
@@ -327,12 +331,16 @@ class SitemapView(generics.GenericAPIView):
                 "priority": 0.5
             })
 
+from .serializers import RobotsSerializer
+
 class RobotsView(generics.GenericAPIView):
     """
     Endpoint para robots.txt.
     """
     permission_classes = [permissions.AllowAny]
+    serializer_class = RobotsSerializer
 
+    @extend_schema(responses={200: serializers.CharField()})
     def get(self, request):
         company = request.company
         if not company:

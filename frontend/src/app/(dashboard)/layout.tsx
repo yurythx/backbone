@@ -77,12 +77,9 @@ export default function DashboardLayout({
   }
 
   return (
-    <PresenceProvider>
-      <DashboardShell>
-        <PresenceHeartbeat />
-        {children}
-      </DashboardShell>
-
-    </PresenceProvider>
+    <DashboardShell>
+      <PresenceHeartbeat />
+      {children}
+    </DashboardShell>
   )
 }

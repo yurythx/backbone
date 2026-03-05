@@ -127,6 +127,17 @@ class DashboardStatsSerializer(serializers.Serializer):
     system_status = SystemStatusSerializer()
 
 
+class GlobalSearchSerializer(serializers.Serializer):
+    articles = serializers.ListField(child=serializers.DictField())
+    pages = serializers.ListField(child=serializers.DictField())
+    messages = serializers.ListField(child=serializers.DictField())
+    contacts = serializers.ListField(child=serializers.DictField())
+
+
+class RobotsSerializer(serializers.Serializer):
+    robots_content = serializers.CharField()
+
+
 class LDAPConfigSerializer(serializers.ModelSerializer):
     """Serializer para configuração LDAP do tenant."""
     bind_password = serializers.CharField(write_only=True, required=False, allow_blank=True)

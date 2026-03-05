@@ -11,9 +11,13 @@ from apps.messenger.serializers import MessageSerializer
 
 User = get_user_model()
 
+from drf_spectacular.utils import extend_schema
+from .serializers import GlobalSearchSerializer
+
 class GlobalSearchViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={200: GlobalSearchSerializer})
     def list(self, request):
         query = request.query_params.get('q', '')
         if not query or len(query) < 2:
