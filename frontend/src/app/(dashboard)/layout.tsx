@@ -20,23 +20,20 @@ export default function DashboardLayout({
   useEffect(() => {
     const checkAuth = () => {
       // Se for a página inicial, NUNCA redireciona, apenas libera o acesso
-      if (window.location.pathname === '/') {
+      if (window.location.pathname === '/' || window.location.pathname.startsWith('/p/')) {
         setAuthorized(true)
         setChecked(true)
         return
       }
-
+      
       try {
         const accessToken = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
-        const companySlug = typeof window !== "undefined" ? localStorage.getItem("companySlug") : null
-        // Removida a verificação de rota de artigos daqui, pois ela tem sua própria lógica de redirecionamento na página
-        // const isPublicRoute = window.location.pathname.startsWith('/artigos') 
-
-        if (!accessToken || !companySlug) {
-          // Apenas redireciona se realmente não tiver token
+        
+        if (!accessToken) {
           if (!isRedirecting.current) {
             isRedirecting.current = true
-            router.replace("/login")
+            // Redireciona para / que é a landing page pública
+            router.replace("/")
           }
           return
         }

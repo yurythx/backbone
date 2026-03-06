@@ -80,15 +80,11 @@ export function Header() {
   // Removed unused companies query
 
   const onLogout = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('companySlug')
-    }
-    toast.success("Você saiu da conta. Até logo!", { duration: 2000 })
-
-    // Forçar reload completo para limpar estados
-    window.location.href = '/'
+    localStorage.removeItem("accessToken")
+    localStorage.removeItem("refreshToken")
+    localStorage.removeItem("companySlug")
+    // Force redirect to root landing page
+    window.location.href = "/"
   }
 
 

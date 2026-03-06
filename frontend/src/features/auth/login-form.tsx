@@ -131,7 +131,7 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
       // Forçar reload completo para garantir que todos os contextos (Header, React Query, Theme)
       // sejam reidratados corretamente com o novo usuário logado.
       // Isso corrige o problema de "não carregar elementos" no primeiro login.
-      window.location.href = '/'
+      window.location.href = '/dashboard'
     } catch (err: unknown) {
       console.error(err)
 
