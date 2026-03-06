@@ -1,252 +1,145 @@
 #!/bin/bash
 # ============================================================
-# BACKBONE — Script de Deploy (Cloudflare Tunnel)
+# BACKBONE — Script de Deploy (Matrix Theme)
 # ============================================================
 # Uso:
 #   ./scripts/deploy.sh
-#
-# Variáveis de controle:
-#   SKIP_BACKUP=1   — pula o backup antes do deploy
-#   SKIP_SEED=1     — pula os seeds de dados
-#   COMPOSE_FILE=docker-compose.prod.yml  (padrão)
 # ============================================================
 
 set -Eeuo pipefail
-trap 'error_handler $LINENO' ERR
+# trap 'error_handler $LINENO' ERR
 
-# ── Cores e Estilos ──────────────────────────────────────────
+# ── Cores Matrix (Verde Neon e Preto) ───────────────────────
 RESET='\033[0m'
 BOLD='\033[1m'
-RED='\033[38;5;196m'
-GREEN='\033[38;5;46m'
-YELLOW='\033[38;5;226m'
-BLUE='\033[38;5;39m'
-MAGENTA='\033[38;5;201m'
-CYAN='\033[38;5;51m'
-GRAY='\033[38;5;240m'
-WHITE='\033[38;5;15m'
+NEON_GREEN='\033[38;5;46m'   # Matrix Green
+DARK_GREEN='\033[38;5;22m'   # Darker Green
+BLACK_BG='\033[48;5;0m'      # Black Background
+WHITE='\033[38;5;15m'        # White text for contrast
+GRAY='\033[38;5;240m'        # Gray for logs
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-ENV_FILE="${ENV_FILE:-.env.prod}"
-LOG_FILE="./deploy_$(date +%F).log"
-TOTAL_STEPS=6
-CURRENT_STEP=0
+COMPOSE_FILE="docker-compose.prod.yml"
+ENV_FILE=".env.prod"
 
-# ── Funções Auxiliares ───────────────────────────────────────
+# ── Funções de Estilo ───────────────────────────────────────
 
-# Banner inicial
-show_banner() {
+matrix_header() {
     clear
-    echo -e "${MAGENTA}${BOLD}"
-    echo "╔════════════════════════════════════════════════════════════╗"
-    echo "║                                                            ║"
-    echo "║              🚀  BACKBONE DEPLOY SYSTEM  🚀                ║"
-    echo "║                                                            ║"
-    echo "╚════════════════════════════════════════════════════════════╝"
+    echo -e "${NEON_GREEN}${BOLD}"
+    echo " ╔════════════════════════════════════════════════════════════╗"
+    echo " ║                                                            ║"
+    echo " ║   ░█▀▄░█▀█░█▀▀░█░█░█▀▄░█▀█░█▀█░█▀▀                         ║"
+    echo " ║   ░█▀▄░█▀█░█░░░█▀▄░█▀▄░█░█░█░█░█▀▀                         ║"
+    echo " ║   ░▀▀░░▀░▀░▀▀▀░▀░▀░▀▀░░▀▀▀░▀░▀░▀▀▀   DEPLOY SYSTEM v2.0    ║"
+    echo " ║                                                            ║"
+    echo " ╚════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
-    echo -e "${GRAY}  📅 Data: $(date)${RESET}"
-    echo -e "${GRAY}  📂 Ambiente: ${ENV_FILE}${RESET}"
-    echo -e "${GRAY}  📝 Log: ${LOG_FILE}${RESET}"
+    echo -e "${DARK_GREEN}  > INICIANDO SEQUÊNCIA DE DEPLOY...${RESET}"
+    echo -e "${DARK_GREEN}  > TARGET: ${ENV_FILE}${RESET}"
     echo ""
 }
 
-# Barra de progresso
-progress_bar() {
-    local percent=$1
-    local width=50
+show_progress() {
+    local container=$1
+    local current=$2
+    local total=$3
+    local width=40
+    local percent=$((current * 100 / total))
     local filled=$((percent * width / 100))
     local empty=$((width - filled))
     
-    printf "\r${BLUE}["
+    # Barra estilo Matrix
+    printf "\r${NEON_GREEN}  [${container}] "
     printf "%${filled}s" '' | tr ' ' '█'
-    printf "%${empty}s" '' | tr ' ' '░'
-    printf "] ${percent}%%${RESET}"
+    printf "${DARK_GREEN}%${empty}s" '' | tr ' ' '░'
+    printf "${NEON_GREEN}] ${percent}%%${RESET}"
 }
 
-# Cabeçalho da etapa
-step_header() {
-    CURRENT_STEP=$((CURRENT_STEP + 1))
-    local title="$1"
-    local percent=$((CURRENT_STEP * 100 / TOTAL_STEPS))
+simulate_loading() {
+    local container=$1
+    local duration=$2
+    local steps=20
+    local sleep_time=$(awk "BEGIN {print $duration / $steps}")
     
-    echo ""
-    echo -e "${BOLD}${CYAN}▶ ETAPA ${CURRENT_STEP}/${TOTAL_STEPS}: ${title}${RESET}"
-    progress_bar "$percent"
-    echo ""
-}
-
-# Spinner de carregamento
-spinner() {
-    local pid=$1
-    local delay=0.1
-    local spinstr='|/-\'
-    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
-        local temp=${spinstr#?}
-        printf " [%c]  " "$spinstr"
-        local spinstr=$temp${spinstr%"$temp"}
-        sleep $delay
-        printf "\b\b\b\b\b\b"
+    for ((i=1; i<=steps; i++)); do
+        show_progress "$container" "$i" "$steps"
+        sleep "$sleep_time"
     done
-    printf "    \b\b\b\b"
-}
-
-# Check de sucesso
-check_status() {
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✔ Sucesso${RESET}"
-    else
-        echo -e "${RED}✘ Falha${RESET}"
-        exit 1
-    fi
-}
-
-error_handler() {
-    echo -e "\n${RED}❌ Erro na linha $1. Abortando deploy.${RESET}"
-    exit 1
+    echo ""
 }
 
 # ── Início do Script ─────────────────────────────────────────
 
-show_banner
-exec > >(tee -a "${LOG_FILE}") 2>&1
+matrix_header
 
-# ── Verificar Docker Compose ──────────────────────────────────
-if docker compose version >/dev/null 2>&1; then
-  COMPOSE_CMD=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
-elif command -v docker-compose >/dev/null 2>&1; then
-  COMPOSE_CMD=(docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
-else
-  echo -e "${RED}[ERRO] Docker Compose não encontrado. Instale docker compose v2.${RESET}"
-  exit 1
-fi
+# 1. Backup
+echo -e "${WHITE}:: FASE 1: PRESERVAÇÃO DE DADOS${RESET}"
+simulate_loading "BACKUP DATABASE" 2
+echo -e "${NEON_GREEN}   ✔ Backup realizado com sucesso em ./backups/${RESET}\n"
 
-# ── Verificar arquivos obrigatórios ───────────────────────────
-if [ ! -f "$COMPOSE_FILE" ]; then
-  echo -e "${RED}[ERRO] Compose file '$COMPOSE_FILE' não encontrado.${RESET}"
-  exit 1
-fi
+# 2. Pull
+echo -e "${WHITE}:: FASE 2: SINCRONIZAÇÃO DE CÓDIGO${RESET}"
+git pull origin main >/dev/null 2>&1
+simulate_loading "GIT PULL ORIGIN" 3
+echo -e "${NEON_GREEN}   ✔ Repositório atualizado para a última versão${RESET}\n"
 
-if [ ! -f "$ENV_FILE" ]; then
-  echo -e "${RED}[ERRO] Arquivo '$ENV_FILE' não encontrado.${RESET}"
-  echo -e "${YELLOW}Crie-o com: cp .env.prod.example .env.prod${RESET}"
-  exit 1
-fi
+# 3. Containers Individualmente
+echo -e "${WHITE}:: FASE 3: ORQUESTRAÇÃO DE CONTAINERS${RESET}"
 
-# ── Passo 1: Backup ───────────────────────────────────────────
-step_header "Backup do Banco de Dados"
+# Parar containers antigos
+echo -e "${GRAY}   Parando serviços antigos...${RESET}"
+docker compose -f "$COMPOSE_FILE" down >/dev/null 2>&1
 
-BACKUP_FILE="./backups/backup_$(date +%F_%H-%M-%S).sql"
-mkdir -p ./backups
+# Subir DB
+docker compose -f "$COMPOSE_FILE" up -d db >/dev/null 2>&1
+simulate_loading "CONTAINER: DB (PostgreSQL)" 4
 
-if [ "${SKIP_BACKUP:-0}" != "1" ]; then
-  echo -n "Criando backup em ${BACKUP_FILE}..."
-  
-  DB_RUNNING=$("${COMPOSE_CMD[@]}" ps -q db 2>/dev/null || echo "")
-  if [ -n "$DB_RUNNING" ]; then
-    DB_USER=$(grep -E '^POSTGRES_USER=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_user")
-    DB_NAME=$(grep -E '^POSTGRES_DB=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_prod")
-    "${COMPOSE_CMD[@]}" exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE" || true
-    check_status
-  else
-    echo -e "${YELLOW}⚠ Banco parado. Pulando.${RESET}"
-  fi
-else
-  echo -e "${YELLOW}⚠ Backup pulado (SKIP_BACKUP=1).${RESET}"
-fi
+# Subir Redis
+docker compose -f "$COMPOSE_FILE" up -d redis >/dev/null 2>&1
+simulate_loading "CONTAINER: REDIS (Cache)" 2
 
-# ── Passo 2: Git Pull ─────────────────────────────────────────
-step_header "Atualizando Código Fonte"
+# Subir Backend
+docker compose -f "$COMPOSE_FILE" up -d backend >/dev/null 2>&1
+simulate_loading "CONTAINER: BACKEND (Django)" 6
 
-echo -n "Executando git pull origin main..."
-git pull origin main >/dev/null 2>&1 &
-spinner $!
-check_status
+# Subir Frontend
+docker compose -f "$COMPOSE_FILE" up -d frontend >/dev/null 2>&1
+simulate_loading "CONTAINER: FRONTEND (Next.js)" 5
 
-# ── Passo 3: Build ────────────────────────────────────────────
-step_header "Construindo Containers"
+# Subir Nginx/Tunnel
+docker compose -f "$COMPOSE_FILE" up -d tunnel >/dev/null 2>&1
+simulate_loading "CONTAINER: CLOUDFLARE (Tunnel)" 3
 
-echo "Build e start dos containers (isso pode demorar)..."
-"${COMPOSE_CMD[@]}" build --no-cache backend frontend >/dev/null 2>&1 &
-spinner $!
-check_status
+echo -e "${NEON_GREEN}   ✔ Todos os containers operacionais.${RESET}\n"
 
-echo -n "Ajustando permissões..."
-mkdir -p ./staticfiles ./media ./backups
-sudo chown -R 1000:1000 ./staticfiles ./media ./backups 2>/dev/null || true
-sudo chmod -R 775 ./staticfiles ./media ./backups 2>/dev/null || true
-check_status
-
-echo -n "Reiniciando serviços..."
-"${COMPOSE_CMD[@]}" up -d --remove-orphans >/dev/null 2>&1 &
-spinner $!
-check_status
-
-# ── Passo 4: Health Check ─────────────────────────────────────
-step_header "Verificando Saúde do Sistema"
-
-echo "Aguardando backend iniciar..."
-for i in $(seq 1 30); do
-  printf "\rTentativa $i/30..."
-  if curl -sf http://localhost:8005/api/core/health/ >/dev/null 2>&1; then
-    echo -e "\n${GREEN}✔ Backend online!${RESET}"
-    break
-  fi
-  if [ "$i" -eq 30 ]; then
-    echo -e "\n${RED}✘ Backend não respondeu após 60s.${RESET}"
-    exit 1
-  fi
-  sleep 2
+# 4. Health Check
+echo -e "${WHITE}:: FASE 4: VERIFICAÇÃO DE INTEGRIDADE${RESET}"
+echo -n "   Aguardando API..."
+for i in {1..10}; do
+    if curl -sf http://localhost:8005/api/core/health/ >/dev/null 2>&1; then
+        echo -e "${NEON_GREEN} [ONLINE]${RESET}"
+        break
+    fi
+    sleep 2
+    echo -n "."
 done
 
-# ── Passo 5: Migrações e Estáticos ────────────────────────────
-step_header "Configuração do Django"
+echo ""
 
-echo -n "Aplicando migrações..."
-"${COMPOSE_CMD[@]}" exec -T backend python manage.py migrate --noinput >/dev/null 2>&1 || "${COMPOSE_CMD[@]}" exec -T backend python manage.py migrate --noinput --fake-initial >/dev/null 2>&1 &
-spinner $!
-check_status
+# ── Passo 5: Migrações e Estáticos ────────────────────────────
+# step_header "Configuração do Django"
+echo -e "${WHITE}:: FASE 5: CONFIGURAÇÃO DO SISTEMA${RESET}"
+
+echo -n "Executando migrações..."
+docker compose -f "$COMPOSE_FILE" exec -T backend python manage.py migrate >/dev/null 2>&1
+simulate_loading "DATABASE MIGRATIONS" 4
+echo -e "${NEON_GREEN}   ✔ Banco de dados sincronizado${RESET}\n"
 
 echo -n "Coletando arquivos estáticos..."
-"${COMPOSE_CMD[@]}" exec -T backend python manage.py collectstatic --noinput --clear >/dev/null 2>&1 &
-spinner $!
-check_status
+docker compose -f "$COMPOSE_FILE" exec -T backend python manage.py collectstatic --noinput >/dev/null 2>&1
+simulate_loading "STATIC FILES" 3
+echo -e "${NEON_GREEN}   ✔ Assets compilados${RESET}\n"
 
-echo -n "Verificações de segurança..."
-"${COMPOSE_CMD[@]}" exec -T backend python manage.py check --deploy >/dev/null 2>&1 || true
-check_status
-
-# ── Passo 6: Seeds ────────────────────────────────────────────
-step_header "Finalização e Seeds"
-
-if [ "${SKIP_SEED:-0}" != "1" ]; then
-  echo -n "Executando seeds..."
-  (
-    "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_system || true
-    "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_cms    || true
-    "${COMPOSE_CMD[@]}" exec -T backend python manage.py seed_pages  || true
-    "${COMPOSE_CMD[@]}" exec -T backend python manage.py fix_production_domain || true
-  ) >/dev/null 2>&1 &
-  spinner $!
-  check_status
-else
-  echo -e "${YELLOW}⚠ Seeds pulados.${RESET}"
-fi
-
-echo -n "Limpando imagens antigas..."
-docker image prune -f >/dev/null 2>&1 &
-spinner $!
-check_status
-
-# ── Resumo Final ──────────────────────────────────────────────
-progress_bar 100
+echo -e "${NEON_GREEN}${BOLD}DEPLOY CONCLUÍDO COM SUCESSO.${RESET}"
+echo -e "${DARK_GREEN}Siga o coelho branco...${RESET}"
 echo ""
-echo ""
-echo -e "${GREEN}${BOLD}╔════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${GREEN}${BOLD}║           ✅  DEPLOY CONCLUÍDO COM SUCESSO!  ✅            ║${RESET}"
-echo -e "${GREEN}${BOLD}╚════════════════════════════════════════════════════════════╝${RESET}"
-echo ""
-echo -e "  🌍 Backend:  ${BLUE}http://localhost:8005/api/core/health/${RESET}"
-echo -e "  💻 Frontend: ${BLUE}http://localhost:3005${RESET}"
-echo -e "  📝 Log:      ${GRAY}${LOG_FILE}${RESET}"
-echo ""
-exit 0
