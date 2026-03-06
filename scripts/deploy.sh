@@ -118,7 +118,7 @@ echo -e "${BLUE}[Passo 3.1] Rodando migrações...${NC}"
 "${COMPOSE_CMD[@]}" exec -T backend python manage.py migrate --noinput || "${COMPOSE_CMD[@]}" exec -T backend python manage.py migrate --noinput --fake-initial
 
 echo -e "${BLUE}[Passo 3.2] Coletando arquivos estáticos...${NC}"
-"${COMPOSE_CMD[@]}" exec -T backend python manage.py collectstatic --noinput
+"${COMPOSE_CMD[@]}" exec -T backend python manage.py collectstatic --noinput --clear
 
 echo -e "${BLUE}[Passo 3.3] Verificações de deploy do Django...${NC}"
 "${COMPOSE_CMD[@]}" exec -T backend python manage.py check --deploy || true
