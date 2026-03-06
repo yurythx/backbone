@@ -18,12 +18,16 @@ export default function DashboardLayout({
   const isRedirecting = useRef(false)
 
   useEffect(() => {
+    // Verificar se estamos no cliente
+    if (typeof window === "undefined") return
+
     const checkAuth = () => {
       // Se for a página inicial ou rota pública, libera o acesso imediatamente
+      const path = window.location.pathname
       if (
-        window.location.pathname === '/' || 
-        window.location.pathname.startsWith('/p/') ||
-        window.location.pathname.startsWith('/login')
+        path === '/' || 
+        path.startsWith('/p/') ||
+        path.startsWith('/login')
       ) {
         setAuthorized(true)
         setChecked(true)
@@ -31,11 +35,12 @@ export default function DashboardLayout({
       }
       
       try {
-        const accessToken = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
+        const accessToken = localStorage.getItem("accessToken")
         
         if (!accessToken) {
           if (!isRedirecting.current) {
             isRedirecting.current = true
+            console.log("[DashboardLayout] Sem token, redirecionando para /")
             // Redireciona para / que é a landing page pública
             router.replace("/")
           }
