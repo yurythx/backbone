@@ -9,7 +9,7 @@ export function useModules() {
             const res = await api.get<TenantModule[] | { results: TenantModule[] }>('/api/modules/my-modules/')
             return res.data
         },
-        staleTime: 5 * 60 * 1000,
+        staleTime: 30_000, // Reduzido de 5min para 30s para atualizar mais rápido em interações
         retry: 1
     })
 

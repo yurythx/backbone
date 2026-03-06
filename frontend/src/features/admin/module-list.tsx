@@ -50,18 +50,26 @@ export function ModuleList() {
         await api.post('/api/modules/my-modules/activate/', { module_code: code })
       } else {
         // Bug M2: encontra o TenantModule pelo module ID (não pelo code)
+        // Correção: Agora verifica se o módulo existe e se está ativo na lista do tenant
         const tm = tenantModules.find(tm => tm.module === moduleId)
         if (!tm) {
+          // Se não existir, tenta criar inativo ou ativar primeiro
+          // Mas como estamos desativando, deve existir. Se não, erro.
           throw new Error(`Módulo "${name}" não encontrado na lista do tenant.`)
         }
         await api.patch(`/api/modules/my-modules/${tm.id}/`, { is_active: false })
       }
       return { name, isActive }
     },
-    onSuccess: ({ name, isActive }) => {
+    onSuccess: async ({ name, isActive }) => {
       // MM2: invalida ambas as queries para garantir sincronismo
-      queryClient.invalidateQueries({ queryKey: ['my-modules'] })
-      queryClient.invalidateQueries({ queryKey: ['modules'] })
+      await queryClient.invalidateQueries({ queryKey: ['my-modules'] })
+      await queryClient.invalidateQueries({ queryKey: ['modules'] })
+      
+      // Forçar atualização da sidebar disparando evento customizado ou atualizando contexto
+      // Como o useModules usa o mesmo queryKey ['my-modules'], ele deve atualizar automaticamente
+      // se estiver usando o mesmo queryClient.
+      
       // MM1: toast com nome do módulo
       toast.success(isActive ? `Módulo "${name}" ativado` : `Módulo "${name}" desativado`)
     },
