@@ -1,5 +1,5 @@
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework import permissions
 from django.db import connection
@@ -25,6 +25,7 @@ class HealthCheckSerializer(serializers.Serializer):
 @extend_schema(responses={200: HealthCheckSerializer})
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
+@throttle_classes([])
 def health_check(request):
     """
     Dedicated Health Check Endpoint.
