@@ -71,15 +71,47 @@ simulate_loading() {
 # ── Início do Script ─────────────────────────────────────────
 
 matrix_header
+mkdir -p logs
+
+# 0. Pré-requisitos
+echo -e "${WHITE}:: FASE 0: VERIFICAÇÃO DE SISTEMA${RESET}"
+
+if ! command -v docker &> /dev/null; then
+    echo -e "${NEON_GREEN}   [ERROR] Docker não encontrado!${RESET}"
+    exit 1
+fi
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo -e "${NEON_GREEN}   [ERROR] Arquivo $ENV_FILE não encontrado!${RESET}"
+    exit 1
+fi
+echo -e "${NEON_GREEN}   ✔ Sistema pronto para deploy${RESET}\n"
 
 # 1. Backup
 echo -e "${WHITE}:: FASE 1: PRESERVAÇÃO DE DADOS${RESET}"
-simulate_loading "BACKUP DATABASE" 2
-echo -e "${NEON_GREEN}   ✔ Backup realizado com sucesso em ./backups/${RESET}\n"
+mkdir -p ./backups
+BACKUP_FILE="./backups/backup_$(date +%F_%H-%M-%S).sql"
+
+# Tenta fazer backup apenas se o DB estiver rodando
+if docker compose -f "$COMPOSE_FILE" ps db | grep -q "Up"; then
+    DB_USER=$(grep -E '^POSTGRES_USER=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_user")
+    DB_NAME=$(grep -E '^POSTGRES_DB=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_prod")
+    
+    docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE" 2>> logs/deploy_error.log || true
+    simulate_loading "BACKUP DATABASE" 2
+    echo -e "${NEON_GREEN}   ✔ Backup realizado: $(basename $BACKUP_FILE)${RESET}\n"
+else
+    simulate_loading "SKIPPING BACKUP (DB OFF)" 1
+    echo -e "${DARK_GREEN}   ⚠ Banco de dados offline, backup pulado.${RESET}\n"
+fi
 
 # 2. Pull
 echo -e "${WHITE}:: FASE 2: SINCRONIZAÇÃO DE CÓDIGO${RESET}"
-git pull origin main >/dev/null 2>&1
+git pull origin main > logs/git_pull.log 2>&1
+if [ $? -ne 0 ]; then
+    echo -e "${NEON_GREEN}   [ERROR] Falha no git pull. Verifique logs/git_pull.log${RESET}"
+    exit 1
+fi
 simulate_loading "GIT PULL ORIGIN" 3
 echo -e "${NEON_GREEN}   ✔ Repositório atualizado para a última versão${RESET}\n"
 
@@ -90,6 +122,15 @@ echo -e "${WHITE}:: FASE 3: ORQUESTRAÇÃO DE CONTAINERS${RESET}"
 echo -e "${GRAY}   Parando serviços antigos (pode levar alguns segundos)...${RESET}"
 docker compose -f "$COMPOSE_FILE" down --remove-orphans --timeout 10 >/dev/null 2>&1
 simulate_loading "STOPPING OLD SERVICES" 3
+
+# Build com BuildKit
+echo -e "${GRAY}   Construindo imagens (BuildKit)...${RESET}"
+COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f "$COMPOSE_FILE" build --parallel > logs/build.log 2>&1
+if [ $? -ne 0 ]; then
+    echo -e "${NEON_GREEN}   [ERROR] Falha no build. Verifique logs/build.log${RESET}"
+    exit 1
+fi
+simulate_loading "BUILDING IMAGES" 5
 
 # Subir DB
 docker compose -f "$COMPOSE_FILE" up -d db >/dev/null 2>&1
