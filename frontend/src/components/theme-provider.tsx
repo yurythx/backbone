@@ -101,22 +101,31 @@ function useThemeHooks(): ThemeConfigShape {
   const fetchConfig = useCallback(async () => {
     setIsLoading(true)
     try {
+      // Check if user is logged in
+      const token = typeof window !== "undefined" ? localStorage.getItem('accessToken') : null
+      
       // Fetch Tenant branding
+      // Note: This endpoint should be public or handle auth gracefully
       const brandingRes = await api.get('/api/core/branding/current/')
       setTenantTheme(brandingRes.data)
 
       // Persist for the init script
       localStorage.setItem('backbone_tenant_branding', JSON.stringify(brandingRes.data))
 
-      // Fetch User preferences if not a public route
-      if (!isPublicRoute) {
-        const prefRes = await api.get('/api/accounts/users/me/')
-        const prefs: UserPreferences = {
-          theme_palette: prefRes.data.theme_palette,
-          use_tenant_theme: prefRes.data.use_tenant_theme !== false,
+      // Fetch User preferences ONLY if not a public route AND user has token
+      if (!isPublicRoute && token) {
+        try {
+          const prefRes = await api.get('/api/accounts/users/me/')
+          const prefs: UserPreferences = {
+            theme_palette: prefRes.data.theme_palette,
+            use_tenant_theme: prefRes.data.use_tenant_theme !== false,
+          }
+          setUserTheme(prefs)
+          localStorage.setItem('backbone_user_preferences', JSON.stringify(prefs))
+        } catch (e) {
+           // Silent fail for user prefs if token is invalid, but don't break the app
+           console.warn("Could not load user theme prefs", e)
         }
-        setUserTheme(prefs)
-        localStorage.setItem('backbone_user_preferences', JSON.stringify(prefs))
       }
     } catch (error) {
       console.error("Failed to load theme config", error)
