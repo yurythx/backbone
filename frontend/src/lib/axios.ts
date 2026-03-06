@@ -121,9 +121,9 @@ api.interceptors.response.use(
           const isAuthError = axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403);
 
           // Don't redirect if checking current user session (silent check)
-          const isMeCheck = originalRequest.url?.includes('/users/me/');
 
-          if (isAuthError && !isMeCheck) {
+
+          if (isAuthError) {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
             window.location.href = '/login';

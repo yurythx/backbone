@@ -52,19 +52,16 @@ interface ThemeConfigShape {
   fontFamily: string
   icon: string
 }
-function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
-  const { resolvedTheme } = useNextTheme() // Agora funciona pois está dentro do Provider
+function ThemeEffectsWrapper({ children, themeConfig }: { children: React.ReactNode, themeConfig: ThemeConfigShape }) {
+  const { resolvedTheme } = useNextTheme()
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const root = document.documentElement;
       root.setAttribute("data-palette", themeConfig.currentPalette)
 
-      // Se for rota pública, força o uso da cor primária do tenant se definida
-      // Se for privada, respeita a lógica de fallback (já resolvida no hook useThemeConfig)
       const shouldUseTenantColor = themeConfig.isPublicRoute || themeConfig.userTheme?.use_tenant_theme !== false;
 
-      // Lógica de Cores Primárias
       if (shouldUseTenantColor && themeConfig.tenantTheme?.primary_color) {
         if (resolvedTheme !== 'dark') {
           const primaryHex = themeConfig.tenantTheme.primary_color
@@ -80,7 +77,6 @@ function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
         root.style.removeProperty('--primary-foreground');
       }
 
-      // Lógica de Cores Secundárias
       if (themeConfig.secondaryColor) {
         const secondaryHex = themeConfig.secondaryColor
         root.style.setProperty('--secondary', secondaryHex);
@@ -91,7 +87,6 @@ function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
         root.style.removeProperty('--secondary-foreground');
       }
 
-      // ✅ CORREÇÃO: Agora resolvedTheme tem o valor correto ('dark' ou 'light')
       if (themeConfig.backgroundColor && resolvedTheme !== 'dark') {
         root.style.setProperty('--background', themeConfig.backgroundColor);
       } else {
@@ -104,7 +99,6 @@ function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
     }
   }, [themeConfig, resolvedTheme])
 
-  // Google Fonts Injection
   React.useEffect(() => {
     if (typeof window !== "undefined" && themeConfig.fontFamily) {
       const fontId = 'dynamic-google-font';
@@ -120,7 +114,6 @@ function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
     }
   }, [themeConfig.fontFamily])
 
-  // Favicon Injection
   React.useEffect(() => {
     if (typeof window !== "undefined" && themeConfig.icon) {
       let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']")
@@ -133,7 +126,7 @@ function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
     }
   }, [themeConfig.icon])
 
-  return null
+  return <React.Fragment>{children}</React.Fragment>
 }
 
 export function ThemeProvider({
@@ -163,10 +156,9 @@ export function ThemeProvider({
       resetToTenantTheme: themeConfig.resetToTenantTheme,
     }}>
       <NextThemesProvider {...props}>
-        <div style={{ display: 'contents' }}>
-          <ThemeEffects themeConfig={themeConfig} />
+        <ThemeEffectsWrapper themeConfig={themeConfig}>
           {children}
-        </div>
+        </ThemeEffectsWrapper>
       </NextThemesProvider>
     </ThemeConfigContext.Provider>
   )
