@@ -261,20 +261,39 @@ class DashboardStatsView(generics.GenericAPIView):
                 })
 
             # 4. Distribuição por Categorias
-            from apps.articles.models import Category
             categories_data = Category.objects.filter(company=company).annotate(
                 article_count=Count('articles')
             ).order_by('-article_count')[:5]
 
+            # 5. Dashboard Stats Format matching Serializer
+            this_month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            
+            # Growth/New logic (simulated for now or calculated if needed)
+            new_users_month = get_user_model().objects.filter(company=company, date_joined__gte=this_month_start).count()
+            new_articles_month = Article.objects.filter(company=company, created_at__gte=this_month_start).count()
+
             stats = {
                 "counters": {
-                    "users": {"total": total_users, "growth": 0},
-                    "articles": {"published": published_articles, "growth": 0},
-                    "messages": {"total": total_messages, "growth": 0}
+                    "users": {
+                        "total": total_users, 
+                        "new_this_month": new_users_month,
+                        "growth": 0.0
+                    },
+                    "articles": {
+                        "total": published_articles, # Published as total for dashboard 
+                        "new_this_month": new_articles_month,
+                        "growth": 0.0
+                    },
+                    "messages": {
+                        "total": total_messages, 
+                        "new_this_month": 0,
+                        "growth": 0.0
+                    }
                 },
                 "system_status": {
                     "api_uptime": "100%",
-                    "storage_used": "1.2GB"
+                    "storage_used": "1.2GB",
+                    "last_backup": timezone.now()
                 },
                 "recent_activity": recent_activity_data,
                 "charts": {

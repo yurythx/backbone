@@ -1,4 +1,5 @@
-import { Metadata } from "next"
+"use client"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -7,24 +8,7 @@ import Link from "next/link"
 
 import { Header } from "@/components/layout/header"
 
-export const metadata: Metadata = {
-  title: "Backbone Services - Central de Serviços",
-  description: "Acesse todos os serviços e aplicações disponíveis no backbone. Organizados por categorias com descrições detalhadas e acesso direto.",
-  keywords: ["serviços", "backbone", "aplicações", "dashboard", "infraestrutura"],
-  authors: [{ name: "Backbone Team" }],
-  robots: "index, follow",
-  openGraph: {
-    title: "Backbone Services - Ecossistema de Serviços",
-    description: "Central de serviços e aplicações do backbone.",
-    type: "website",
-    locale: "pt_BR"
-  }
-}
 
-export const viewport = {
-  width: "device-width",
-  initialScale: 1
-}
 
 interface Service {
   id: string
@@ -226,91 +210,91 @@ export default function ServicesLandingPage() {
       <Header />
 
       <main role="main" aria-labelledby="titulo-ecossistema">
-      <section className="relative overflow-hidden py-20">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20" aria-hidden="true"></div>
-        <div className="container mx-auto px-6 relative">
-          <div className="text-center max-w-3xl mx-auto">
-            <h2 id="titulo-ecossistema" className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-              Ecossistema de Serviços
-            </h2>
-            <p className="text-xl text-muted-foreground mb-8">
-              Acesse todos os serviços e aplicações disponíveis no backbone. 
-              Organizados por categorias com descrições detalhadas e acesso direto.
-            </p>
-            <div className="flex flex-wrap gap-4 justify-center">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true"></div>
-                <span className="text-sm text-muted-foreground">{services.filter(s => s.status === "online").length} serviços online</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true"></div>
-                <span className="text-sm text-muted-foreground">{categories.length - 1} categorias</span>
+        <section className="relative overflow-hidden py-20">
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20" aria-hidden="true"></div>
+          <div className="container mx-auto px-6 relative">
+            <div className="text-center max-w-3xl mx-auto">
+              <h2 id="titulo-ecossistema" className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                Ecossistema de Serviços
+              </h2>
+              <p className="text-xl text-muted-foreground mb-8">
+                Acesse todos os serviços e aplicações disponíveis no backbone.
+                Organizados por categorias com descrições detalhadas e acesso direto.
+              </p>
+              <div className="flex flex-wrap gap-4 justify-center">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true"></div>
+                  <span className="text-sm text-muted-foreground">{services.filter(s => s.status === "online").length} serviços online</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true"></div>
+                  <span className="text-sm text-muted-foreground">{categories.length - 1} categorias</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="container mx-auto px-6 py-12">
-        <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" role="list" aria-label="Lista de serviços disponíveis">
-          {services.map((service) => (
-            <li key={service.id} role="listitem">
-            <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className={`h-2 bg-gradient-to-r ${service.color} rounded-t-lg`}></div>
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between">
-                  <div className={`p-3 rounded-lg bg-gradient-to-r ${service.color} text-white group-hover:scale-110 transition-transform`}>
-                    <service.icon className="h-6 w-6" aria-hidden="true" />
-                  </div>
-                  <Badge variant={service.status === "online" ? "default" : "destructive"} className="text-xs">
-                    {service.status === "online" ? "Online" : "Offline"}
-                  </Badge>
-                </div>
-                <CardTitle className="text-lg font-bold mt-4">{service.name}</CardTitle>
-                <CardDescription className="text-sm">{service.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Destaques</p>
-                  <div className="flex flex-wrap gap-1">
-                    {service.features.slice(0, 2).map((feature, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {feature}
+        <section className="container mx-auto px-6 py-12">
+          <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" role="list" aria-label="Lista de serviços disponíveis">
+            {services.map((service) => (
+              <li key={service.id} role="listitem">
+                <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <div className={`h-2 bg-gradient-to-r ${service.color} rounded-t-lg`}></div>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-start justify-between">
+                      <div className={`p-3 rounded-lg bg-gradient-to-r ${service.color} text-white group-hover:scale-110 transition-transform`}>
+                        <service.icon className="h-6 w-6" aria-hidden="true" />
+                      </div>
+                      <Badge variant={service.status === "online" ? "default" : "destructive"} className="text-xs">
+                        {service.status === "online" ? "Online" : "Offline"}
                       </Badge>
-                    ))}
-                    {service.features.length > 2 && (
+                    </div>
+                    <CardTitle className="text-lg font-bold mt-4">{service.name}</CardTitle>
+                    <CardDescription className="text-sm">{service.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Destaques</p>
+                      <div className="flex flex-wrap gap-1">
+                        {service.features.slice(0, 2).map((feature, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {feature}
+                          </Badge>
+                        ))}
+                        {service.features.length > 2 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{service.features.length - 2}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2">
                       <Badge variant="outline" className="text-xs">
-                        +{service.features.length - 2}
+                        {service.category}
                       </Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2">
-                  <Badge variant="outline" className="text-xs">
-                    {service.category}
-                  </Badge>
-                  <Link
-                    href={service.url}
-                    target={service.url.startsWith('http') ? "_blank" : undefined}
-                    rel={service.url.startsWith('http') ? "noopener noreferrer" : undefined}
-                    aria-label={`Acessar ${service.name}`}
-                  >
-                    <Button
-                      size="sm"
-                      className="group/btn focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                      disabled={service.status !== "online"}
-                    >
-                      Acessar
-                      <ExternalLink className="h-3 w-3 ml-2 group-hover/btn:translate-x-1 transition-transform" aria-hidden="true" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-            </li>
-          ))}
-        </ul>
-      </section>
+                      <Link
+                        href={service.url}
+                        target={service.url.startsWith('http') ? "_blank" : undefined}
+                        rel={service.url.startsWith('http') ? "noopener noreferrer" : undefined}
+                        aria-label={`Acessar ${service.name}`}
+                      >
+                        <Button
+                          size="sm"
+                          className="group/btn focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                          disabled={service.status !== "online"}
+                        >
+                          Acessar
+                          <ExternalLink className="h-3 w-3 ml-2 group-hover/btn:translate-x-1 transition-transform" aria-hidden="true" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </section>
       </main>
 
       {/* Footer */}

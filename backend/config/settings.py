@@ -192,6 +192,8 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
     "api.projetoravenna.cloud",
     "projetoravenna.cloud",
+    "backbone_backend",
+    "backbone_frontend",
     "192.168.1.121",
     "localhost",
     "127.0.0.1"
