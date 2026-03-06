@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 
 import { ThemeInitScript } from "@/components/theme-init-script";
 
+export const dynamic = 'force-dynamic'
 
 
 export const metadata: Metadata = {
