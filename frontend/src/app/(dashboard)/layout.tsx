@@ -19,8 +19,12 @@ export default function DashboardLayout({
 
   useEffect(() => {
     const checkAuth = () => {
-      // Se for a página inicial, NUNCA redireciona, apenas libera o acesso
-      if (window.location.pathname === '/' || window.location.pathname.startsWith('/p/')) {
+      // Se for a página inicial ou rota pública, libera o acesso imediatamente
+      if (
+        window.location.pathname === '/' || 
+        window.location.pathname.startsWith('/p/') ||
+        window.location.pathname.startsWith('/login')
+      ) {
         setAuthorized(true)
         setChecked(true)
         return
