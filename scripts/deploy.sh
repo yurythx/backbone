@@ -87,8 +87,9 @@ echo -e "${NEON_GREEN}   ✔ Repositório atualizado para a última versão${RES
 echo -e "${WHITE}:: FASE 3: ORQUESTRAÇÃO DE CONTAINERS${RESET}"
 
 # Parar containers antigos
-echo -e "${GRAY}   Parando serviços antigos...${RESET}"
-docker compose -f "$COMPOSE_FILE" down >/dev/null 2>&1
+echo -e "${GRAY}   Parando serviços antigos (pode levar alguns segundos)...${RESET}"
+docker compose -f "$COMPOSE_FILE" down --remove-orphans --timeout 10 >/dev/null 2>&1
+simulate_loading "STOPPING OLD SERVICES" 3
 
 # Subir DB
 docker compose -f "$COMPOSE_FILE" up -d db >/dev/null 2>&1
