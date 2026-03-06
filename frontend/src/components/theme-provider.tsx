@@ -1,120 +1,255 @@
 "use client"
 
 import * as React from "react"
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react"
 import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from "next-themes"
-import { useThemeConfig } from "@/hooks/use-theme-config"
-import { getContrastColor } from "@/lib/utils"
-import type { TenantBranding, UserThemePreference } from "@/types"
+import { api } from "@/lib/axios"
+import axios from "axios"
+import { usePathname } from "next/navigation"
 
-interface ThemeContextType {
-  logo: string;
-  icon: string;
-  companyName: string;
-  footerText: string;
-  primaryColor: string;
-  secondaryColor: string;
-  backgroundColor: string;
-  fontFamily: string;
-  customCss: string;
-  customJs: string;
-  socialLinks: {
-    facebook: string;
-    instagram: string;
-    linkedin: string;
-    twitter: string;
-  };
-  currentPalette: string;
-  isLoading: boolean;
-  isPublicRoute: boolean;
-  refreshConfig: () => Promise<void>;
-  updatePalette: (palette: string) => Promise<void>;
-  resetToTenantTheme: () => Promise<void>;
+// --- Types ---
+interface TenantTheme {
+  primary_color: string
+  secondary_color: string
+  background_color: string
+  font_family: string
+  logo: string
+  icon: string
+  footer_text: string
+  facebook_url?: string
+  instagram_url?: string
+  linkedin_url?: string
+  twitter_url?: string
+  theme_palette?: string
+  custom_css?: string
+  custom_js?: string
 }
 
-const ThemeConfigContext = React.createContext<ThemeContextType | undefined>(undefined)
+interface UserPreferences {
+  theme_palette?: string
+  use_tenant_theme: boolean
+  font_size?: string
+}
 
-export function useTheme() {
-  const context = React.useContext(ThemeConfigContext)
+interface ThemeConfigShape {
+  logo: string | null
+  icon: string | null
+  companyName: string | null
+  footerText: string | null
+  primaryColor: string
+  secondaryColor: string | null
+  backgroundColor: string | null
+  fontFamily: string | null
+  customCss: string | null
+  customJs: string | null
+  socialLinks: {
+    facebook: string | null
+    instagram: string | null
+    linkedin: string | null
+    twitter: string | null
+  }
+  currentPalette: string
+  isLoading: boolean
+  isPublicRoute: boolean
+  tenantTheme: TenantTheme | null
+  userTheme: UserPreferences | null
+  refreshConfig: () => Promise<void>
+  updatePalette: (palette: string) => Promise<void>
+  resetToTenantTheme: () => Promise<void>
+}
+
+// --- Context & Hook ---
+const BrandingContext = createContext<ThemeConfigShape | undefined>(undefined)
+
+/**
+ * Hook to access Backbone branding and theme configuration.
+ * Distinct from next-themes' useTheme.
+ */
+export function useBranding() {
+  const context = useContext(BrandingContext)
   if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider")
+    throw new Error('useBranding must be used within a BrandingProvider')
   }
   return context
 }
 
-// Internal helper for dynamic theme effects
-interface ThemeConfigShape {
-  currentPalette: string
-  isPublicRoute: boolean
-  tenantTheme: TenantBranding | null
-  userTheme: UserThemePreference | null
-  secondaryColor: string
-  backgroundColor: string
-  fontFamily: string
-  icon: string
+// Re-export for easier migration in components that already use 'useTheme' 
+// but we should eventually rename them to useBranding
+export { useBranding as useTheme }
+
+// --- Internal Implementation ---
+
+function getContrastColor(hex: string) {
+  if (!hex) return '#FFFFFF'
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000
+  return brightness > 128 ? '#000000' : '#FFFFFF'
 }
-function ThemeEffectsWrapper({ children, themeConfig }: { children: React.ReactNode, themeConfig: ThemeConfigShape }) {
+
+function useThemeHooks(): ThemeConfigShape {
+  const pathname = usePathname()
+  const isPublicRoute = useMemo(() =>
+    pathname === "/" || pathname?.startsWith("/p/") || pathname?.startsWith("/artigos"),
+    [pathname])
+
+  const [tenantTheme, setTenantTheme] = useState<TenantTheme | null>(null)
+  const [userTheme, setUserTheme] = useState<UserPreferences | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  const fetchConfig = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      // Fetch Tenant branding
+      const brandingRes = await api.get('/api/core/branding/current/')
+      setTenantTheme(brandingRes.data)
+
+      // Persist for the init script
+      localStorage.setItem('backbone_tenant_branding', JSON.stringify(brandingRes.data))
+
+      // Fetch User preferences if not a public route
+      if (!isPublicRoute) {
+        const prefRes = await api.get('/api/accounts/users/me/')
+        const prefs: UserPreferences = {
+          theme_palette: prefRes.data.theme_palette,
+          use_tenant_theme: prefRes.data.use_tenant_theme !== false,
+        }
+        setUserTheme(prefs)
+        localStorage.setItem('backbone_user_preferences', JSON.stringify(prefs))
+      }
+    } catch (error) {
+      console.error("Failed to load theme config", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isPublicRoute])
+
+  useEffect(() => {
+    fetchConfig()
+  }, [fetchConfig])
+
+  const updatePalette = async (palette: string) => {
+    try {
+      await api.patch('/api/accounts/users/update_me/', {
+        theme_palette: palette,
+        use_tenant_theme: false
+      })
+      await fetchConfig()
+    } catch (err) {
+      console.error("Failed to update palette", err)
+    }
+  }
+
+  const resetToTenantTheme = async () => {
+    try {
+      await api.patch('/api/accounts/users/update_me/', { use_tenant_theme: true })
+      await fetchConfig()
+    } catch (err) {
+      console.error("Failed to reset theme", err)
+    }
+  }
+
+  const currentPalette = useMemo(() => {
+    if (!isPublicRoute && userTheme && !userTheme.use_tenant_theme && userTheme.theme_palette) {
+      return userTheme.theme_palette
+    }
+    return tenantTheme?.theme_palette || 'django-green'
+  }, [userTheme, tenantTheme, isPublicRoute])
+
+  return {
+    logo: tenantTheme?.logo || null,
+    icon: tenantTheme?.icon || null,
+    companyName: tenantTheme?.footer_text?.split('.')[0]?.replace('©', '')?.trim() || "Backbone",
+    footerText: tenantTheme?.footer_text || null,
+    primaryColor: tenantTheme?.primary_color || '#0C4B33',
+    secondaryColor: tenantTheme?.secondary_color || null,
+    backgroundColor: tenantTheme?.background_color || null,
+    fontFamily: tenantTheme?.font_family || null,
+    customCss: tenantTheme?.custom_css || null,
+    customJs: tenantTheme?.custom_js || null,
+    socialLinks: {
+      facebook: tenantTheme?.facebook_url || null,
+      instagram: tenantTheme?.instagram_url || null,
+      linkedin: tenantTheme?.linkedin_url || null,
+      twitter: tenantTheme?.twitter_url || null,
+    },
+    currentPalette,
+    isLoading,
+    isPublicRoute,
+    tenantTheme,
+    userTheme,
+    refreshConfig: fetchConfig,
+    updatePalette,
+    resetToTenantTheme
+  }
+}
+
+function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
   const { resolvedTheme } = useNextTheme()
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (typeof window !== "undefined") {
-      const root = document.documentElement;
+      const root = document.documentElement
       root.setAttribute("data-palette", themeConfig.currentPalette)
 
-      const shouldUseTenantColor = themeConfig.isPublicRoute || themeConfig.userTheme?.use_tenant_theme !== false;
+      const shouldUseTenantColor = themeConfig.isPublicRoute || themeConfig.userTheme?.use_tenant_theme !== false
 
       if (shouldUseTenantColor && themeConfig.tenantTheme?.primary_color) {
         if (resolvedTheme !== 'dark') {
           const primaryHex = themeConfig.tenantTheme.primary_color
-          root.style.setProperty('--primary', primaryHex);
-          const foregroundHex = getContrastColor(primaryHex);
-          root.style.setProperty('--primary-foreground', foregroundHex);
+          root.style.setProperty('--primary', primaryHex)
+          const foregroundHex = getContrastColor(primaryHex)
+          root.style.setProperty('--primary-foreground', foregroundHex)
         } else {
-          root.style.removeProperty('--primary');
-          root.style.removeProperty('--primary-foreground');
+          root.style.removeProperty('--primary')
+          root.style.removeProperty('--primary-foreground')
         }
       } else {
-        root.style.removeProperty('--primary');
-        root.style.removeProperty('--primary-foreground');
+        root.style.removeProperty('--primary')
+        root.style.removeProperty('--primary-foreground')
       }
 
       if (themeConfig.secondaryColor) {
         const secondaryHex = themeConfig.secondaryColor
-        root.style.setProperty('--secondary', secondaryHex);
-        const foregroundHex = getContrastColor(secondaryHex);
-        root.style.setProperty('--secondary-foreground', foregroundHex);
+        root.style.setProperty('--secondary', secondaryHex)
+        const foregroundHex = getContrastColor(secondaryHex)
+        root.style.setProperty('--secondary-foreground', foregroundHex)
       } else {
-        root.style.removeProperty('--secondary');
-        root.style.removeProperty('--secondary-foreground');
+        root.style.removeProperty('--secondary')
+        root.style.removeProperty('--secondary-foreground')
       }
 
       if (themeConfig.backgroundColor && resolvedTheme !== 'dark') {
-        root.style.setProperty('--background', themeConfig.backgroundColor);
+        root.style.setProperty('--background', themeConfig.backgroundColor)
       } else {
-        root.style.removeProperty('--background');
+        root.style.removeProperty('--background')
       }
 
       if (themeConfig.fontFamily) {
-        root.style.setProperty('--font-family', `"${themeConfig.fontFamily}", sans-serif`);
+        root.style.setProperty('--font-family', `"${themeConfig.fontFamily}", sans-serif`)
       }
     }
   }, [themeConfig, resolvedTheme])
 
-  React.useEffect(() => {
+  // Load dynamic Google Font
+  useEffect(() => {
     if (typeof window !== "undefined" && themeConfig.fontFamily) {
-      const fontId = 'dynamic-google-font';
-      let link = document.getElementById(fontId) as HTMLLinkElement;
+      const fontId = 'dynamic-google-font'
+      let link = document.getElementById(fontId) as HTMLLinkElement
       if (!link) {
-        link = document.createElement('link');
-        link.id = fontId;
-        link.rel = 'stylesheet';
-        document.head.appendChild(link);
+        link = document.createElement('link')
+        link.id = fontId
+        link.rel = 'stylesheet'
+        document.head.appendChild(link)
       }
-      const fontName = themeConfig.fontFamily.replace(/\s+/g, '+');
-      link.href = `https://fonts.googleapis.com/css2?family=${fontName}:wght@300;400;500;600;700&display=swap`;
+      const fontName = themeConfig.fontFamily.replace(/\s+/g, '+')
+      link.href = `https://fonts.googleapis.com/css2?family=${fontName}:wght@300;400;500;600;700&display=swap`
     }
   }, [themeConfig.fontFamily])
 
-  React.useEffect(() => {
+  // Update Favicon
+  useEffect(() => {
     if (typeof window !== "undefined" && themeConfig.icon) {
       let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']")
       if (!link) {
@@ -126,40 +261,23 @@ function ThemeEffectsWrapper({ children, themeConfig }: { children: React.ReactN
     }
   }, [themeConfig.icon])
 
-  return <React.Fragment>{children}</React.Fragment>
+  return null
 }
 
 export function ThemeProvider({
   children,
   ...props
 }: React.ComponentProps<typeof NextThemesProvider>) {
-  const themeConfig = useThemeConfig()
+  const themeConfig = useThemeHooks()
 
   return (
-    <ThemeConfigContext.Provider value={{
-      logo: themeConfig.logo,
-      icon: themeConfig.icon,
-      companyName: themeConfig.companyName,
-      footerText: themeConfig.footerText,
-      primaryColor: themeConfig.tenantTheme?.primary_color || '#0C4B33',
-      secondaryColor: themeConfig.secondaryColor,
-      backgroundColor: themeConfig.backgroundColor,
-      fontFamily: themeConfig.fontFamily,
-      customCss: themeConfig.customCss,
-      customJs: themeConfig.customJs,
-      socialLinks: themeConfig.socialLinks,
-      currentPalette: themeConfig.currentPalette,
-      isLoading: themeConfig.isLoading,
-      isPublicRoute: themeConfig.isPublicRoute,
-      refreshConfig: themeConfig.refreshConfig,
-      updatePalette: themeConfig.updatePalette,
-      resetToTenantTheme: themeConfig.resetToTenantTheme,
-    }}>
+    <BrandingContext.Provider value={themeConfig}>
       <NextThemesProvider {...props}>
-        <ThemeEffectsWrapper themeConfig={themeConfig}>
+        <div style={{ display: 'contents' }}>
+          <ThemeEffects themeConfig={themeConfig} />
           {children}
-        </ThemeEffectsWrapper>
+        </div>
       </NextThemesProvider>
-    </ThemeConfigContext.Provider>
+    </BrandingContext.Provider>
   )
 }
