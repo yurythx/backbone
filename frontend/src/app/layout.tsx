@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 import { ThemeInitScript } from "@/components/theme-init-script";
 
-export const dynamic = 'force-dynamic'
+
 
 export const metadata: Metadata = {
   title: "Backbone SaaS",
@@ -36,9 +36,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <ErrorBoundary>
-          <Providers>{children}</Providers>
-        </ErrorBoundary>
+        <Providers>
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
+        </Providers>
       </body>
     </html>
   );

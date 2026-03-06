@@ -92,6 +92,10 @@ export function Header() {
   }
 
 
+  if (!isClient) {
+    return <header className="h-20 border-b bg-background/50 animate-pulse" />
+  }
+
   return (
     <header className="h-20 sticky top-0 z-50 px-8 flex items-center justify-between border-b glass shadow-sm transition-all duration-500" role="banner" aria-label="Cabeçalho">
       <div className="flex items-center gap-12">

@@ -1,5 +1,4 @@
-"use client"
-
+import { Metadata } from "next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -7,6 +6,25 @@ import { ExternalLink, Play, Music, FileVideo, Cloud, Database, MessageCircle, S
 import Link from "next/link"
 
 import { Header } from "@/components/layout/header"
+
+export const metadata: Metadata = {
+  title: "Backbone Services - Central de Serviços",
+  description: "Acesse todos os serviços e aplicações disponíveis no backbone. Organizados por categorias com descrições detalhadas e acesso direto.",
+  keywords: ["serviços", "backbone", "aplicações", "dashboard", "infraestrutura"],
+  authors: [{ name: "Backbone Team" }],
+  robots: "index, follow",
+  openGraph: {
+    title: "Backbone Services - Ecossistema de Serviços",
+    description: "Central de serviços e aplicações do backbone.",
+    type: "website",
+    locale: "pt_BR"
+  }
+}
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1
+}
 
 
 

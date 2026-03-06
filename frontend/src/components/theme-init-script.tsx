@@ -1,9 +1,7 @@
-"use client"
-
 import * as React from "react"
 
 export function ThemeInitScript() {
-    const scriptContent = `
+  const scriptContent = `
     (function() {
       try {
         const tenantBranding = JSON.parse(localStorage.getItem('backbone_tenant_branding'));
@@ -65,10 +63,10 @@ export function ThemeInitScript() {
     })();
   `
 
-    return (
-        <script
-            id="theme-init-script"
-            dangerouslySetInnerHTML={{ __html: scriptContent }}
-        />
-    )
+  return (
+    <script
+      id="theme-init-script"
+      dangerouslySetInnerHTML={{ __html: scriptContent }}
+    />
+  )
 }

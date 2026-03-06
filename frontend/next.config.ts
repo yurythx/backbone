@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  transpilePackages: ["lucide-react", "framer-motion"],
   experimental: {
     reactCompiler: false,
   },
