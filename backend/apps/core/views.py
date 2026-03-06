@@ -78,7 +78,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
             "response_time_ms": round((time.time() - start_time) * 1000, 2)
         })
 
-    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], throttle_classes=[])
     def public_list(self, request):
         """Lista apenas nome, slug e logo para o seletor de login"""
         companies = Company.objects.select_related('theme_branding').all()

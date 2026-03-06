@@ -24,9 +24,9 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     queryset = TenantBranding.objects.all()
     serializer_class = TenantBrandingSerializer
     @tenant_cached(timeout=3600, key_prefix='branding')
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[])
     def current(self, request):
-        """Obtém branding do tenant atual (requer autenticação)"""
+        """Obtém branding do tenant atual (público para carregar tema no login)"""
         return self._get_current_branding()
 
     @tenant_cached(timeout=3600, key_prefix='branding_public')
@@ -36,9 +36,32 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         return self._get_current_branding()
 
     def _get_current_branding(self):
-        company = get_current_company()
-        if not company:
-            # Fallback para branding do sistema (se não houver tenant identificado)
+        try:
+            company = get_current_company()
+            if not company:
+                # Fallback para branding do sistema (se não houver tenant identificado)
+                return Response({
+                    'company_name': 'Backbone SaaS',
+                    'primary_color': '#000000',
+                    'secondary_color': '#ffffff',
+                    'logo': None,
+                    'icon': None,
+                    'theme_palette': 'slate-gray',
+                    'custom_css': ''
+                })
+            
+            branding, created = TenantBranding.objects.get_or_create(
+                company=company,
+                defaults={
+                    'company_name': company.name,
+                    'theme_palette': 'django-green'
+                }
+            )
+            
+            serializer = self.get_serializer(branding)
+            return Response(serializer.data)
+        except Exception as e:
+            # Fallback seguro em caso de erro 500 no get_current_company ou get_or_create
             return Response({
                 'company_name': 'Backbone SaaS',
                 'primary_color': '#000000',
@@ -48,21 +71,10 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                 'theme_palette': 'slate-gray',
                 'custom_css': ''
             })
-        
-        branding, created = TenantBranding.objects.get_or_create(
-            company=company,
-            defaults={
-                'company_name': company.name,
-                'theme_palette': 'django-green'
-            }
-        )
-        
-        serializer = self.get_serializer(branding)
-        return Response(serializer.data)
 
     def get_permissions(self):
-        if self.action in ['public_current', 'palettes']:
-            return []
+        if self.action in ['current', 'public_current', 'palettes']:
+            return [permissions.AllowAny()]
         return [IsAuthenticated()]
     
     @action(detail=False, methods=['put'])
