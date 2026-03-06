@@ -4,6 +4,7 @@ import { useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { PageList } from "@/features/pages/page-list"
 import { PageForm } from "@/features/pages/page-form"
+import { ModuleGuard } from "@/components/module-guard"
 import { Page } from "@/types"
 
 function CMSPageContent() {
@@ -57,8 +58,10 @@ function CMSPageContent() {
 
 export default function CMSPage() {
   return (
-    <Suspense fallback={null}>
-      <CMSPageContent />
-    </Suspense>
+    <ModuleGuard moduleCode="pages">
+      <Suspense fallback={null}>
+        <CMSPageContent />
+      </Suspense>
+    </ModuleGuard>
   )
 }

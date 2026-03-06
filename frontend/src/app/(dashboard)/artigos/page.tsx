@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { PublicArticleCard } from "@/components/public/article-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Search, BookOpen, Plus } from "lucide-react"
+import { ModuleGuard } from "@/components/module-guard"
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -372,8 +373,10 @@ function ArtigosPageContent() {
 
 export default function ArtigosPage() {
     return (
-        <Suspense fallback={null}>
-            <ArtigosPageContent />
-        </Suspense>
+        <ModuleGuard moduleCode="articles">
+            <Suspense fallback={null}>
+                <ArtigosPageContent />
+            </Suspense>
+        </ModuleGuard>
     )
 }
