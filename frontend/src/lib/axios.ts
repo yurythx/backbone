@@ -87,7 +87,7 @@ api.interceptors.response.use(
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           // Redirect to login if needed
-          window.location.href = '/login';
+          window.location.href = '/';
         }
         return Promise.reject(error);
       }
@@ -126,7 +126,7 @@ api.interceptors.response.use(
           if (isAuthError) {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
-            window.location.href = '/login';
+            window.location.href = '/';
           }
         }
         return Promise.reject(err);
