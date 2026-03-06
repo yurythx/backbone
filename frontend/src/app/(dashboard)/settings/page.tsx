@@ -17,37 +17,19 @@ import { Protected } from "@/components/auth/protected"
 
 function SettingsContent() {
   const searchParams = useSearchParams()
-  const initialTab = searchParams.get("tab") || "profile"
+  const initialTab = searchParams.get("tab") || "company"
   const [activeTab, setActiveTab] = useState(initialTab)
-
-  // Estado inicial derivado de searchParams; sem sincronização via effect
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-20">
       <PageHeader
-        title="Configurações"
-        description="Gerencie seu perfil, preferências e configurações da organização."
+        title="Configurações do Sistema"
+        description="Gerencie as configurações da organização e preferências globais."
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
         <div className="glass rounded-2xl p-2 border shadow-sm">
           <TabsList className="bg-transparent p-0 w-full flex flex-col md:flex-row h-auto gap-2" aria-label="Seções de configurações">
-            <TabsTrigger
-              value="profile"
-              className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
-            >
-              <User className="h-4 w-4" aria-hidden="true" />
-              Perfil Pessoal
-            </TabsTrigger>
-
-            <TabsTrigger
-              value="personalization"
-              className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
-            >
-              <Palette className="h-4 w-4" aria-hidden="true" />
-              Aparência
-            </TabsTrigger>
-
             <TabsTrigger
               value="company"
               className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
@@ -83,18 +65,6 @@ function SettingsContent() {
             transition={{ duration: 0.2 }}
             className="glass rounded-3xl p-6 md:p-10 border shadow-sm outline-none"
           >
-            {activeTab === "profile" && <ProfileForm />}
-
-            {activeTab === "personalization" && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold">Preferências Visuais</h3>
-                  <p className="text-sm text-muted-foreground">Personalize como você vê a plataforma.</p>
-                </div>
-                <UserThemeSelector />
-              </div>
-            )}
-
             <Protected requireStaff>
               {activeTab === "company" && <CompanyForm />}
               {activeTab === "branding" && <BrandingSettings isOnboarding={false} />}

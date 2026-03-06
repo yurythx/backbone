@@ -41,21 +41,30 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """
-        Retorna apenas artigos públicos e publicados.
-        Se houver tenant identificado (via middleware por domínio, header X-Company-Slug
-        ou query param company_slug), filtra pela empresa atual.
+        Retorna artigos publicados.
+        - Usuários anônimos: apenas públicos.
+        - Usuários autenticados (do mesmo tenant): públicos e privados.
         """
+        company = getattr(self.request, 'company', None)
+        
+        # Base query: apenas publicados
+        # Usamos all_objects para poder filtrar manualmente o tenant se necessário (ex: acesso via slug público)
         qs = Article.all_objects.filter(
-            is_public=True,
             status=Article.STATUS_PUBLISHED,
             published_at__isnull=False
         )
-        company = getattr(self.request, 'company', None)
+
+        # Se usuário autenticado e no contexto da sua empresa, vê privados também
+        user = self.request.user
+        is_same_tenant = user.is_authenticated and company and getattr(user, 'company_id', None) == company.id
+        
+        if not is_same_tenant:
+            qs = qs.filter(is_public=True)
+
         if company:
             qs = qs.filter(company=company)
         else:
-            # Tentar obter company_slug via query params ou header manualmente se o middleware falhar
-            # Isso é um fallback para garantir que o filtro funcione mesmo sem autenticação forte
+            # Fallback manual de tenant
             company_slug = self.request.query_params.get('company_slug') or self.request.headers.get('X-Company-Slug')
             if company_slug:
                 qs = qs.filter(company__slug=company_slug)

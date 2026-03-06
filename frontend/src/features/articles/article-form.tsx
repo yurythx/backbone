@@ -466,12 +466,12 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                           onChange={field.onChange}
                           disabled={initialData?.status !== 'published'}
                         />
-                        {initialData?.status !== 'published' && field.value && (
-                          <p className="text-[10px] text-orange-600 mt-1 font-medium">
-                            Nota: Apenas artigos publicados podem ser marcados como públicos.
-                          </p>
-                        )}
                       </FormControl>
+                      {initialData?.status !== 'published' && field.value && (
+                        <p className="text-[10px] text-orange-600 mt-1 font-medium">
+                          Nota: Apenas artigos publicados podem ser marcados como públicos.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

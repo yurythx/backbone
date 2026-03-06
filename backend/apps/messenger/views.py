@@ -1,4 +1,7 @@
+import logging
 from rest_framework import viewsets, permissions, status, mixins, exceptions
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
@@ -34,20 +37,27 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        company = self.request.company
+        
         if not user or not user.is_authenticated:
             return User.all_objects.none()
 
-        # User.objects (TenantUserManager) already filters by company.
+        logger.debug(f"ContactViewSet: User {user.username} (ID: {user.id}) fetching contacts for Company {company}")
+
         # Superusers use all_objects for global visibility if no company context is set.
-        # If company context is set, they should be restricted to that company by default.
         if user.is_superuser:
-            if self.request.company:
-                qs = User.objects.exclude(id=user.id)
+            if company:
+                qs = User.objects.filter(is_active=True).exclude(id=user.id)
             else:
-                qs = User.all_objects.exclude(id=user.id)
+                qs = User.all_objects.filter(is_active=True).exclude(id=user.id)
         else:
             # Users see everyone in the same company
-            qs = User.objects.filter(company=self.request.company).exclude(id=user.id)
+            if not company:
+                # Se não há empresa no contexto, usuário normal não deve ver nada
+                logger.warning(f"ContactViewSet: User {user.username} has no company context. Returning empty.")
+                return User.objects.none()
+                
+            qs = User.objects.filter(company=company, is_active=True).exclude(id=user.id)
         
         return qs.prefetch_related('groups').order_by('username')
 

@@ -168,7 +168,7 @@ services:
       - /app/.next
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8005
-      - INTERNAL_API_URL=http://backend:8000
+      - API_URL_INTERNAL=http://backend:8005
       - WATCHPACK_POLLING=true
     extra_hosts:
       - "localhost:host-gateway"

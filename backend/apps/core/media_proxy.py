@@ -74,17 +74,24 @@ class MediaProxyView(APIView):
         # Se configuramos AWS_MEDIA_LOCATION (ex: 'media'), o arquivo real no bucket pode estar em 'media/path'
         # Mas verificamos se o arquivo já existe no path original primeiro
         if not default_storage.exists(file_path):
-            if hasattr(settings, 'AWS_MEDIA_LOCATION') and settings.AWS_MEDIA_LOCATION:
-                 if not path.startswith(settings.AWS_MEDIA_LOCATION):
-                      prefixed_path = f"{settings.AWS_MEDIA_LOCATION}/{path}"
-                      if default_storage.exists(prefixed_path):
-                           file_path = prefixed_path
-                      else:
-                           logger.warning(f"[MediaProxy] File not found. Tried: {file_path} and {prefixed_path}")
-                 else:
-                      logger.warning(f"[MediaProxy] File not found: {file_path}")
+            # Tentar com prefixo AWS_MEDIA_LOCATION se definido
+            media_location = getattr(settings, 'AWS_MEDIA_LOCATION', '')
+            if media_location and not path.startswith(media_location):
+                prefixed_path = f"{media_location}/{path}"
+                if default_storage.exists(prefixed_path):
+                    file_path = prefixed_path
+                else:
+                    logger.warning(f"[MediaProxy] File not found. Tried: {path} and {prefixed_path}")
             else:
-                logger.warning(f"[MediaProxy] File not found: {file_path}")
+                # Tentar remover prefixo 'media/' se o path vier com ele duplicado
+                if path.startswith('media/'):
+                    stripped_path = path[6:]
+                    if default_storage.exists(stripped_path):
+                         file_path = stripped_path
+                    else:
+                         logger.warning(f"[MediaProxy] File not found: {path}")
+                else:
+                    logger.warning(f"[MediaProxy] File not found: {path}")
 
         if not default_storage.exists(file_path):
             raise Http404(f"File not found in storage: {file_path}")

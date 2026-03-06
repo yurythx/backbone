@@ -5,6 +5,7 @@ from apps.accounts.models import Role
 from apps.licensing.models import Plan, Feature, PlanFeature, License
 from apps.articles.models import Category, Tag, Article
 from apps.pages.models import Page
+from apps.module_manager.models import Module, TenantModule
 from shared_kernel.tenant_context import set_current_company
 from django.utils.text import slugify
 from django.utils import timezone
@@ -232,6 +233,32 @@ class Command(BaseCommand):
             )
             if pg_created:
                 self.stdout.write(f'  [+] Created Page: {pg.title}')
+
+        # 12. MODULES
+        modules_data = [
+            {'code': 'calendar', 'name': 'Agenda', 'description': 'Gestão de eventos e compromissos'},
+            {'code': 'finance', 'name': 'Financeiro', 'description': 'Gestão de receitas e despesas'},
+            {'code': 'articles', 'name': 'Artigos', 'description': 'Gestão de conteúdo'},
+            {'code': 'pages', 'name': 'Páginas', 'description': 'Páginas institucionais'},
+            {'code': 'messenger', 'name': 'Mensagens', 'description': 'Chat interno'},
+        ]
+
+        for mod_data in modules_data:
+            module, _ = Module.objects.get_or_create(
+                code=mod_data['code'],
+                defaults={
+                    'name': mod_data['name'],
+                    'description': mod_data['description'],
+                    'is_default': True
+                }
+            )
+            # Enable for default tenant
+            TenantModule.objects.get_or_create(
+                company=company,
+                module=module,
+                defaults={'is_active': True}
+            )
+            self.stdout.write(f'  [+] Module verified: {module.name}')
 
         self.stdout.write(self.style.SUCCESS('System Seeding completed!'))
 

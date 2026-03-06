@@ -19,7 +19,9 @@ import {
   ChevronRight,
   TrendingUp,
   Globe,
-  KeyRound
+  KeyRound,
+  Calendar as CalendarIcon,
+  DollarSign
 } from "lucide-react"
 import { motion } from "framer-motion"
 import {
@@ -62,6 +64,18 @@ const sidebarSections: SidebarSection[] = [
   {
     title: "Módulos",
     items: [
+      {
+        title: "Agenda",
+        href: "/calendar",
+        icon: CalendarIcon, // Renamed to avoid conflict with imported Calendar icon if any
+        module: "calendar",
+      },
+      {
+        title: "Financeiro",
+        href: "/finance",
+        icon: DollarSign,
+        module: "finance",
+      },
       {
         title: "Mensagens",
         href: "/messenger",
@@ -114,6 +128,11 @@ const sidebarSections: SidebarSection[] = [
         title: "Configurações",
         href: "/settings",
         icon: Settings,
+      },
+      {
+        title: "Meu Perfil",
+        href: "/perfil",
+        icon: Users, // Using Users icon for profile as User is imported but not used in the original list
       },
     ]
   },

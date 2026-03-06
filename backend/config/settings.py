@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     "apps.seo",
     "apps.webhooks",
     "apps.api_keys",
+    "apps.calendar",
+    "apps.finance",
 ]
 
 MIDDLEWARE = [
@@ -248,6 +250,11 @@ CORS_EXPOSE_HEADERS = [
     "content-disposition",
     "x-company-slug",
 ]
+
+# DEV: Allow all origins to avoid CORS issues locally
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+
 
 
 # Static & Media Files
