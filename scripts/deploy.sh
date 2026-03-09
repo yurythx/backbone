@@ -126,8 +126,8 @@ if [[ "${1:-}" == "--pull" ]]; then
     simulate_loading "PULLING IMAGES" 4
 else
     echo -e "${GRAY}   Construindo imagens (BuildKit)...${RESET}"
-    COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 $DC build --parallel --no-cache > logs/build.log 2>&1
-    if [ $? -ne 0 ]; then
+    COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 $DC build --parallel --no-cache | tee logs/build.log
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
         echo -e "${NEON_GREEN}   [ERROR] Falha no build. Verifique logs/build.log${RESET}"
         exit 1
     fi
