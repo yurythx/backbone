@@ -68,6 +68,8 @@ export function Header() {
         if (typeof window !== "undefined") {
           localStorage.removeItem('accessToken')
           localStorage.removeItem('refreshToken')
+          // Clear session cookie as well
+          document.cookie = 'hasSession=; path=/; SameSite=Lax; max-age=0'
         }
         return null
       }
