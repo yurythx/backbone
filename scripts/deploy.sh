@@ -142,7 +142,7 @@ simulate_loading "INFRA: DB & REDIS" 4
 # Aguarda DB ficar saudável
 echo -n "   Aguardando DB..."
 for i in {1..20}; do
-    if $DC exec -T db pg_isready -U "$(grep POSTGRES_USER .env.prod | cut -d= -f2 | tr -d '"') " >/dev/null 2>&1; then
+    if $DC exec -T db pg_isready -U "$(grep POSTGRES_USER .env.prod | cut -d= -f2 | tr -d '\" ')" >/dev/null 2>&1; then
         echo -e "${NEON_GREEN} [READY]${RESET}"
         break
     fi
