@@ -20,6 +20,7 @@ GRAY='\033[38;5;240m'        # Gray for logs
 
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE=".env.prod"
+DC="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
 # ── Funções de Estilo ───────────────────────────────────────
 
@@ -93,11 +94,11 @@ mkdir -p ./backups
 BACKUP_FILE="./backups/backup_$(date +%F_%H-%M-%S).sql"
 
 # Tenta fazer backup apenas se o DB estiver rodando
-if docker compose -f "$COMPOSE_FILE" ps db | grep -q "Up"; then
+if $DC ps db 2>/dev/null | grep -q "Up"; then
     DB_USER=$(grep -E '^POSTGRES_USER=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_user")
     DB_NAME=$(grep -E '^POSTGRES_DB=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_prod")
     
-    docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE" 2>> logs/deploy_error.log || true
+    $DC exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE" 2>> logs/deploy_error.log || true
     simulate_loading "BACKUP DATABASE" 2
     echo -e "${NEON_GREEN}   ✔ Backup realizado: $(basename $BACKUP_FILE)${RESET}\n"
 else
@@ -121,11 +122,11 @@ echo -e "${WHITE}:: FASE 3: ORQUESTRAÇÃO DE CONTAINERS${RESET}"
 # Build ou Pull
 if [[ "${1:-}" == "--pull" ]]; then
     echo -e "${GRAY}   Baixando imagens do registro externo...${RESET}"
-    docker compose -f "$COMPOSE_FILE" pull > logs/pull.log 2>&1
+    $DC pull > logs/pull.log 2>&1
     simulate_loading "PULLING IMAGES" 4
 else
     echo -e "${GRAY}   Construindo imagens (BuildKit)...${RESET}"
-    COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f "$COMPOSE_FILE" build --parallel --no-cache > logs/build.log 2>&1
+    COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 $DC build --parallel --no-cache > logs/build.log 2>&1
     if [ $? -ne 0 ]; then
         echo -e "${NEON_GREEN}   [ERROR] Falha no build. Verifique logs/build.log${RESET}"
         exit 1
@@ -135,13 +136,13 @@ fi
 
 # 3.1 Infraestrutura básica (DB e Redis)
 echo -e "${GRAY}   Iniciando infraestrutura básica...${RESET}"
-docker compose -f "$COMPOSE_FILE" up -d db redis >/dev/null 2>&1
+$DC up -d db redis >/dev/null 2>&1
 simulate_loading "INFRA: DB & REDIS" 4
 
 # Aguarda DB ficar saudável
 echo -n "   Aguardando DB..."
 for i in {1..20}; do
-    if docker compose -f "$COMPOSE_FILE" exec -T db pg_isready -U "$(grep POSTGRES_USER .env.prod | cut -d= -f2 | tr -d '"') " >/dev/null 2>&1; then
+    if $DC exec -T db pg_isready -U "$(grep POSTGRES_USER .env.prod | cut -d= -f2 | tr -d '"') " >/dev/null 2>&1; then
         echo -e "${NEON_GREEN} [READY]${RESET}"
         break
     fi
@@ -152,7 +153,7 @@ done
 # 3.2 Migrações (ANTES de subir o backend principal)
 echo -e "${WHITE}:: FASE 4: SINCRONIZAÇÃO DE SCHEMA${RESET}"
 echo -n "   Executando migrações..."
-docker compose -f "$COMPOSE_FILE" run --rm backend python manage.py migrate --no-input > logs/migrate.log 2>&1
+$DC run --rm backend python manage.py migrate --no-input > logs/migrate.log 2>&1
 if [ $? -ne 0 ]; then
     echo -e "\n${NEON_GREEN}   [ERROR] Falha na migração! Verifique logs/migrate.log${RESET}"
     exit 1
@@ -164,7 +165,7 @@ echo -e "${NEON_GREEN}   ✔ Banco de dados sincronizado${RESET}\n"
 echo -e "${WHITE}:: FASE 5: STARTUP DA APLICAÇÃO${RESET}"
 
 # Subir tudo (Docker reinicia apenas o necessário)
-docker compose -f "$COMPOSE_FILE" up -d backend frontend tunnel celery_worker celery_beat >/dev/null 2>&1
+$DC up -d backend frontend cloudflared celery_worker celery_beat >/dev/null 2>&1
 simulate_loading "STARTING APP SERVICES" 5
 
 echo -e "${NEON_GREEN}   ✔ Todos os containers operacionais.${RESET}\n"
@@ -181,7 +182,7 @@ for i in {1..15}; do
     echo -n "."
     if [ $i -eq 15 ]; then
         echo -e "\n${NEON_GREEN}   [ERROR] Backend não respondeu a tempo!${RESET}"
-        docker compose -f "$COMPOSE_FILE" logs backend --tail=50
+        $DC logs backend --tail=50
         exit 1
     fi
 done
@@ -189,7 +190,7 @@ done
 # 5. Estáticos
 echo -e "${WHITE}:: FASE 7: FINALIZAÇÃO${RESET}"
 echo -n "   Coletando arquivos estáticos..."
-docker compose -f "$COMPOSE_FILE" exec -T backend python manage.py collectstatic --noinput >/dev/null 2>&1
+$DC exec -T backend python manage.py collectstatic --noinput >/dev/null 2>&1
 simulate_loading "STATIC FILES" 2
 echo -e "${NEON_GREEN}   ✔ Assets compilados${RESET}\n"
 
