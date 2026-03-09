@@ -116,22 +116,36 @@ fi
 simulate_loading "GIT PULL ORIGIN" 3
 echo -e "${NEON_GREEN}   ✔ Repositório atualizado para a última versão${RESET}\n"
 
+# ── Log Wrapper ─────────────────────────────────────────────
+log_box() {
+    local title=$1
+    echo -e "${NEON_GREEN} ╔═ ${WHITE}${title} ${NEON_GREEN}"$(printf '═%.0s' $(seq 1 $((54 - ${#title}))))"╗"
+    while IFS= read -r line; do
+        # Truncate or pad line to fix width (approx 58 chars)
+        local formatted_line=$(echo "$line" | cut -c1-58)
+        printf "${NEON_GREEN} ║ ${GRAY}%-58s ${NEON_GREEN}║\n" "$formatted_line"
+    done
+    echo -e " ╚"$(printf '═%.0s' $(seq 1 60))"╝${RESET}"
+}
+
 # 3. Orquestração de Containers
 echo -e "${WHITE}:: FASE 3: ORQUESTRAÇÃO DE CONTAINERS${RESET}"
 
 # Build ou Pull
 if [[ "${1:-}" == "--pull" ]]; then
     echo -e "${GRAY}   Baixando imagens do registro externo...${RESET}"
-    $DC pull > logs/pull.log 2>&1
-    simulate_loading "PULLING IMAGES" 4
+    $DC pull 2>&1 | log_box "PULLING IMAGES"
+    simulate_loading "PULLING IMAGES" 2
 else
     echo -e "${GRAY}   Construindo imagens (BuildKit)...${RESET}"
-    COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 $DC build --parallel --no-cache | tee logs/build.log
+    # Armazenamos o log completo mas mostramos na caixa
+    (COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 $DC build --parallel --no-cache 2>&1) | tee logs/build.log | log_box "DOCKER BUILD"
+    
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
-        echo -e "${NEON_GREEN}   [ERROR] Falha no build. Verifique logs/build.log${RESET}"
+        echo -e "\n${NEON_GREEN}   [ERROR] Falha no build. Verifique logs/build.log${RESET}"
         exit 1
     fi
-    simulate_loading "BUILDING IMAGES" 5
+    simulate_loading "BUILDING IMAGES" 2
 fi
 
 # 3.1 Infraestrutura básica (DB e Redis)
