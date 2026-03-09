@@ -23,12 +23,12 @@ export function UserPresenceProvider({ children }: { children: React.ReactNode }
     // Memoize socket URL logic
     const getSocketUrl = useCallback((): string | null => {
         if (typeof window === 'undefined') return null;
-        
+
         // Check if user is on a public page (no auth required)
         const path = window.location.pathname;
-        if (path === '/' || path.startsWith('/p/') || path.startsWith('/login')) {
-            return null;
-        }
+        const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/accept-invite'];
+        const isPublic = PUBLIC_PATHS.some(p => path === p || path.startsWith(p + '/')) || path.startsWith('/p/');
+        if (isPublic) return null;
 
         const token = localStorage.getItem('accessToken');
         if (!token) return null;
@@ -49,7 +49,11 @@ export function UserPresenceProvider({ children }: { children: React.ReactNode }
     const socketUrl = useMemo(() => getSocketUrl(), [getSocketUrl]);
 
     const websocketOptions = useMemo(() => ({
-        shouldReconnect: () => true,
+        shouldReconnect: () => {
+            // Don't reconnect if there's no token (user logged out)
+            if (typeof window === 'undefined') return false;
+            return !!localStorage.getItem('accessToken');
+        },
         reconnectAttempts: 10,
         reconnectInterval: 3000,
         share: true,

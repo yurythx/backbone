@@ -1,10 +1,10 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { api } from "@/lib/axios"
+import { api, resetAuthState } from "@/lib/axios"
 import { AuthResponse } from "@/types"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
@@ -124,10 +124,18 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
       localStorage.setItem('accessToken', response.data.access)
       localStorage.setItem('refreshToken', response.data.refresh)
 
-      // 4. Notify theme config to refresh in the same tab
+      // 3b. Set session cookie readable by the Next.js middleware
+      // SameSite=Lax is sufficient; it doesn't need to be httpOnly since
+      // it's just a presence signal (the real token stays in localStorage).
+      document.cookie = `hasSession=true; path=/; SameSite=Lax; max-age=${60 * 60 * 24 * 7}` // 7 days
+
+      // 4. Reset auth state (allows future 401 redirects after this session)
+      resetAuthState()
+
+      // 5. Notify theme config to refresh in the same tab
       window.dispatchEvent(new Event('app-login'))
 
-      // 5. Redirect and Force Reload
+      // 6. Redirect and Force Reload
       toast.success("Login realizado com sucesso! Bem-vindo de volta.")
 
       // Invalidate queries so cached data matches the newly logged user

@@ -20,6 +20,12 @@ interface FailedRequest {
 
 let isRefreshing = false;
 let failedQueue: FailedRequest[] = [];
+let isRedirectingToLogin = false;
+
+// Public routes that should never trigger auth redirects
+const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/accept-invite'];
+const isPublicRoute = (pathname: string) =>
+  PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith('/p/'));
 
 const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach((prom) => {
@@ -55,6 +61,13 @@ api.interceptors.request.use(
   }
 );
 
+// Call this on successful login to re-enable future redirects
+export function resetAuthState() {
+  isRedirectingToLogin = false;
+  isRefreshing = false;
+  failedQueue = [];
+}
+
 api.interceptors.response.use(
   (response) => {
     return response;
@@ -65,6 +78,11 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Do not intercept authentication requests
       if (originalRequest.url?.includes('/api/accounts/token/')) {
+        return Promise.reject(error);
+      }
+
+      // Never trigger auth redirect flows from public routes — just reject silently
+      if (typeof window !== 'undefined' && isPublicRoute(window.location.pathname)) {
         return Promise.reject(error);
       }
 
@@ -87,12 +105,14 @@ api.interceptors.response.use(
       const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
 
       if (!refreshToken) {
-        // No refresh token, logout
+        // No refresh token — clear storage and redirect once
         if (typeof window !== 'undefined') {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
-          // Redirect to login if needed
-          if (window.location.pathname !== '/login') {
+          document.cookie = 'hasSession=; path=/; SameSite=Lax; max-age=0';
+          isRefreshing = false;
+          if (!isRedirectingToLogin && !isPublicRoute(window.location.pathname)) {
+            isRedirectingToLogin = true;
             window.location.href = '/login';
           }
         }
@@ -109,10 +129,15 @@ api.interceptors.response.use(
           headers: companySlug ? { 'X-Company-Slug': companySlug } : {}
         });
 
-        const { access } = response.data;
+        // ROTATE_REFRESH_TOKENS=True: backend returns both new access AND new refresh token.
+        // We MUST save both — the old refresh is blacklisted after rotation.
+        const { access, refresh: newRefresh } = response.data;
 
         if (typeof window !== 'undefined') {
           localStorage.setItem('accessToken', access);
+          if (newRefresh) {
+            localStorage.setItem('refreshToken', newRefresh);
+          }
         }
 
         api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
@@ -127,13 +152,13 @@ api.interceptors.response.use(
         if (typeof window !== 'undefined') {
           const isAuthError = axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403);
 
-          // Don't redirect if checking current user session (silent check)
-
-
           if (isAuthError) {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
-            if (window.location.pathname !== '/login') {
+            document.cookie = 'hasSession=; path=/; SameSite=Lax; max-age=0';
+            // Only redirect once and never from public routes
+            if (!isRedirectingToLogin && !isPublicRoute(window.location.pathname)) {
+              isRedirectingToLogin = true;
               window.location.href = '/login';
             }
           }

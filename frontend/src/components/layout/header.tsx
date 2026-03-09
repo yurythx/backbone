@@ -83,6 +83,8 @@ export function Header() {
     localStorage.removeItem("accessToken")
     localStorage.removeItem("refreshToken")
     localStorage.removeItem("companySlug")
+    // Clear middleware session cookie
+    document.cookie = 'hasSession=; path=/; SameSite=Lax; max-age=0'
     // Force redirect to root landing page
     window.location.href = "/"
   }
