@@ -13,12 +13,13 @@ class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ModuleSerializer
     permission_classes = [permissions.AllowAny]
 
+from config.pagination import DefaultPagination
+
 class TenantModuleViewSet(viewsets.ModelViewSet):
     """
     Gerencia os módulos ativados para o tenant atual.
     """
     serializer_class = TenantModuleSerializer
-    from config.pagination import DefaultPagination
     pagination_class = DefaultPagination
 
     def get_authenticators(self):

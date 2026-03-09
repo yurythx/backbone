@@ -25,13 +25,13 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     serializer_class = TenantBrandingSerializer
     @tenant_cached(timeout=3600, key_prefix='branding')
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[])
-    def current(self, request, *args, **kwargs):
+    def current(self, request):
         """Obtém branding do tenant atual (público para carregar tema no login)"""
         return self._get_current_branding()
 
     @tenant_cached(timeout=3600, key_prefix='branding_public')
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[])
-    def public_current(self, request, *args, **kwargs):
+    def public_current(self, request):
         """Obtém branding do tenant atual (público)"""
         return self._get_current_branding()
 
@@ -77,11 +77,6 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
         public_actions = ['current', 'public_current', 'palettes']
         if self.action in public_actions:
             return []
-        # Robustez: se action ainda não foi definida, checa o path
-        if not self.action and hasattr(self, 'request'):
-            path = self.request.path
-            if any(p in path for p in ['/current/', '/public_current/', '/palettes/']):
-                return []
         return super().get_authenticators()
 
     def get_permissions(self):

@@ -79,7 +79,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], throttle_classes=[])
-    def public_list(self, request, *args, **kwargs):
+    def public_list(self, request):
         """Lista apenas nome, slug e logo para o seletor de login"""
         companies = Company.objects.select_related('theme_branding').all()
         data = []
@@ -140,14 +140,9 @@ class CompanyViewSet(viewsets.ModelViewSet):
     # Permitir criação pública para onboarding inicial? 
     # Ou restringir? Vamos permitir AllowAny no create e IsAuthenticated no resto.
     def get_authenticators(self):
-        # Allow public access to public_list without auth to avoid 401 with stale tokens
-        public_actions = ['public_list', 'health']
-        if self.action in public_actions:
+        # Allow public access to public_list and health without auth
+        if self.action in ['public_list', 'health']:
             return []
-        if not self.action and hasattr(self, 'request'):
-            path = self.request.path
-            if any(p in path for p in ['/public_list/', '/health/']):
-                return []
         return super().get_authenticators()
 
     def get_permissions(self):
