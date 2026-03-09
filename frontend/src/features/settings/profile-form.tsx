@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils"
 
 const profileSchema = z.object({
   username: z.string().min(2, "O nome de usuário deve ter pelo menos 2 caracteres."),
-  email: z.string().email("Endereço de e-mail inválido."),
+  email: z.string().min(1, "O e-mail é obrigatório."),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
 })

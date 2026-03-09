@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { usePathname } from 'next/navigation';
 import useWebSocket from 'react-use-websocket';
 
 export type UserStatus = 'online' | 'busy' | 'offline';
@@ -46,7 +47,8 @@ export function UserPresenceProvider({ children }: { children: React.ReactNode }
         return `${protocol}//${host}/ws/presence/?${qs}`;
     }, []);
 
-    const socketUrl = useMemo(() => getSocketUrl(), [getSocketUrl]);
+    const pathname = usePathname();
+    const socketUrl = useMemo(() => getSocketUrl(), [getSocketUrl, pathname]);
 
     const websocketOptions = useMemo(() => ({
         shouldReconnect: () => {
