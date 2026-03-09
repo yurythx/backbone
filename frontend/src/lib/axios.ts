@@ -23,9 +23,11 @@ let failedQueue: FailedRequest[] = [];
 let isRedirectingToLogin = false;
 
 // Public routes that should never trigger auth redirects
-const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/accept-invite'];
-const isPublicRoute = (pathname: string) =>
-  PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith('/p/'));
+const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/404', '/500'];
+const isPublicRoute = (pathname: string) => {
+  if (!pathname) return true;
+  return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith('/p/') || pathname.startsWith('/artigos'));
+};
 
 const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach((prom) => {

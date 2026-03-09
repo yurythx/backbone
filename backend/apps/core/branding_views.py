@@ -72,6 +72,12 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                 'custom_css': ''
             })
 
+    def get_authenticators(self):
+        """Desativa autenticação para endpoints públicos para evitar 401 com tokens expirados"""
+        if self.action in ['current', 'public_current', 'palettes']:
+            return []
+        return super().get_authenticators()
+
     def get_permissions(self):
         if self.action in ['current', 'public_current', 'palettes']:
             return [permissions.AllowAny()]

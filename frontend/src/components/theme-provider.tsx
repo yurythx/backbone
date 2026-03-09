@@ -90,9 +90,11 @@ function getContrastColor(hex: string) {
 
 function useThemeHooks(): ThemeConfigShape {
   const pathname = usePathname()
-  const isPublicRoute = useMemo(() =>
-    pathname === "/" || pathname?.startsWith("/p/") || pathname?.startsWith("/artigos"),
-    [pathname])
+  const isPublicRoute = useMemo(() => {
+    if (!pathname) return true;
+    const publicPaths = ["/", "/login", "/register", "/forgot-password", "/reset-password", "/accept-invite"];
+    return publicPaths.includes(pathname) || pathname.startsWith("/p/") || pathname.startsWith("/artigos");
+  }, [pathname])
 
   const [tenantTheme, setTenantTheme] = useState<TenantTheme | null>(null)
   const [userTheme, setUserTheme] = useState<UserPreferences | null>(null)
@@ -103,10 +105,14 @@ function useThemeHooks(): ThemeConfigShape {
     try {
       // Check if user is logged in
       const token = typeof window !== "undefined" ? localStorage.getItem('accessToken') : null
-      
+
       // Fetch Tenant branding
-      // Note: This endpoint should be public or handle auth gracefully
-      const brandingRes = await api.get('/api/core/branding/current/')
+      // Use public endpoint for public routes or when not authenticated to avoid 401 loops
+      const endpoint = (isPublicRoute || !token)
+        ? '/api/core/branding/public_current/'
+        : '/api/core/branding/current/';
+
+      const brandingRes = await api.get(endpoint)
       setTenantTheme(brandingRes.data)
 
       // Persist for the init script
@@ -123,8 +129,8 @@ function useThemeHooks(): ThemeConfigShape {
           setUserTheme(prefs)
           localStorage.setItem('backbone_user_preferences', JSON.stringify(prefs))
         } catch (e) {
-           // Silent fail for user prefs if token is invalid, but don't break the app
-           console.warn("Could not load user theme prefs", e)
+          // Silent fail for user prefs if token is invalid, but don't break the app
+          console.warn("Could not load user theme prefs", e)
         }
       }
     } catch (error) {
