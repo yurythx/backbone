@@ -93,7 +93,7 @@ function useThemeHooks(): ThemeConfigShape {
   const isPublicRoute = useMemo(() => {
     if (!pathname) return true;
     const publicPaths = ["/", "/login", "/register", "/forgot-password", "/reset-password", "/accept-invite"];
-    return publicPaths.includes(pathname) || pathname.startsWith("/p/") || pathname.startsWith("/artigos");
+    return publicPaths.includes(pathname) || pathname.startsWith("/p/");
   }, [pathname])
 
   const [tenantTheme, setTenantTheme] = useState<TenantTheme | null>(null)

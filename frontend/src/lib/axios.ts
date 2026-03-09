@@ -26,7 +26,7 @@ let isRedirectingToLogin = false;
 const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/404', '/500'];
 const isPublicRoute = (pathname: string) => {
   if (!pathname) return true;
-  return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith('/p/') || pathname.startsWith('/artigos'));
+  return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith('/p/'));
 };
 
 const processQueue = (error: unknown, token: string | null = null) => {
