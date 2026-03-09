@@ -358,8 +358,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
-# Reaproveita conexões por 60 segundos para evitar handshakes constantes
-DATABASES['default']['CONN_MAX_AGE'] = 60
+# Forcing CONN_MAX_AGE=0 by default in Daphne/ASGI to prevent "too many clients" 
+# Postgres errors. Connections will close after each request unless overridden.
+DATABASES['default']['CONN_MAX_AGE'] = env.int("CONN_MAX_AGE", default=0)
 DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 
 # Redis Channel Layer & Cache
