@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { Menu, X, LayoutDashboard, MessageSquare, FileText, Settings, ShieldCheck, Box, LogOut, User } from "lucide-react"
+import { Menu, X, LayoutDashboard, MessageSquare, FileText, Settings, ShieldCheck, Box, LogOut, User, DollarSign, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -26,6 +26,8 @@ const navItems: SidebarItem[] = [
     { title: "Mensagens", href: "/messenger", icon: MessageSquare, module: "messenger" },
     { title: "Páginas", href: "/cms", icon: ShieldCheck, module: "pages" },
     { title: "Artigos", href: "/artigos", icon: FileText, module: "articles" },
+    { title: "Financeiro", href: "/finance", icon: DollarSign, module: "finance" },
+    { title: "Agenda", href: "/calendar", icon: Calendar, module: "calendar" },
     { title: "Módulos", href: "/admin/modules", icon: Box },
     { title: "Configurações", href: "/settings", icon: Settings },
 ]

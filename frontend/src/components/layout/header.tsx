@@ -1,6 +1,7 @@
 "use client"
 import { useTheme } from "@/components/theme-provider"
-import { User, Settings, LogOut, Plus, FileText, ShieldCheck, UserPlus, LogIn } from "lucide-react"
+import { User as UserIcon, Settings, LogOut, Plus, FileText, ShieldCheck, UserPlus, LogIn } from "lucide-react"
+import { User as AuthUser } from "@/types"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import React from "react"
@@ -23,21 +24,24 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { MobileNav } from "@/components/layout/mobile-nav"
 import { NotificationBell } from "@/components/layout/notification-bell"
 import { usePresence } from "@/hooks/use-presence"
+import { useModules } from "@/hooks/use-modules"
 import { GlobalSearch } from "@/components/layout/global-search"
 import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
 
 
 const navItems = [
-  { label: "Visão Geral", href: "/admin" },
-  { label: "Páginas", href: "/cms" },
-  { label: "Artigos", href: "/artigos" },
-  { label: "Messenger", href: "/messenger" },
+  { label: "Painel Admin", href: "/admin" },
+  { label: "Páginas", href: "/cms", module: "pages" },
+  { label: "Artigos", href: "/artigos", module: "articles" },
+  { label: "Messenger", href: "/messenger", module: "messenger" },
+  { label: "Financeiro", href: "/finance", module: "finance" },
+  { label: "Agenda", href: "/calendar", module: "calendar" },
 ]
 
-const guestNavItems: { label: string; href: string }[] = [
+const guestNavItems: { label: string; href: string; module?: string }[] = [
   { label: "Início", href: "/" },
-  { label: "Artigos", href: "/p/artigos" },
+  { label: "Artigos", href: "/p/artigos", module: "articles" },
 ]
 
 export function Header() {
@@ -46,33 +50,21 @@ export function Header() {
   const pathname = usePathname()
   const [isClient, setIsClient] = React.useState(false)
   const { userStatuses, updateStatus } = usePresence()
+  const { isModuleActive } = useModules()
 
   React.useEffect(() => {
     setIsClient(true)
   }, [])
 
-  const { data: me } = useQuery({
+  const { data: me } = useQuery<AuthUser | null>({
     queryKey: ['me'],
     queryFn: async () => {
-      // Se não tiver token, nem tenta buscar o usuário
       if (typeof window === "undefined") return null
       const token = localStorage.getItem('accessToken')
       if (!token) return null
 
-      try {
-        const res = await api.get('/api/accounts/users/me/')
-        return res.data
-      } catch {
-        // Se falhar (ex: 401 mesmo com token), limpa o storage para evitar loops futuros
-        // mas NÃO redireciona aqui (deixa o usuário como "guest")
-        if (typeof window !== "undefined") {
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('refreshToken')
-          // Clear session cookie as well
-          document.cookie = 'hasSession=; path=/; SameSite=Lax; max-age=0'
-        }
-        return null
-      }
+      const res = await api.get('/api/accounts/users/me/')
+      return res.data
     },
     retry: false,
     refetchOnWindowFocus: false,
@@ -129,7 +121,7 @@ export function Header() {
         </SlideUp>
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1" role="navigation" aria-label="Navegação do cabeçalho">
-          {(me ? navItems : guestNavItems).map((item, index) => (
+          {(me ? navItems : guestNavItems).filter(item => !('module' in item) || isModuleActive(item.module as string)).map((item, index) => (
             <SlideUp key={item.href} delay={0.1 + index * 0.05}>
               <Button
                 variant="ghost"
@@ -234,7 +226,7 @@ export function Header() {
                   </div>
                 ) : (
                   <div className="relative h-full w-full flex items-center justify-center">
-                    <User className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                    <UserIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                     <span
                       className={cn(
                         "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background shadow-sm transition-colors",

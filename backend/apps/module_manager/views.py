@@ -11,23 +11,31 @@ class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Module.objects.all().order_by('name')
     serializer_class = ModuleSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
 class TenantModuleViewSet(viewsets.ModelViewSet):
     """
     Gerencia os módulos ativados para o tenant atual.
     """
     serializer_class = TenantModuleSerializer
-    permission_classes = [permissions.IsAuthenticated]
     from config.pagination import DefaultPagination
     pagination_class = DefaultPagination
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            # Permitir que visitantes vejam quais módulos estão ativos para o portal
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     @tenant_cached(timeout=3600, key_prefix='modules')
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
-        return TenantModule.objects.select_related('module').filter(company=self.request.company).order_by('module__name')
+        company = getattr(self.request, 'company', None)
+        if not company:
+            return TenantModule.objects.none()
+        return TenantModule.objects.select_related('module').filter(company=company).order_by('module__name')
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
