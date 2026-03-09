@@ -64,8 +64,8 @@ export function CompanyForm() {
         name: company.name,
         domain: company.domain || "",
         branding: {
-          primaryColor: company.branding?.primaryColor || "#000000",
-          logoUrl: company.branding?.logoUrl || "",
+          primaryColor: company.theme_branding?.primary_color || "#000000",
+          logoUrl: company.theme_branding?.logo_url || "",
         }
       })
     }

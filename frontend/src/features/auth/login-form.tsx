@@ -6,8 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { api } from "@/lib/axios"
 import { AuthResponse } from "@/types"
-import { useQuery } from "@tanstack/react-query"
-
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -52,6 +52,8 @@ interface LoginFormProps {
 export function LoginForm({ onCompanyChange }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const router = useRouter()
 
   // Fetch companies for the selector
   const { data: companies, isLoading: isLoadingCompanies } = useQuery({
@@ -128,10 +130,9 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
       // 5. Redirect and Force Reload
       toast.success("Login realizado com sucesso! Bem-vindo de volta.")
 
-      // Forçar reload completo para garantir que todos os contextos (Header, React Query, Theme)
-      // sejam reidratados corretamente com o novo usuário logado.
-      // Isso corrige o problema de "não carregar elementos" no primeiro login.
-      window.location.href = '/dashboard'
+      // Invalidate queries so cached data matches the newly logged user
+      queryClient.clear()
+      router.push('/dashboard')
     } catch (err: unknown) {
       console.error(err)
 

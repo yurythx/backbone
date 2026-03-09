@@ -22,10 +22,10 @@ export function getContrastColor(hexColor: string): string {
   const r = parseInt(hexColor.substr(1, 2), 16);
   const g = parseInt(hexColor.substr(3, 2), 16);
   const b = parseInt(hexColor.substr(5, 2), 16);
-  
+
   // Calculate luminance
   const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-  
+
   // Return black or white based on luminance
   return (yiq >= 128) ? '#000000' : '#FFFFFF';
 }
@@ -43,11 +43,11 @@ export function slugify(text: string): string {
     .replace(/-+$/, '');             // Trim - from end of text
 }
 
-export function fixImageUrl(url: string | null | undefined): string | undefined {
-    if (!url) return undefined
-    // Em desenvolvimento, corrige HTTPS local para HTTP para evitar timeouts no Next.js
-    if (process.env.NODE_ENV === 'development' && typeof url === 'string' && url.startsWith('https://localhost:8005')) {
-        return url.replace('https://', 'http://')
-    }
-    return url
+export function fixImageUrl(url: string | null | undefined): string {
+  if (!url) return ''
+  // Em desenvolvimento, corrige HTTPS local para HTTP para evitar timeouts no Next.js
+  if (process.env.NODE_ENV === 'development' && typeof url === 'string' && url.startsWith('https://localhost:8005')) {
+    return url.replace('https://', 'http://')
+  }
+  return url
 }

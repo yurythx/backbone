@@ -12,11 +12,11 @@ import {
     Loader2,
     Upload,
     Trash2,
-    
+
     CheckCircle2,
     FileText,
     Search,
-    
+
     ExternalLink,
     Info,
     Calendar,
@@ -33,7 +33,7 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-    
+
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -78,15 +78,15 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
             const formData = new FormData()
             formData.append("file", file)
             formData.append("title", file.name)
-            
+
             // Usando fetch nativo para garantir controle total sobre headers (Multipart boundary)
             const token = localStorage.getItem('accessToken')
             const companySlug = localStorage.getItem('companySlug')
-            
+
             const headers: HeadersInit = {}
             if (token) headers['Authorization'] = `Bearer ${token}`
             if (companySlug) headers['X-Company-Slug'] = companySlug
-            
+
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'}/api/media/files/`, {
                 method: 'POST',
                 headers,
@@ -335,14 +335,14 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                                 {selectedItem.file_type.startsWith("image/") ? (
                                     <div className="relative group w-full h-[300px]">
                                         <Image
-                                            src={fixImageUrl(selectedItem.file_url)}
+                                            src={fixImageUrl(selectedItem.file_url || '')}
                                             alt={selectedItem.title || 'Imagem'}
                                             fill
                                             className="object-contain rounded-lg shadow-lg border bg-background"
                                             sizes="(max-width: 768px) 100vw, 50vw"
                                         />
                                         <a
-                                            href={fixImageUrl(selectedItem.file_url)}
+                                            href={fixImageUrl(selectedItem.file_url || '')}
                                             target="_blank"
                                             className="absolute top-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
                                         >
@@ -385,12 +385,12 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                                 </div>
 
                                 <div className="space-y-3 pt-4">
-                                    <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => copyToClipboard(fixImageUrl(selectedItem.file_url))}>
+                                    <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => copyToClipboard(fixImageUrl(selectedItem.file_url || ''))}>
                                         <Copy className="h-3 w-3 mr-2" />
                                         Copiar URL
                                     </Button>
                                     <Button asChild variant="outline" size="sm" className="w-full justify-start">
-                                        <a href={fixImageUrl(selectedItem.file_url)} download target="_blank">
+                                        <a href={fixImageUrl(selectedItem.file_url || '')} download target="_blank">
                                             <Download className="h-3 w-3 mr-2" />
                                             Baixar Arquivo
                                         </a>

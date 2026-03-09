@@ -25,7 +25,7 @@ export default function DashboardLayout({
       // Se for a página inicial ou rota pública, libera o acesso imediatamente
       const path = window.location.pathname
       if (
-        path === '/' || 
+        path === '/' ||
         path.startsWith('/p/') ||
         path.startsWith('/login')
       ) {
@@ -33,16 +33,16 @@ export default function DashboardLayout({
         setChecked(true)
         return
       }
-      
+
       try {
         const accessToken = localStorage.getItem("accessToken")
-        
+
         if (!accessToken) {
           if (!isRedirecting.current) {
             isRedirecting.current = true
-            console.log("[DashboardLayout] Sem token, redirecionando para /")
-            // Redireciona para / que é a landing page pública
-            router.replace("/")
+            console.log("[DashboardLayout] Sem token, redirecionando para /login")
+            // Redireciona para /login
+            router.replace("/login")
           }
           return
         }

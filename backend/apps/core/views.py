@@ -326,8 +326,10 @@ class SitemapView(generics.GenericAPIView):
         if not company:
             return Response({"error": "Tenant context required"}, status=400)
 
-        # Usar URLs amigáveis base (configurável no futuro)
-        base_url = f"https://{company.slug}.backbone.com"
+        from django.conf import settings
+        # Usar URLs amigáveis base
+        frontend_domain = getattr(settings, 'FRONTEND_URL', 'https://backbone.com').replace('https://', '').replace('http://', '')
+        base_url = f"https://{company.slug}.{frontend_domain}"
         
         pages = []
         # Artigos Publicados
@@ -365,7 +367,9 @@ class RobotsView(generics.GenericAPIView):
         if not company:
             return HttpResponse("User-agent: *\nDisallow: /", content_type="text/plain")
 
-        base_url = f"https://{company.slug}.backbone.com"
+        from django.conf import settings
+        frontend_domain = getattr(settings, 'FRONTEND_URL', 'https://backbone.com').replace('https://', '').replace('http://', '')
+        base_url = f"https://{company.slug}.{frontend_domain}"
         content = f"User-agent: *\nAllow: /\nSitemap: {base_url}/api/core/sitemap/"
         return HttpResponse(content, content_type="text/plain")
 

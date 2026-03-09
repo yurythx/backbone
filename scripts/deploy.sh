@@ -115,71 +115,82 @@ fi
 simulate_loading "GIT PULL ORIGIN" 3
 echo -e "${NEON_GREEN}   ✔ Repositório atualizado para a última versão${RESET}\n"
 
-# 3. Containers Individualmente
+# 3. Orquestração de Containers
 echo -e "${WHITE}:: FASE 3: ORQUESTRAÇÃO DE CONTAINERS${RESET}"
 
-# Parar containers antigos
-echo -e "${GRAY}   Parando serviços antigos (pode levar alguns segundos)...${RESET}"
-docker compose -f "$COMPOSE_FILE" down --remove-orphans --timeout 10 >/dev/null 2>&1
-simulate_loading "STOPPING OLD SERVICES" 3
+# Build ou Pull
+if [[ "${1:-}" == "--pull" ]]; then
+    echo -e "${GRAY}   Baixando imagens do registro externo...${RESET}"
+    docker compose -f "$COMPOSE_FILE" pull > logs/pull.log 2>&1
+    simulate_loading "PULLING IMAGES" 4
+else
+    echo -e "${GRAY}   Construindo imagens (BuildKit)...${RESET}"
+    COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f "$COMPOSE_FILE" build --parallel --no-cache > logs/build.log 2>&1
+    if [ $? -ne 0 ]; then
+        echo -e "${NEON_GREEN}   [ERROR] Falha no build. Verifique logs/build.log${RESET}"
+        exit 1
+    fi
+    simulate_loading "BUILDING IMAGES" 5
+fi
 
-# Build com BuildKit
-echo -e "${GRAY}   Construindo imagens (BuildKit)...${RESET}"
-COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f "$COMPOSE_FILE" build --parallel > logs/build.log 2>&1
+# 3.1 Infraestrutura básica (DB e Redis)
+echo -e "${GRAY}   Iniciando infraestrutura básica...${RESET}"
+docker compose -f "$COMPOSE_FILE" up -d db redis >/dev/null 2>&1
+simulate_loading "INFRA: DB & REDIS" 4
+
+# Aguarda DB ficar saudável
+echo -n "   Aguardando DB..."
+for i in {1..20}; do
+    if docker compose -f "$COMPOSE_FILE" exec -T db pg_isready -U "$(grep POSTGRES_USER .env.prod | cut -d= -f2 | tr -d '"') " >/dev/null 2>&1; then
+        echo -e "${NEON_GREEN} [READY]${RESET}"
+        break
+    fi
+    sleep 1
+    echo -n "."
+done
+
+# 3.2 Migrações (ANTES de subir o backend principal)
+echo -e "${WHITE}:: FASE 4: SINCRONIZAÇÃO DE SCHEMA${RESET}"
+echo -n "   Executando migrações..."
+docker compose -f "$COMPOSE_FILE" run --rm backend python manage.py migrate --no-input > logs/migrate.log 2>&1
 if [ $? -ne 0 ]; then
-    echo -e "${NEON_GREEN}   [ERROR] Falha no build. Verifique logs/build.log${RESET}"
+    echo -e "\n${NEON_GREEN}   [ERROR] Falha na migração! Verifique logs/migrate.log${RESET}"
     exit 1
 fi
-simulate_loading "BUILDING IMAGES" 5
+simulate_loading "DATABASE MIGRATIONS" 3
+echo -e "${NEON_GREEN}   ✔ Banco de dados sincronizado${RESET}\n"
 
-# Subir DB
-docker compose -f "$COMPOSE_FILE" up -d db >/dev/null 2>&1
-simulate_loading "CONTAINER: DB (PostgreSQL)" 4
+# 3.3 Subir Aplicação
+echo -e "${WHITE}:: FASE 5: STARTUP DA APLICAÇÃO${RESET}"
 
-# Subir Redis
-docker compose -f "$COMPOSE_FILE" up -d redis >/dev/null 2>&1
-simulate_loading "CONTAINER: REDIS (Cache)" 2
-
-# Subir Backend
-docker compose -f "$COMPOSE_FILE" up -d backend >/dev/null 2>&1
-simulate_loading "CONTAINER: BACKEND (Django)" 6
-
-# Subir Frontend
-docker compose -f "$COMPOSE_FILE" up -d frontend >/dev/null 2>&1
-simulate_loading "CONTAINER: FRONTEND (Next.js)" 5
-
-# Subir Nginx/Tunnel
-docker compose -f "$COMPOSE_FILE" up -d tunnel >/dev/null 2>&1
-simulate_loading "CONTAINER: CLOUDFLARE (Tunnel)" 3
+# Subir tudo (Docker reinicia apenas o necessário)
+docker compose -f "$COMPOSE_FILE" up -d backend frontend tunnel celery_worker celery_beat >/dev/null 2>&1
+simulate_loading "STARTING APP SERVICES" 5
 
 echo -e "${NEON_GREEN}   ✔ Todos os containers operacionais.${RESET}\n"
 
 # 4. Health Check
-echo -e "${WHITE}:: FASE 4: VERIFICAÇÃO DE INTEGRIDADE${RESET}"
+echo -e "${WHITE}:: FASE 6: VERIFICAÇÃO DE INTEGRIDADE${RESET}"
 echo -n "   Aguardando API..."
-for i in {1..10}; do
+for i in {1..15}; do
     if curl -sf http://localhost:8005/api/core/health/ >/dev/null 2>&1; then
         echo -e "${NEON_GREEN} [ONLINE]${RESET}"
         break
     fi
     sleep 2
     echo -n "."
+    if [ $i -eq 15 ]; then
+        echo -e "\n${NEON_GREEN}   [ERROR] Backend não respondeu a tempo!${RESET}"
+        docker compose -f "$COMPOSE_FILE" logs backend --tail=50
+        exit 1
+    fi
 done
 
-echo ""
-
-# ── Passo 5: Migrações e Estáticos ────────────────────────────
-# step_header "Configuração do Django"
-echo -e "${WHITE}:: FASE 5: CONFIGURAÇÃO DO SISTEMA${RESET}"
-
-echo -n "Executando migrações..."
-docker compose -f "$COMPOSE_FILE" exec -T backend python manage.py migrate >/dev/null 2>&1
-simulate_loading "DATABASE MIGRATIONS" 4
-echo -e "${NEON_GREEN}   ✔ Banco de dados sincronizado${RESET}\n"
-
-echo -n "Coletando arquivos estáticos..."
+# 5. Estáticos
+echo -e "${WHITE}:: FASE 7: FINALIZAÇÃO${RESET}"
+echo -n "   Coletando arquivos estáticos..."
 docker compose -f "$COMPOSE_FILE" exec -T backend python manage.py collectstatic --noinput >/dev/null 2>&1
-simulate_loading "STATIC FILES" 3
+simulate_loading "STATIC FILES" 2
 echo -e "${NEON_GREEN}   ✔ Assets compilados${RESET}\n"
 
 echo -e "${NEON_GREEN}${BOLD}DEPLOY CONCLUÍDO COM SUCESSO.${RESET}"

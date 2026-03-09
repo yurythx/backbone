@@ -35,6 +35,11 @@ class LogoutView(generics.GenericAPIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    class LogoutSerializer(serializers.Serializer):
+        refresh = serializers.CharField()
+
+    serializer_class = LogoutSerializer
+
     def post(self, request):
         from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError

@@ -23,7 +23,7 @@ import { RichEditor } from "@/components/ui/rich-editor"
 import { PreviewDialog } from "@/components/cms/preview-dialog"
 import { Loader2, ArrowLeft, Layout, Globe, Sparkles, CheckCircle2 } from "lucide-react"
 import { notify } from "@/lib/notifications"
- 
+
 
 const formSchema = z.object({
     title: z.string().min(3, "O título deve ter pelo menos 3 caracteres."),
@@ -50,7 +50,7 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
             title: initialData?.title || "",
             slug: initialData?.slug || "",
             content: initialData?.content || "",
-            is_active: initialData?.is_active ?? true,
+            is_active: initialData?.status === 'published',
             meta_title: initialData?.meta_title || "",
             meta_description: initialData?.meta_description || "",
             meta_keywords: initialData?.meta_keywords || "",
@@ -62,10 +62,14 @@ export function PageForm({ initialData, onSuccess, onCancel }: PageFormProps) {
 
     const mutation = useMutation({
         mutationFn: async (values: z.infer<typeof formSchema>) => {
+            const payload = { ...values, status: values.is_active ? 'published' : 'draft' };
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { is_active, ...finalPayload } = payload;
+
             if (initialData) {
-                await api.put(`/api/pages/${initialData.id}/`, values)
+                await api.put(`/api/pages/${initialData.id}/`, finalPayload)
             } else {
-                await api.post('/api/pages/', values)
+                await api.post('/api/pages/', finalPayload)
             }
         },
         onSuccess: () => {
