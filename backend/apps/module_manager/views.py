@@ -21,6 +21,11 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
     from config.pagination import DefaultPagination
     pagination_class = DefaultPagination
 
+    def get_authenticators(self):
+        if self.action in ['list', 'retrieve']:
+            return []
+        return super().get_authenticators()
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             # Permitir que visitantes vejam quais módulos estão ativos para o portal

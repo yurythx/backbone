@@ -10,26 +10,33 @@ def tenant_cached(timeout=3600, key_prefix=''):
     def decorator(func):
         @wraps(func)
         def wrapper(self, request, *args, **kwargs):
-            company = get_current_company()
-            if not company:
-                return func(self, request, *args, **kwargs)
-            
-            # Create a unique key for this view, action, and tenant
-            cache_key = f"{key_prefix}:{func.__name__}:{company.slug}"
-            
-            cached_data = cache.get(cache_key)
-            if cached_data is not None:
-                if isinstance(cached_data, (dict, list)):
-                    return Response(cached_data)
-                return cached_data
+            try:
+                company = get_current_company()
+                if not company:
+                    return func(self, request, *args, **kwargs)
+                
+                # Create a unique key for this view, action, and tenant
+                cache_key = f"{key_prefix}:{func.__name__}:{company.slug}"
+                
+                cached_data = cache.get(cache_key)
+                if cached_data is not None:
+                    if isinstance(cached_data, (dict, list)):
+                        return Response(cached_data)
+                    return cached_data
 
-            response = func(self, request, *args, **kwargs)
-            
-            # Only cache successful responses
-            if hasattr(response, 'status_code') and response.status_code == 200:
-                cache.set(cache_key, response.data, timeout)
-            
-            return response
+                response = func(self, request, *args, **kwargs)
+                
+                # Only cache successful responses
+                if hasattr(response, 'status_code') and response.status_code == 200:
+                    cache.set(cache_key, response.data, timeout)
+                
+                return response
+            except Exception as e:
+                # Se falhar o cache ou contexto, executa a função sem cache para evitar 500
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Cache error in {func.__name__}: {str(e)}")
+                return func(self, request, *args, **kwargs)
         return wrapper
     return decorator
 

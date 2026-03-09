@@ -97,7 +97,7 @@ class TenantMiddleware:
                 if company and use_cache:
                     set_company_in_cache(company, cache_key_host)
             else:
-                logger.debug(f"TenantMiddleware: Company matching host '{host}' not found.")
+                logger.debug(f"TenantMiddleware: Company matching host '{host}' found in cache.")
 
         if not company:
             # Fallback for localhost/local testing with ports
