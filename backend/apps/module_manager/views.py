@@ -23,12 +23,16 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
     pagination_class = DefaultPagination
 
     def get_authenticators(self):
-        if self.action in ['list', 'retrieve']:
+        path = getattr(getattr(self, "request", None), "path", "") or ""
+        method = getattr(getattr(self, "request", None), "method", "") or ""
+        if method in ("GET", "HEAD", "OPTIONS") and path.startswith("/api/modules/my-modules"):
             return []
         return super().get_authenticators()
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        path = getattr(getattr(self, "request", None), "path", "") or ""
+        method = getattr(getattr(self, "request", None), "method", "") or ""
+        if method in ("GET", "HEAD", "OPTIONS") and path.startswith("/api/modules/my-modules"):
             # Permitir que visitantes vejam quais módulos estão ativos para o portal
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]

@@ -77,15 +77,18 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
 
     def get_authenticators(self):
         """Desativa autenticação para endpoints públicos para evitar 401 com tokens expirados"""
-        public_actions = ['current', 'public_current', 'palettes']
-        action = getattr(self, 'action', None)
-        if action in public_actions:
+        path = getattr(getattr(self, "request", None), "path", "") or ""
+        if path.startswith("/api/core/branding/") and (
+            path.endswith("/current/") or path.endswith("/public_current/") or path.endswith("/palettes/")
+        ):
             return []
         return super().get_authenticators()
 
     def get_permissions(self):
-        action = getattr(self, 'action', None)
-        if action in ['current', 'public_current', 'palettes']:
+        path = getattr(getattr(self, "request", None), "path", "") or ""
+        if path.startswith("/api/core/branding/") and (
+            path.endswith("/current/") or path.endswith("/public_current/") or path.endswith("/palettes/")
+        ):
             return [permissions.AllowAny()]
         return [IsAuthenticated()]
 

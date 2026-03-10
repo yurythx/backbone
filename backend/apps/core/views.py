@@ -141,18 +141,24 @@ class CompanyViewSet(viewsets.ModelViewSet):
     # Ou restringir? Vamos permitir AllowAny no create e IsAuthenticated no resto.
     def get_authenticators(self):
         # Allow public access to public_list and health without auth
-        if self.action in ['public_list', 'health']:
+        path = getattr(getattr(self, "request", None), "path", "") or ""
+        if path.startswith("/api/core/companies/") and (path.endswith("/public_list/") or path.endswith("/health/")):
             return []
         return super().get_authenticators()
 
     def get_permissions(self):
-        if self.action == 'create':
+        path = getattr(getattr(self, "request", None), "path", "") or ""
+        if path.startswith("/api/core/companies/") and (path.endswith("/public_list/") or path.endswith("/health/")):
+            return [permissions.AllowAny()]
+
+        action = getattr(self, "action", None)
+        if action == "create":
             if not self.request.user.is_authenticated:
                 return [permissions.AllowAny()]
             return [IsSuperUser()]
-        if self.action in ['destroy', 'update', 'partial_update']:
+        if action in ['destroy', 'update', 'partial_update']:
             return [permissions.IsAuthenticated(), IsSuperUser()]
-        if self.action == 'public_list':
+        if action == 'public_list':
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 

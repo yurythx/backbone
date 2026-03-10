@@ -167,7 +167,9 @@ simulate_loading "INFRA: DB & REDIS" 4
 # Aguarda DB ficar saudável
 echo -n "   Aguardando DB..."
 for i in {1..20}; do
-    if $DC exec -T db pg_isready -U "$(grep POSTGRES_USER .env.prod | cut -d= -f2 | tr -d '\" ')" >/dev/null 2>&1; then
+    DB_USER_CHECK="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
+    DB_NAME_CHECK="$(awk -F= '/^POSTGRES_DB=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
+    if $DC exec -T db pg_isready -U "$DB_USER_CHECK" -d "$DB_NAME_CHECK" >/dev/null 2>&1; then
         echo -e "${NEON_GREEN} [READY]${RESET}"
         break
     fi
