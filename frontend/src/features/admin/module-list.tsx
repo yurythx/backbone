@@ -51,7 +51,7 @@ export function ModuleList() {
       } else {
         // Bug M2: encontra o TenantModule pelo module ID (não pelo code)
         // Correção: Agora verifica se o módulo existe e se está ativo na lista do tenant
-        const tm = tenantModules.find(tm => tm.module === moduleId)
+        const tm = tenantModules.find(tm => tm.module === moduleId) || tenantModules.find(tm => tm.module_code === code)
         if (!tm) {
           // Se não existir, tenta criar inativo ou ativar primeiro
           // Mas como estamos desativando, deve existir. Se não, erro.
@@ -73,9 +73,12 @@ export function ModuleList() {
       // MM1: toast com nome do módulo
       toast.success(isActive ? `Módulo "${name}" ativado` : `Módulo "${name}" desativado`)
     },
-    onError: (err: Error) => {
-      // MM1: mensagem de erro com nome do módulo
-      toast.error(err.message || "Falha ao atualizar módulo")
+    onError: (err: unknown) => {
+      const message =
+        typeof err === 'object' && err !== null && 'message' in err && typeof (err as { message?: unknown }).message === 'string'
+          ? (err as { message: string }).message
+          : "Falha ao atualizar módulo"
+      toast.error(message)
     }
   })
 
