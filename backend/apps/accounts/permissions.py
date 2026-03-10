@@ -1,6 +1,6 @@
 import logging
+
 from rest_framework import permissions
-from rest_framework.exceptions import PermissionDenied
 
 logger = logging.getLogger(__name__)
 
@@ -14,22 +14,26 @@ AVAILABLE_PERMISSIONS = {
     'articles.article_delete': 'Excluir Artigos',
     'articles.article_publish': 'Publicar Artigos',
     'articles.category_manage': 'Gerenciar Categorias/Tags',
-    
+
     # CMS/Páginas
     'pages.page_view': 'Visualizar Páginas',
     'pages.page_create': 'Criar Páginas',
     'pages.page_edit': 'Editar Páginas',
     'pages.page_delete': 'Excluir Páginas',
-    
+
     # Mídia
     'media.media_view': 'Ver Biblioteca de Mídia',
     'media.media_upload': 'Fazer Upload de Mídia',
     'media.media_delete': 'Excluir Mídia',
-    
+
     # Messenger
     'messenger.view': 'Acesso ao Chat',
     'messenger.admin': 'Administrar Grupos/Conversas',
-    
+
+    # Financeiro / Folha
+    'finance.view_financial': 'Visualizar Financeiro',
+    'finance.manage_financial': 'Gerenciar Financeiro',
+
     # Administração
     'admin.user_manage': 'Gerenciar Equipe/Convites',
     'admin.smtp_manage': 'Configurações de E-mail',
@@ -50,6 +54,7 @@ DEFAULT_ROLES = {
             'pages.page_view', 'pages.page_create', 'pages.page_edit',
             'media.media_view', 'media.media_upload',
             'messenger.view',
+            'finance.view_financial',
             'admin.view_dashboard',
         ]
     },
@@ -60,6 +65,7 @@ DEFAULT_ROLES = {
             'pages.page_view',
             'media.media_view',
             'messenger.view',
+            'finance.view_financial',
         ]
     }
 }
@@ -74,7 +80,7 @@ class HasRolePermission(permissions.BasePermission):
         # Admin/Superuser sempre pode
         if request.user.is_superuser:
             return True
-            
+
         required_permission = getattr(view, 'required_permission', None)
         if not required_permission:
             return True # Se a view não exige permissão específica, passa

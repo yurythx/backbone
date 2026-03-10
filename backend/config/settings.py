@@ -1,9 +1,10 @@
+import os
 import sys
 import warnings
-import environ
-import os
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
+
+import environ
 from django.core.exceptions import ImproperlyConfigured
 
 env = environ.Env(
@@ -60,6 +61,7 @@ INSTALLED_APPS = [
     "apps.api_keys",
     "apps.calendar",
     "apps.finance",
+    "apps.payroll",
 ]
 
 MIDDLEWARE = [
@@ -203,7 +205,7 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
 
 # SECURITY: Deployment security settings
 if not DEBUG:
-    # O Cloudflare Tunnel/Proxy já lida com HTTPS. 
+    # O Cloudflare Tunnel/Proxy já lida com HTTPS.
     # Ativamos True apenas se quisermos que o Django force o redirect,
     # mas isso pode quebrar healthchecks internos via HTTP.
     SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
@@ -275,10 +277,10 @@ if USE_S3:
     AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default="http://minio:9000")
     AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
     AWS_S3_SIGNATURE_VERSION = "s3v4"
-    
+
     # Media files on S3
     AWS_MEDIA_LOCATION = ''
-    
+
     # Modern Django 4.2+ STORAGES setting
     STORAGES = {
         "default": {
@@ -291,9 +293,9 @@ if USE_S3:
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
-    
+
     # Backward compatibility (removed - using STORAGES)
-    
+
     # Configuração de Domínio e URLs (Proxy ou Direto)
     media_host = env("MEDIA_HOST", default=None)
     if not media_host:
@@ -301,12 +303,12 @@ if USE_S3:
             media_host = 'localhost:8005'
         else:
             media_host = ALLOWED_HOSTS[0] if ALLOWED_HOSTS else 'localhost'
-    
+
     media_base_path = env("MEDIA_BASE_PATH", default='media')
     AWS_S3_CUSTOM_DOMAIN = f"{media_host}/{media_base_path}".rstrip('/')
-    
+
     AWS_QUERYSTRING_AUTH = False
-    
+
     media_proto = 'http' if DEBUG else 'https'
     MEDIA_URL = f'{media_proto}://{AWS_S3_CUSTOM_DOMAIN}/'
 else:
@@ -358,7 +360,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
-# Forcing CONN_MAX_AGE=0 by default in Daphne/ASGI to prevent "too many clients" 
+# Forcing CONN_MAX_AGE=0 by default in Daphne/ASGI to prevent "too many clients"
 # Postgres errors. Connections will close after each request unless overridden.
 DATABASES['default']['CONN_MAX_AGE'] = env.int("CONN_MAX_AGE", default=0)
 DATABASES['default']['CONN_HEALTH_CHECKS'] = True
@@ -381,7 +383,7 @@ if REDIS_URL:
     _port = f":{_parsed.port}" if _parsed.port else ""
     REDIS_BASE = f"{_parsed.scheme}://{_auth}{_parsed.hostname}{_port}"
 
-    
+
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -390,7 +392,7 @@ if REDIS_URL:
             },
         },
     }
-    
+
     # Redis Cache Configuration
     CACHES = {
         "default": {
@@ -542,10 +544,10 @@ OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 SENTRY_DSN = env("SENTRY_DSN", default=None)
 if SENTRY_DSN:
     import sentry_sdk
+    from sentry_sdk.integrations.celery import CeleryIntegration
     from sentry_sdk.integrations.django import DjangoIntegration
     from sentry_sdk.integrations.redis import RedisIntegration
-    from sentry_sdk.integrations.celery import CeleryIntegration
-    
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[
@@ -577,10 +579,24 @@ CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=TESTING)
 CELERY_TASK_EAGER_PROPAGATES = env.bool("CELERY_TASK_EAGER_PROPAGATES", default=TESTING)
 CELERY_TASK_IGNORE_RESULT = True
 
+from celery.schedules import crontab
+
 CELERY_BEAT_SCHEDULE = {
     'cleanup-orphan-messenger-files': {
         'task': 'apps.messenger.tasks.cleanup_orphan_chat_files',
         'schedule': timedelta(days=1),
+    },
+    'payroll-accrue-thirteenth-previous-month': {
+        'task': 'apps.payroll.tasks.accrue_thirteenth_previous_month',
+        'schedule': crontab(minute=5, hour=0, day_of_month='1'),
+    },
+    'payroll-generate-thirteenth-july': {
+        'task': 'apps.payroll.tasks.generate_thirteenth_july',
+        'schedule': crontab(minute=15, hour=0, day_of_month='1', month_of_year='7'),
+    },
+    'payroll-generate-thirteenth-december': {
+        'task': 'apps.payroll.tasks.generate_thirteenth_december',
+        'schedule': crontab(minute=25, hour=0, day_of_month='1', month_of_year='12'),
     },
 }
 
@@ -599,7 +615,7 @@ if not DEBUG and not TESTING and not BUILDING and not FIELD_ENCRYPTION_KEY:
     )
 
 # Content Security Policy (CSP)
-from .csp_config import *  # noqa
+from .csp_config import *
 
 # -----------------
 # SECURITY SETTINGS

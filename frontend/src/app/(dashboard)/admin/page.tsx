@@ -30,6 +30,7 @@ function AdminPageContent() {
   const initialView = searchParams.get('action') === 'create' ? 'create' : 'list'
   const [view, setView] = useState<'list' | 'create' | 'edit'>(initialView)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [activeTab, setActiveTab] = useState<'management' | 'analytics'>('management')
 
   // Estado inicial já deriva de searchParams; sem sincronização via effect
 
@@ -113,7 +114,7 @@ function AdminPageContent() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-8">
-          <Tabs defaultValue="management" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'management' | 'analytics')} className="space-y-6">
             <TabsList className="bg-muted/50 p-1 rounded-2xl border w-full justify-start md:w-auto">
               <TabsTrigger value="management" className="rounded-xl px-6">
                 <ShieldCheck className="mr-2 h-4 w-4" aria-hidden="true" /> Usuários
@@ -138,10 +139,12 @@ function AdminPageContent() {
             </TabsContent>
 
             <TabsContent value="analytics" className="mt-0">
-              <AnalyticsChart
-                title="Tráfego de Artigos"
-                data={stats?.charts?.views_series || []}
-              />
+              {activeTab === 'analytics' && (
+                <AnalyticsChart
+                  title="Tráfego de Artigos"
+                  data={stats?.charts?.views_series || []}
+                />
+              )}
             </TabsContent>
           </Tabs>
         </div>

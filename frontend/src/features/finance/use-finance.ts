@@ -25,16 +25,27 @@ export interface FinanceCategory {
   id: number
   name: string
   color: string
+  is_shared?: boolean
+  created_by?: number | null
 }
 
-export function useFinance() {
+export interface FinanceRange {
+  start?: string
+  end?: string
+}
+
+export function useFinance(range?: FinanceRange) {
   const queryClient = useQueryClient()
 
   // Fetch Transactions
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ['finance-transactions'],
+    queryKey: ['finance-transactions', range?.start ?? null, range?.end ?? null],
     queryFn: async () => {
-      const response = await api.get<Transaction[]>('/api/finance/transactions/')
+      const params = new URLSearchParams()
+      if (range?.start) params.set('start', range.start)
+      if (range?.end) params.set('end', range.end)
+      const qs = params.toString()
+      const response = await api.get<Transaction[]>(`/api/finance/transactions/${qs ? `?${qs}` : ''}`)
       return response.data
     }
   })
@@ -46,6 +57,18 @@ export function useFinance() {
       const response = await api.get<FinanceCategory[]>('/api/finance/categories/')
       return response.data
     }
+  })
+
+  const createCategory = useMutation({
+    mutationFn: async (payload: Pick<FinanceCategory, "name" | "color"> & { description?: string }) => {
+      const response = await api.post<FinanceCategory>('/api/finance/categories/', payload)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance-categories'] })
+      toast.success("Categoria criada com sucesso!")
+    },
+    onError: () => toast.error("Erro ao criar categoria.")
   })
 
   // Create Transaction
@@ -93,6 +116,7 @@ export function useFinance() {
     transactions,
     categories,
     isLoading,
+    createCategory,
     createTransaction,
     updateTransaction,
     deleteTransaction

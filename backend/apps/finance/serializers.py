@@ -1,15 +1,17 @@
 from rest_framework import serializers
-from .models import Transaction, Category
+
+from .models import Category, Transaction
+
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = '__all__'
-        read_only_fields = ['id', 'company', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'company', 'created_at', 'updated_at', 'created_by']
 
 class TransactionSerializer(serializers.ModelSerializer):
     category_details = CategorySerializer(source='category', read_only=True)
-    
+
     class Meta:
         model = Transaction
         fields = '__all__'
@@ -25,4 +27,11 @@ class TransactionSerializer(serializers.ModelSerializer):
             if request and hasattr(request, 'company'):
                 if value.company != request.company:
                     raise serializers.ValidationError("Categoria inválida para esta empresa.")
+                if not value.is_shared:
+                    role = getattr(getattr(request, "user", None), "role", None)
+                    can_manage = bool(getattr(getattr(request, "user", None), "is_superuser", False)) or (
+                        role and "finance.manage_financial" in (role.permissions or [])
+                    )
+                    if not can_manage and value.created_by_id != getattr(request.user, "id", None):
+                        raise serializers.ValidationError("Categoria inválida para este usuário.")
         return value

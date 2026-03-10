@@ -1,7 +1,9 @@
-from django.db import models
 from django.conf import settings
-from shared_kernel.models import BaseTenantModel
+from django.db import models
+
 from apps.calendar.models import Event
+from shared_kernel.models import BaseTenantModel
+
 
 class Category(BaseTenantModel):
     """
@@ -10,14 +12,33 @@ class Category(BaseTenantModel):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     color = models.CharField(max_length=20, default='#000000')
-    
+    is_shared = models.BooleanField(default=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_finance_categories',
+    )
+
     # Override company to avoid clash with articles.Category
     company = models.ForeignKey('core.Company', on_delete=models.CASCADE, related_name='finance_categories', db_index=True)
 
     class Meta:
         verbose_name = "Financial Category"
         verbose_name_plural = "Financial Categories"
-        unique_together = ('company', 'name')
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "name"],
+                condition=models.Q(is_shared=True),
+                name="finance_category_unique_shared_name_per_company",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "created_by", "name"],
+                condition=models.Q(is_shared=False),
+                name="finance_category_unique_personal_name_per_user",
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -30,7 +51,7 @@ class Transaction(BaseTenantModel):
         ('in', 'Receita'),
         ('out', 'Despesa'),
     )
-    
+
     STATUS_CHOICES = (
         ('pending', 'Pendente'),
         ('paid', 'Pago'),
@@ -42,16 +63,16 @@ class Transaction(BaseTenantModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Valor da transação")
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    
+
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
-    
+
     due_date = models.DateField(help_text="Data de vencimento")
     payment_date = models.DateField(null=True, blank=True, help_text="Data do pagamento efetivo")
     competence_date = models.DateField(help_text="Data de competência (mês de referência)")
-    
+
     # Integração opcional com Calendar
     linked_event = models.ForeignKey(Event, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
-    
+
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_transactions')
 
     class Meta:

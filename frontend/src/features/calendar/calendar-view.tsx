@@ -9,7 +9,7 @@ import ptBrLocale from '@fullcalendar/core/locales/pt-br'
 import { useCalendar, CalendarEvent } from './use-calendar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -180,6 +180,9 @@ export function CalendarView() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{selectedEvent ? 'Editar Evento' : 'Novo Evento'}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Formulário de criação e edição de eventos da agenda.
+            </DialogDescription>
           </DialogHeader>
           
           <Form {...form}>
