@@ -164,7 +164,7 @@ function AdminPageContent() {
 export default function AdminPage() {
   return (
     <Suspense fallback={null}>
-      <Protected requiredPermissions={['admin.view_dashboard']} requireStaff>
+      <Protected requiredPermissions={['admin.view_dashboard']}>
         <AdminPageContent />
       </Protected>
     </Suspense>

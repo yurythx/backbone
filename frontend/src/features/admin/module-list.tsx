@@ -114,19 +114,19 @@ export function ModuleList() {
               <CardTitle className="text-base font-medium">
                 {module.name}
               </CardTitle>
-              {/* M3: is_default (correto) em vez de is_global que não existe no model */}
-              {module.is_default ? (
-                <Badge variant="secondary">Padrão</Badge>
-              ) : (
-                <Switch
-                  checked={isActive}
-                  onCheckedChange={(checked) =>
-                    toggleMutation.mutate({ moduleId: module.id, code: module.code, name: module.name, isActive: checked })
-                  }
-                  disabled={toggleMutation.isPending}
-                  aria-label={`${isActive ? 'Desativar' : 'Ativar'} módulo ${module.name}`}
-                />
-              )}
+                <div className="flex items-center gap-2">
+                  {module.is_default ? (
+                    <Badge variant="secondary">Padrão</Badge>
+                  ) : null}
+                  <Switch
+                    checked={isActive}
+                    onCheckedChange={(checked) =>
+                      toggleMutation.mutate({ moduleId: module.id, code: module.code, name: module.name, isActive: checked })
+                    }
+                    disabled={toggleMutation.isPending}
+                    aria-label={`${isActive ? 'Desativar' : 'Ativar'} módulo ${module.name}`}
+                  />
+                </div>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-2">

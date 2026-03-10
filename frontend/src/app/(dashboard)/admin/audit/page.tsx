@@ -59,7 +59,7 @@ export default function AuditPage() {
     }
 
     return (
-        <Protected requireStaff>
+        <Protected requiredPermissions={['admin.view_dashboard']}>
         <div className="max-w-6xl mx-auto py-8 space-y-8">
             <SlideUp>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

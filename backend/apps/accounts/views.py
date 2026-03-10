@@ -1,23 +1,27 @@
-from rest_framework import generics, permissions, viewsets, status, serializers
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.http import HttpResponse
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import generics, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView
-from django.http import HttpResponse
-from .serializers import (
-    UserRegistrationSerializer, UserSerializer, RoleSerializer,
-    PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
-    InvitationSerializer, AcceptInvitationSerializer,
-    CustomTokenObtainPairSerializer
-)
-from .models import Role, Invitation
-from .services import AccountService
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from apps.module_manager.permissions import HasModuleAccess
-from django.core.cache import cache
-from drf_spectacular.utils import extend_schema, extend_schema_view
+
 from shared_kernel.audit import log_action
+
+from .models import Invitation, Role
+from .serializers import (
+    AcceptInvitationSerializer,
+    CustomTokenObtainPairSerializer,
+    InvitationSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
+    RoleSerializer,
+    UserRegistrationSerializer,
+    UserSerializer,
+)
+from .services import AccountService
 
 User = get_user_model()
 
@@ -41,8 +45,8 @@ class LogoutView(generics.GenericAPIView):
     serializer_class = LogoutSerializer
 
     def post(self, request):
-        from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
+        from rest_framework_simplejwt.tokens import RefreshToken
 
         refresh_token = request.data.get('refresh')
         if not refresh_token:
@@ -59,7 +63,7 @@ class LogoutView(generics.GenericAPIView):
             pass
         except Exception as e:
             return Response(
-                {"detail": f"Logout failed: {str(e)}"},
+                {"detail": f"Logout failed: {e!s}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -73,33 +77,34 @@ class CustomTokenRefreshView(generics.GenericAPIView):
     """
     permission_classes = [permissions.AllowAny]
     authentication_classes = []  # Disable authentication for this endpoint
-    
+
     def post(self, request):
-        from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
+        from rest_framework_simplejwt.tokens import RefreshToken
+
         from .serializers import CustomTokenObtainPairSerializer
-        
+
         refresh_token = request.data.get('refresh')
-        
+
         if not refresh_token:
             return Response(
                 {"detail": "Refresh token is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         try:
             # Validate the refresh token
             token = RefreshToken(refresh_token)
-            
+
             # Get user_id from the refresh token
             user_id = token.get('user_id')
-            
+
             if not user_id:
                 return Response(
                     {"detail": "Invalid refresh token - no user_id"},
                     status=status.HTTP_401_UNAUTHORIZED
                 )
-            
+
             # Get the user definitively (using global manager)
             try:
                 user = User.objects.get(id=user_id)
@@ -108,16 +113,16 @@ class CustomTokenRefreshView(generics.GenericAPIView):
                     {"detail": "User not found"},
                     status=status.HTTP_401_UNAUTHORIZED
                 )
-            
+
             # Generate new token pair with custom claims using the same serializer as login
             new_token = CustomTokenObtainPairSerializer.get_token(user)
-            
+
             return Response({
                 'access': str(new_token.access_token),
                 'refresh': str(token)  # Return the same refresh token
             }, status=status.HTTP_200_OK)
-            
-        except TokenError as e:
+
+        except TokenError:
             return Response(
                 {"detail": "Invalid or expired refresh token"},
                 status=status.HTTP_401_UNAUTHORIZED
@@ -140,7 +145,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         AccountService.request_password_reset(serializer.validated_data['email'])
-            
+
         return Response(
             {"detail": "Se o seu email estiver cadastrado, você receberá um link de recuperação."},
             status=status.HTTP_200_OK
@@ -154,13 +159,13 @@ class PasswordResetConfirmView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         success = AccountService.confirm_password_reset(
             uid=serializer.validated_data['uid'],
             token=serializer.validated_data['token'],
             new_password=serializer.validated_data['new_password']
         )
-        
+
         if success:
             return Response({"detail": "Senha alterada com sucesso."}, status=status.HTTP_200_OK)
         return Response({"detail": "Link inválido ou expirado."}, status=status.HTTP_400_BAD_REQUEST)
@@ -185,7 +190,7 @@ class UserViewSet(viewsets.ModelViewSet):
     ordering_fields = ['username', 'email', 'first_name', 'last_name', 'date_joined']
 
     def get_permissions(self):
-        from .permissions import HasRolePermission, FeatureLimitPermission
+        from .permissions import FeatureLimitPermission, HasRolePermission
         if self.action in ('me', 'retrieve'):
             return [permissions.IsAuthenticated()]
         if self.action == 'create':
@@ -277,7 +282,7 @@ class UserViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
     @action(detail=False, methods=['get'])
     def export(self, request):
         # A4: usar RBAC em vez de is_staff — a permissão admin.user_manage já cobre isso
@@ -316,6 +321,15 @@ class RoleViewSet(viewsets.ModelViewSet):
     required_permission = 'admin.user_manage'
     pagination_class = None
 
+    def _get_company(self):
+        company = getattr(self.request, 'company', None)
+        if not company and getattr(self.request, 'user', None) and getattr(self.request.user, 'company', None):
+            company = self.request.user.company
+        if not company:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": "Contexto de empresa ausente. Defina X-Company-Slug ou vincule o usuário a uma empresa."})
+        return company
+
     def get_permissions(self):
         from .permissions import HasRolePermission
         # Leitura (list/retrieve) liberada para qualquer autenticado (para popular selects)
@@ -325,16 +339,21 @@ class RoleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # A1: filtrar roles pelo tenant atual — não expor roles de outros tenants
-        return Role.objects.filter(company=self.request.company).order_by('name')
+        company = getattr(self.request, 'company', None)
+        if not company and getattr(self.request, 'user', None) and getattr(self.request.user, 'company', None):
+            company = self.request.user.company
+        if not company:
+            return Role.objects.none()
+        return Role.objects.filter(company=company).order_by('name')
 
     def perform_create(self, serializer):
-        serializer.save(company=self.request.company)
+        serializer.save(company=self._get_company())
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         if instance.is_system_role:
             return Response(
-                {"detail": "Não é possível excluir um papel do sistema."}, 
+                {"detail": "Não é possível excluir um papel do sistema."},
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().destroy(request, *args, **kwargs)
@@ -346,7 +365,7 @@ class RoleViewSet(viewsets.ModelViewSet):
         """
         from .permissions import AVAILABLE_PERMISSIONS
         data = [
-            {'id': key, 'label': label, 'description': label} 
+            {'id': key, 'label': label, 'description': label}
             for key, label in AVAILABLE_PERMISSIONS.items()
         ]
         return Response(data)
@@ -392,7 +411,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             email=serializer.validated_data['email'],
             role=serializer.validated_data['role']
         )
-    
+
     @action(detail=True, methods=['post'])
     def resend(self, request, pk=None):
         """
@@ -409,6 +428,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
         if cache.get(cache_key):
             return Response({"detail": "Aguarde antes de reenviar o convite."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         from django.conf import settings
+
         from shared_kernel.email import send_notification_email
         invite_url = f"{settings.FRONTEND_URL}/accept-invite?token={invite.token}"
         try:
@@ -426,7 +446,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             log_action(request.user, 'update', 'Invitation', resource_id=invite.id, details={'action': 'resend'}, request=request)
             return Response({"detail": "Convite reenviado com sucesso."}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"detail": f"Falha ao reenviar convite: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": f"Falha ao reenviar convite: {e!s}"}, status=status.HTTP_400_BAD_REQUEST)
 
 @extend_schema(tags=['Accounts - Invitations'], summary="Accept invitation and create account")
 class AcceptInvitationView(generics.GenericAPIView):
@@ -436,15 +456,14 @@ class AcceptInvitationView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         user, error_msg = AccountService.accept_invitation(
             token=serializer.validated_data['token'],
             first_name=serializer.validated_data['first_name'],
             last_name=serializer.validated_data['last_name'],
             password=serializer.validated_data['password']
         )
-        
+
         if user:
             return Response({"detail": "Conta criada com sucesso! Agora você pode fazer login."}, status=status.HTTP_201_CREATED)
         return Response({"detail": error_msg}, status=status.HTTP_400_BAD_REQUEST)
-

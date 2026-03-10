@@ -166,9 +166,9 @@ export function Sidebar() {
 
         // Specific route checks:
         if (item.href === '/admin/users' && !hasPermission('admin.user_manage')) return false
-        // Roles and Modules usually only for Super Admin or high level Admin
         if (item.href === '/admin/roles' && !hasPermission('admin.user_manage')) return false
-        if (item.href === '/admin/modules' && !isSuperuser) return false // Only superuser manages modules globally usually
+        if (item.href === '/admin/modules' && !hasPermission('admin.settings_manage')) return false
+        if (item.href === '/admin/ldap' && !hasPermission('admin.settings_manage')) return false
         if (item.href === '/admin/companies' && !isSuperuser) return false
 
         // Fallback for general admin access
