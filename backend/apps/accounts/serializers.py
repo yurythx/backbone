@@ -123,6 +123,8 @@ class UserSerializer(serializers.ModelSerializer):
             from .models import Role
             request = self.context.get('request')
             company = getattr(request, 'company', None) if request else None
+            if not company and request and getattr(request, 'user', None) and getattr(request.user, 'company', None):
+                company = request.user.company
             try:
                 if request and request.user.is_superuser:
                     # Superusuário pode atribuir qualquer role

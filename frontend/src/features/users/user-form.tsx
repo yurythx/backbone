@@ -125,6 +125,10 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
         },
         onSuccess: () => {
             notify.success(initialData ? "Usuário atualizado" : "Membro adicionado")
+            queryClient.invalidateQueries({ queryKey: ['users'] })
+            queryClient.invalidateQueries({ queryKey: ['roles'] })
+            queryClient.invalidateQueries({ queryKey: ['auth', 'user'] })
+            queryClient.invalidateQueries({ queryKey: ['me'] })
             onSuccess()
         },
         onError: (error: unknown) => {

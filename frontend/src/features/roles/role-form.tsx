@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import {
@@ -46,6 +46,7 @@ interface RoleFormProps {
 }
 
 export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
+    const queryClient = useQueryClient()
     const { data: availablePermissions = [], isLoading: isLoadingPermissions } = useQuery<Permission[]>({
         queryKey: ['available-permissions'],
         queryFn: async () => {
@@ -73,6 +74,10 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
         },
         onSuccess: () => {
             notify.success(initialData ? "Papel atualizado" : "Papel criado")
+            queryClient.invalidateQueries({ queryKey: ['roles'] })
+            queryClient.invalidateQueries({ queryKey: ['users'] })
+            queryClient.invalidateQueries({ queryKey: ['auth', 'user'] })
+            queryClient.invalidateQueries({ queryKey: ['me'] })
             onSuccess()
         },
         onError: (error) => {

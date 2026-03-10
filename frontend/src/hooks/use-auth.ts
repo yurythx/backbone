@@ -17,7 +17,7 @@ export function useAuth() {
                 return null
             }
         },
-        staleTime: 5 * 60 * 1000, // A9: revalida a cada 5 min (Infinity deixava permissões desatualizadas após troca de role)
+        staleTime: 30_000,
         retry: false
     })
 
