@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
@@ -8,6 +8,7 @@ import { api, resetAuthState } from "@/lib/axios"
 import { AuthResponse } from "@/types"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
+import axios from "axios"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -61,7 +62,14 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
     queryFn: async () => {
       const res = await api.get<Company[]>('/api/core/companies/public_list/')
       return res.data
-    }
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (axios.isAxiosError(error) && error.response?.status === 429) return false
+      return failureCount < 1
+    },
   })
 
   const form = useForm<z.infer<typeof formSchema>>({

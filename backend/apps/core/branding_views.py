@@ -1,18 +1,21 @@
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from django.conf import settings
 from django.shortcuts import get_object_or_404
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from shared_kernel.cache import invalidate_tenant_cache, tenant_cached
 from shared_kernel.tenant_context import get_current_company
+
 from .models import TenantBranding
 from .serializers import TenantBrandingSerializer
-from shared_kernel.cache import tenant_cached, invalidate_tenant_cache
 
 
 class TenantBrandingViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gerenciar branding da empresa (tenant).
-    
+
     Endpoints:
     - GET /api/core/branding/ - Lista todas as configurações de branding (admin)
     - GET /api/core/branding/current/ - Obtém branding do tenant atual
@@ -24,13 +27,13 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     queryset = TenantBranding.objects.all()
     serializer_class = TenantBrandingSerializer
     @tenant_cached(timeout=3600, key_prefix='branding')
-    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[], throttle_classes=[])
     def current(self, request):
         """Obtém branding do tenant atual (público para carregar tema no login)"""
         return self._get_current_branding()
 
     @tenant_cached(timeout=3600, key_prefix='branding_public')
-    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[], throttle_classes=[])
     def public_current(self, request):
         """Obtém branding do tenant atual (público)"""
         return self._get_current_branding()
@@ -49,18 +52,18 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                     'theme_palette': 'slate-gray',
                     'custom_css': ''
                 })
-            
-            branding, created = TenantBranding.objects.get_or_create(
+
+            branding, _created = TenantBranding.objects.get_or_create(
                 company=company,
                 defaults={
                     'company_name': company.name,
                     'theme_palette': 'django-green'
                 }
             )
-            
+
             serializer = self.get_serializer(branding)
             return Response(serializer.data)
-        except Exception as e:
+        except Exception:
             # Fallback seguro em caso de erro 500 no get_current_company ou get_or_create
             return Response({
                 'company_name': 'Backbone SaaS',
@@ -75,15 +78,17 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     def get_authenticators(self):
         """Desativa autenticação para endpoints públicos para evitar 401 com tokens expirados"""
         public_actions = ['current', 'public_current', 'palettes']
-        if self.action in public_actions:
+        action = getattr(self, 'action', None)
+        if action in public_actions:
             return []
         return super().get_authenticators()
 
     def get_permissions(self):
-        if self.action in ['current', 'public_current', 'palettes']:
+        action = getattr(self, 'action', None)
+        if action in ['current', 'public_current', 'palettes']:
             return [permissions.AllowAny()]
         return [IsAuthenticated()]
-    
+
     @action(detail=False, methods=['put'])
     def update_current(self, request):
         """Atualiza branding do tenant atual (apenas admins)"""
@@ -92,19 +97,19 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                 {'error': 'Only admins can modify branding'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         company = get_current_company()
         if not company:
             return Response(
                 {'error': 'No company context found'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        branding, created = TenantBranding.objects.get_or_create(
+
+        branding, _created = TenantBranding.objects.get_or_create(
             company=company,
             defaults={'company_name': company.name}
         )
-        
+
         serializer = self.get_serializer(branding, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -112,7 +117,7 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
             invalidate_tenant_cache('branding', company.slug)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
     @action(detail=False, methods=['post'], url_path='upload-logo')
     def upload_logo(self, request):
         """Upload de logo da empresa"""
@@ -121,34 +126,34 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                 {'error': 'Only admins can upload logo'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         company = get_current_company()
         if not company:
             return Response(
                 {'error': 'No company context found'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        branding, created = TenantBranding.objects.get_or_create(
+
+        branding, _created = TenantBranding.objects.get_or_create(
             company=company,
             defaults={'company_name': company.name}
         )
-        
+
         if 'logo' not in request.FILES:
             return Response(
                 {'error': 'No logo file provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         branding.logo = request.FILES['logo']
         branding.save()
-        
+
         # Invalida o cache ao fazer upload
         invalidate_tenant_cache('branding', company.slug)
-        
+
         serializer = self.get_serializer(branding)
         return Response(serializer.data)
-    
+
     @action(detail=False, methods=['post'], url_path='upload-icon')
     def upload_icon(self, request):
         """Upload de ícone/favicon da empresa"""
@@ -157,34 +162,34 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                 {'error': 'Only admins can upload icon'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         company = get_current_company()
         if not company:
             return Response(
                 {'error': 'No company context found'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        branding, created = TenantBranding.objects.get_or_create(
+
+        branding, _created = TenantBranding.objects.get_or_create(
             company=company,
             defaults={'company_name': company.name}
         )
-        
+
         if 'icon' not in request.FILES:
             return Response(
                 {'error': 'No icon file provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         branding.icon = request.FILES['icon']
         branding.save()
-        
+
         # Invalida o cache ao fazer upload
         invalidate_tenant_cache('branding', company.slug)
-        
+
         serializer = self.get_serializer(branding)
         return Response(serializer.data)
-    
+
     @action(detail=False, methods=['get', 'put'])
     def email_config(self, request):
         """Gerencia configurações de SMTP do tenant atual"""
@@ -193,20 +198,20 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                 {'error': 'Only admins can modify email config'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         company = get_current_company()
         from .models import TenantEmailConfig
         from .serializers import TenantEmailConfigSerializer
-        
-        config, created = TenantEmailConfig.objects.get_or_create(company=company)
-        
+
+        config, _created = TenantEmailConfig.objects.get_or_create(company=company)
+
         if request.method == 'PUT':
             serializer = TenantEmailConfigSerializer(config, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         serializer = TenantEmailConfigSerializer(config)
         return Response(serializer.data)
 
@@ -218,11 +223,11 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                 {'error': 'Only admins can test SMTP'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         company = get_current_company()
         from .models import TenantEmailConfig
         config = get_object_or_404(TenantEmailConfig, company=company)
-        
+
         if not config.use_custom_smtp or not config.smtp_host:
             return Response(
                 {'error': 'Custom SMTP is not configured or enabled'},
@@ -230,17 +235,16 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            from django.core.mail import get_connection, EmailMessage
-            
+            from django.core.mail import EmailMessage, get_connection
+
             connection = get_connection(
                 host=config.smtp_host,
                 port=config.smtp_port,
                 username=config.smtp_user,
                 password=config.get_smtp_password(),
                 use_tls=config.smtp_use_tls
-
             )
-            
+
             email = EmailMessage(
                 subject=f'Teste de SMTP - {company.name}',
                 body='Se você recebeu este e-mail, as configurações de SMTP do seu tenant estão funcionando corretamente!',
@@ -251,7 +255,7 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
             email.send()
             return Response({'message': 'E-mail de teste enviado com sucesso!'})
         except Exception as e:
-            return Response({'error': f'Falha ao enviar e-mail: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'Falha ao enviar e-mail: {e!s}'}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny], authentication_classes=[])
     def palettes(self, request):

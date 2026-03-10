@@ -46,7 +46,7 @@ setup('authenticate', async ({ page }) => {
 
     // Submit and wait for redirect
     await page.click('button[type="submit"]')
-    await page.waitForURL('/', { timeout: 20_000 })
+    await page.waitForURL('/dashboard', { timeout: 20_000 })
 
     // Verify we're actually logged in
     await expect(page).not.toHaveURL('/login')

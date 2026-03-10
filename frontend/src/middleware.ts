@@ -31,13 +31,18 @@ function isProtected(pathname: string): boolean {
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
     const hasSession = request.cookies.get('hasSession')?.value === 'true'
+    const debug = process.env.NODE_ENV !== 'production'
 
     // LOG PARA DEBUG (visível no terminal do dev server)
-    console.log(`[Middleware] ${request.method} ${pathname} | hasSession: ${hasSession}`)
+    if (debug) {
+        console.log(`[Middleware] ${request.method} ${pathname} | hasSession: ${hasSession}`)
+    }
 
     // ── Bloqueio de rotas protegidas sem sessão ──────────────────────────────
     if (isProtected(pathname) && !hasSession) {
-        console.log(`[Middleware] REDIRECT protected ${pathname} -> /login`)
+        if (debug) {
+            console.log(`[Middleware] REDIRECT protected ${pathname} -> /login`)
+        }
         const loginUrl = new URL('/login', request.url)
         loginUrl.searchParams.set('next', pathname)
         return NextResponse.redirect(loginUrl)

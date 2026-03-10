@@ -66,12 +66,32 @@ describe('api interceptor — request headers', () => {
 
 describe('api interceptor — 401 refresh flow', () => {
     const API_URL = 'http://localhost:8005'
+    const originalLocation = window.location
+
+    const setMockLocation = (pathname: string) => {
+        const locationMock = { href: '', pathname } as unknown as Location
+        Object.defineProperty(window, 'location', {
+            value: locationMock,
+            configurable: true,
+            writable: true,
+        })
+        return locationMock
+    }
+
+    beforeEach(() => {
+        setMockLocation('/dashboard')
+    })
 
     afterEach(() => {
         mock.reset()
         rawMock.reset()
         localStorage.clear()
         vi.restoreAllMocks()
+        Object.defineProperty(window, 'location', {
+            value: originalLocation,
+            configurable: true,
+            writable: true,
+        })
     })
 
     it('refreshes token on 401 and retries the original request', async () => {
@@ -99,18 +119,7 @@ describe('api interceptor — 401 refresh flow', () => {
     it('clears tokens and redirects when no refresh token on 401', async () => {
         localStorage.setItem('accessToken', 'expired')
         // No refreshToken
-
-        const hrefSpy = vi.spyOn(window, 'location', 'get').mockReturnValue({
-            ...window.location,
-            href: '',
-        } as Location)
-
-        const locationMock = { href: '' }
-        Object.defineProperty(window, 'location', {
-            value: locationMock,
-            configurable: true,
-            writable: true,
-        })
+        const locationMock = setMockLocation('/dashboard')
 
         mock.onGet('/api/protected/').reply(401, {})
 
@@ -121,6 +130,5 @@ describe('api interceptor — 401 refresh flow', () => {
         }
 
         expect(locationMock.href).toBe('/login')
-        hrefSpy.mockRestore()
     })
 })

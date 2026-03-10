@@ -82,8 +82,19 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
+if ! command -v git &> /dev/null; then
+    echo -e "${NEON_GREEN}   [ERROR] Git não encontrado!${RESET}"
+    exit 1
+fi
+
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "${NEON_GREEN}   [ERROR] Arquivo $ENV_FILE não encontrado!${RESET}"
+    exit 1
+fi
+
+if ! $DC config > logs/compose_config.log 2>&1; then
+    echo -e "${NEON_GREEN}   [ERROR] Falha ao validar docker compose. Verifique logs/compose_config.log${RESET}"
+    tail -n 20 logs/compose_config.log || true
     exit 1
 fi
 echo -e "${NEON_GREEN}   ✔ Sistema pronto para deploy${RESET}\n"
