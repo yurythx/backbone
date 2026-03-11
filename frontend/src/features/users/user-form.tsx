@@ -212,7 +212,7 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
                                         name="first_name"
@@ -241,7 +241,7 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
                                         name="username"

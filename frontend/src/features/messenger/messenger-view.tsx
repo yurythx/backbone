@@ -228,7 +228,7 @@ export function MessengerView() {
                 <SlidersHorizontal className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[360px] sm:w-[420px]">
+            <SheetContent side="right" className="w-[90vw] sm:w-[420px]">
               <SheetHeader>
                 <SheetTitle>Filtros de busca</SheetTitle>
               </SheetHeader>
@@ -302,7 +302,7 @@ export function MessengerView() {
                     className="mt-2"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground">De</label>
                     <Input

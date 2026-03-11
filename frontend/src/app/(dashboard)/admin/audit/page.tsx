@@ -24,11 +24,30 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 import { Protected } from "@/components/auth/protected"
 
 export default function AuditPage() {
     const [searchTerm, setSearchTerm] = useState("")
     const [actionFilter, setActionFilter] = useState("all")
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+    const [selectedLog, setSelectedLog] = useState<{
+        id: number
+        action: string
+        user_name?: string
+        user_email?: string
+        resource: string
+        resource_id: string | number
+        ip_address?: string | null
+        created_at: string
+        details?: unknown
+    } | null>(null)
 
     const { data: logs, isLoading } = useQuery({
         queryKey: ['audit-logs', searchTerm, actionFilter],
@@ -109,15 +128,89 @@ export default function AuditPage() {
             <FadeIn delay={0.3}>
                 <div className="rounded-[2.5rem] border border-border/50 bg-card/30 backdrop-blur-xl overflow-hidden shadow-2xl relative">
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
-                    <Table aria-label="Tabela de logs de auditoria">
+
+                    <div className="sm:hidden p-4 space-y-3">
+                        {isLoading ? (
+                            Array.from({ length: 5 }).map((_, i) => (
+                                <div key={i} className="rounded-2xl border border-border/50 bg-background/60 p-4 animate-pulse">
+                                    <div className="flex items-center justify-between">
+                                        <div className="h-4 w-24 bg-muted rounded" />
+                                        <div className="h-4 w-16 bg-muted rounded" />
+                                    </div>
+                                    <div className="mt-3 space-y-2">
+                                        <div className="h-4 w-48 bg-muted rounded" />
+                                        <div className="h-3 w-40 bg-muted rounded opacity-70" />
+                                    </div>
+                                </div>
+                            ))
+                        ) : safeLogs.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+                                <div className="p-6 rounded-full bg-muted/20">
+                                    <History className="h-10 w-10 text-muted-foreground/30" aria-hidden="true" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold">Nenhum rastro encontrado</h3>
+                                    <p className="text-muted-foreground">Ajuste os filtros e tente novamente.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            safeLogs.map((log: {
+                                id: number
+                                action: string
+                                user_name?: string
+                                user_email?: string
+                                resource: string
+                                resource_id: string | number
+                                ip_address?: string | null
+                                created_at: string
+                                details?: unknown
+                            }) => (
+                                <div key={log.id} className="rounded-2xl border border-border/50 bg-background/60 p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="space-y-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                {getActionBadge(log.action)}
+                                                <span className="text-xs font-bold text-muted-foreground truncate">
+                                                    {format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                                                </span>
+                                            </div>
+                                            <div className="font-bold truncate">
+                                                {log.resource} <span className="text-muted-foreground">#{log.resource_id}</span>
+                                            </div>
+                                            <div className="text-sm text-muted-foreground truncate">
+                                                {log.user_name || "Sistema"} · {log.user_email || "Backbone Daemon"}
+                                            </div>
+                                            <div className="text-xs font-mono text-muted-foreground">
+                                                {log.ip_address || "Internal"}
+                                            </div>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="shrink-0 rounded-xl"
+                                            onClick={() => {
+                                                setSelectedLog(log)
+                                                setIsDetailsOpen(true)
+                                            }}
+                                        >
+                                            Detalhes
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <div className="hidden sm:block">
+                    <Table aria-label="Tabela de logs de auditoria" className="min-w-[980px]">
                         <TableHeader>
                             <TableRow className="border-border/50 hover:bg-transparent bg-muted/20">
-                                <TableHead className="py-6 pl-10 font-bold text-foreground">Evento</TableHead>
+                                <TableHead className="py-6 pl-4 sm:pl-10 font-bold text-foreground">Evento</TableHead>
                                 <TableHead className="font-bold text-foreground">Usuário</TableHead>
                                 <TableHead className="font-bold text-foreground">Recurso</TableHead>
                                 <TableHead className="font-bold text-foreground">IP</TableHead>
                                 <TableHead className="font-bold text-foreground">Data</TableHead>
-                                <TableHead className="text-right pr-10 font-bold text-foreground">Detalhes</TableHead>
+                                <TableHead className="text-right pr-4 sm:pr-10 font-bold text-foreground">Detalhes</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody role={isLoading ? "status" : undefined} aria-live={isLoading ? "polite" : undefined} aria-label={isLoading ? "Carregando logs" : undefined}>
@@ -147,7 +240,7 @@ export default function AuditPage() {
                                 details?: unknown
                               }) => (
                                 <TableRow key={log.id} className="group hover:bg-primary/5 transition-all border-border/30">
-                                    <TableCell className="py-6 pl-10">
+                                    <TableCell className="py-6 pl-4 sm:pl-10">
                                         <div className="flex items-center gap-4">
                                             <div className="h-12 w-12 rounded-2xl bg-background border border-border/50 flex items-center justify-center shadow-premium group-hover:scale-110 transition-transform">
                                                 <Activity className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" />
@@ -183,7 +276,7 @@ export default function AuditPage() {
                                     <TableCell className="text-xs font-bold">
                                         {format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
                                     </TableCell>
-                                    <TableCell className="text-right pr-10">
+                                    <TableCell className="text-right pr-4 sm:pr-10">
                                             <TooltipProvider>
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
@@ -218,8 +311,27 @@ export default function AuditPage() {
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
             </FadeIn>
+
+            <Dialog
+                open={isDetailsOpen}
+                onOpenChange={(open) => {
+                    setIsDetailsOpen(open)
+                    if (!open) setSelectedLog(null)
+                }}
+            >
+                <DialogContent className="max-w-[92vw] sm:max-w-[720px] max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Detalhes do Evento</DialogTitle>
+                        <DialogDescription className="sr-only">Detalhes do log de auditoria.</DialogDescription>
+                    </DialogHeader>
+                    <pre className="text-[11px] bg-card font-mono text-foreground/80 leading-relaxed overflow-auto rounded-xl border p-4">
+                        {selectedLog ? JSON.stringify(selectedLog.details, null, 2) : ""}
+                    </pre>
+                </DialogContent>
+            </Dialog>
         </div>
         </Protected>
     )

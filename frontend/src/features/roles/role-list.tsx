@@ -82,8 +82,76 @@ export function RoleList() {
                 )}
             </div>
 
-            <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
-                <Table aria-label="Tabela de papéis e permissões">
+            <div className="rounded-2xl border bg-card shadow-sm">
+                <div className="sm:hidden p-4 space-y-3">
+                    {(roles && roles.length > 0) ? (
+                        roles.map((role) => (
+                            <div key={role.id} className="rounded-2xl border border-border/50 bg-background/60 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            {role.is_system_role ? (
+                                                <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+                                            ) : (
+                                                <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                                            )}
+                                            <span className="font-bold truncate">{role.name}</span>
+                                            {role.is_system_role && (
+                                                <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-widest bg-primary/10 text-primary border-none">Sistema</Badge>
+                                            )}
+                                        </div>
+                                        <div className="mt-1 text-sm text-muted-foreground">
+                                            {role.description || "Nenhuma descrição"}
+                                        </div>
+                                        <div className="mt-2 text-xs text-muted-foreground">
+                                            {Array.isArray(role.permissions) ? `${role.permissions.length} permissões` : "0 permissões"}
+                                        </div>
+                                    </div>
+
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="shrink-0" aria-label="Abrir menu de ações">
+                                                <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                                            {canManageRoles ? (
+                                                <>
+                                                    <DropdownMenuItem onClick={() => handleEdit(role)} className="cursor-pointer">
+                                                        <Edit className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" /> Editar
+                                                    </DropdownMenuItem>
+                                                    {!role.is_system_role && (
+                                                        <DropdownMenuItem
+                                                            onClick={() => {
+                                                                if (window.confirm("Tem certeza que deseja excluir este papel?")) {
+                                                                    deleteMutation.mutate(role.id)
+                                                                }
+                                                            }}
+                                                            className="text-destructive focus:text-destructive cursor-pointer"
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Excluir
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <DropdownMenuItem disabled className="text-muted-foreground text-xs">
+                                                    Sem permissão
+                                                </DropdownMenuItem>
+                                            )}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-10 text-muted-foreground">
+                            Nenhum papel encontrado.
+                        </div>
+                    )}
+                </div>
+
+                <div className="hidden sm:block">
+                <Table aria-label="Tabela de papéis e permissões" className="min-w-[820px]">
                     <TableHeader className="bg-muted/50">
                         <TableRow>
                             <TableHead className="py-4">Nome do Papel</TableHead>
@@ -164,6 +232,7 @@ export function RoleList() {
                         ))}
                     </TableBody>
                 </Table>
+                </div>
             </div>
 
             <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>

@@ -36,8 +36,8 @@ export function DashboardShell({
         <SetupAlert />
 
 
-        <main className="flex-1 p-6 md:p-8 overflow-y-auto" role="main" aria-label="Conteúdo principal do dashboard">
-          <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <main className="flex-1 px-4 py-6 sm:p-6 md:p-8 overflow-y-auto overflow-x-hidden" role="main" aria-label="Conteúdo principal do dashboard">
+          <div className="mx-auto w-full min-w-0 max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
             {children}
           </div>
         </main>

@@ -3,6 +3,8 @@ import { api } from "@/lib/axios"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { notify } from "@/lib/notifications"
 import { toast } from "sonner"
+import { isJwtExpired } from "@/lib/jwt"
+import { ensureFreshAccessToken } from "@/lib/ws-auth"
 
 // Singleton WS e toast-dedupe cache (prevenir conexões/toasts duplicados)
 let WS_SINGLETON: WebSocket | null = null
@@ -78,8 +80,6 @@ export function useNotifications(options?: { showToasts?: boolean }) {
             return
         }
 
-        const token = localStorage.getItem('accessToken')
-        if (!token) return
         const companySlug = localStorage.getItem('companySlug')
         const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
         const effectiveCompany = companySlug || envCompany || undefined
@@ -89,11 +89,22 @@ export function useNotifications(options?: { showToasts?: boolean }) {
         const protocol = isSecure ? 'wss:' : 'ws:'
         const host = apiUrl.replace(/^https?:\/\//, '')
 
-        const openSocket = () => {
+        const openSocket = async () => {
             // Bug N4: respeita limite de tentativas para não lopar infinitamente
             if (WS_RETRY_COUNT >= WS_MAX_RETRIES) {
                 console.warn("[useNotifications] WebSocket max retries reached, giving up.")
                 return
+            }
+
+            let token = localStorage.getItem("accessToken")
+            if (!token) return
+            if (isJwtExpired(token)) {
+                try {
+                    const fresh = await ensureFreshAccessToken()
+                    if (fresh) token = fresh
+                } catch {
+                    return
+                }
             }
 
             const qs = `token=${encodeURIComponent(token)}${effectiveCompany ? `&company_slug=${encodeURIComponent(effectiveCompany)}` : ''}`
@@ -193,8 +204,12 @@ export function useNotifications(options?: { showToasts?: boolean }) {
                 WS_INITIALIZED = false
                 socketRef.current = null
 
-                // Bug N4: não reconectar em erros de autenticação (4001/4003/4004)
                 if (event.code === 4001 || event.code === 4003 || event.code === 4004) {
+                    const t = localStorage.getItem("accessToken")
+                    if (t && isJwtExpired(t)) {
+                        openSocket()
+                        return
+                    }
                     console.warn(`[useNotifications] WebSocket closed with auth error (${event.code}), not retrying.`)
                     return
                 }

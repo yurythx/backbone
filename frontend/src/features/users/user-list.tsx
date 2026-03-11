@@ -139,8 +139,98 @@ export function UserList({ onEdit }: UserListProps) {
                 </TabsList>
 
                 <TabsContent value="active">
-                    <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
-                        <Table aria-label="Tabela de usuários">
+                    <div className="rounded-2xl border bg-card shadow-sm">
+                        <div className="sm:hidden p-4 space-y-3">
+                            {safeUsers.length > 0 ? safeUsers.map((user: UserType) => (
+                                <div key={user.id} className="rounded-2xl border border-border/50 bg-background/60 p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="font-bold truncate">
+                                                {user.first_name} {user.last_name}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground truncate">
+                                                @{user.username} · {user.email}
+                                            </div>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {user.is_superuser && (
+                                                    <Badge variant="default" className="gap-1.5 bg-indigo-600 text-white border-none rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                        <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                                                        Superadmin
+                                                    </Badge>
+                                                )}
+                                                {user.role_details ? (
+                                                    <Badge variant="outline" className="gap-1.5 border-primary/20 bg-primary/5 text-primary rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                        <Shield className="h-3 w-3" aria-hidden="true" />
+                                                        {user.role_details.name}
+                                                    </Badge>
+                                                ) : !user.is_superuser && (
+                                                    <span className="text-xs text-muted-foreground italic">Sem papel definido</span>
+                                                )}
+                                            </div>
+                                            <div className="mt-2">
+                                                {user.company ? (
+                                                    <Badge variant="secondary" className="gap-1.5 rounded-lg text-[10px] font-medium">
+                                                        <Building2 className="h-3 w-3" aria-hidden="true" />
+                                                        {typeof user.company === 'object' ? user.company.name : `Empresa #${user.company}`}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">-</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" aria-label="Ações do usuário" className="shrink-0">
+                                                    <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                                                {canManageUsers && (!user.is_superuser || currentUserFormatted?.is_superuser) && (
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            if (onEdit) {
+                                                                onEdit(user)
+                                                            } else {
+                                                                setEditingUser(user)
+                                                                setIsUserFormOpen(true)
+                                                            }
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Edit className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" /> Editar
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {canManageUsers && user.id !== currentUserFormatted?.id && (!user.is_superuser || currentUserFormatted?.is_superuser) && (
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            if (confirm("Tem certeza que deseja remover este usuário? Esta ação não pode ser desfeita.")) {
+                                                                deleteUserMutation.mutate(user.id)
+                                                            }
+                                                        }}
+                                                        className="text-destructive focus:text-destructive cursor-pointer"
+                                                    >
+                                                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Remover
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {(!canManageUsers || (user.is_superuser && !currentUserFormatted?.is_superuser)) && (
+                                                    <DropdownMenuItem disabled className="text-muted-foreground text-xs">
+                                                        Acesso Negado
+                                                    </DropdownMenuItem>
+                                                )}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="text-center py-10 text-muted-foreground">
+                                    Nenhum usuário encontrado para esta empresa.
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="hidden sm:block">
+                        <Table aria-label="Tabela de usuários" className="min-w-[900px]">
                             <TableHeader className="bg-muted/50">
                                 <TableRow>
                                     <TableHead className="py-4">Usuário</TableHead>
@@ -243,19 +333,57 @@ export function UserList({ onEdit }: UserListProps) {
                                     </TableRow>
                                 )) : (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                                        <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                                             Nenhum usuário encontrado para esta empresa.
                                         </TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
                         </Table>
+                        </div>
                     </div>
                 </TabsContent>
 
                 <TabsContent value="pending">
-                    <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
-                        <Table aria-label="Tabela de convites">
+                    <div className="rounded-2xl border bg-card shadow-sm">
+                        <div className="sm:hidden p-4 space-y-3">
+                            {safeInvites.length > 0 ? safeInvites.map((invite: Invite) => (
+                                <div key={invite.id} className="rounded-2xl border border-border/50 bg-background/60 p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="font-bold truncate">{invite.email}</div>
+                                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                <Badge variant="outline" className="rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                    {invite.role_name}
+                                                </Badge>
+                                                <Badge variant="secondary" className="capitalize text-[10px] font-bold rounded-lg bg-orange-100 text-orange-700 border-none">
+                                                    {invite.status}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" aria-label="Ações do convite" className="shrink-0">
+                                                    <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                                                <DropdownMenuItem onClick={() => cancelInviteMutation.mutate(invite.id)} className="text-destructive focus:text-destructive cursor-pointer">
+                                                    <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Cancelar Convite
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="text-center py-10 text-muted-foreground">
+                                    Nenhum convite pendente.
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="hidden sm:block">
+                        <Table aria-label="Tabela de convites" className="min-w-[640px]">
                             <TableHeader className="bg-muted/50">
                                 <TableRow>
                                     <TableHead className="py-4">Email</TableHead>
@@ -303,6 +431,7 @@ export function UserList({ onEdit }: UserListProps) {
                                 )}
                             </TableBody>
                         </Table>
+                        </div>
                     </div>
                 </TabsContent>
             </Tabs>

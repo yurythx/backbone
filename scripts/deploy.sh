@@ -106,8 +106,8 @@ BACKUP_FILE="./backups/backup_$(date +%F_%H-%M-%S).sql"
 
 # Tenta fazer backup apenas se o DB estiver rodando
 if $DC ps db 2>/dev/null | grep -q "Up"; then
-    DB_USER=$(grep -E '^POSTGRES_USER=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_user")
-    DB_NAME=$(grep -E '^POSTGRES_DB=' "$ENV_FILE" | cut -d= -f2 | tr -d '"' || echo "backbone_prod")
+    DB_USER="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs || echo "backbone_user")"
+    DB_NAME="$(awk -F= '/^POSTGRES_DB=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs || echo "backbone_prod")"
     
     $DC exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE" 2>> logs/deploy_error.log || true
     simulate_loading "BACKUP DATABASE" 2
@@ -176,6 +176,25 @@ for i in {1..20}; do
     sleep 1
     echo -n "."
 done
+
+# Garante usuário e banco consistentes (evita erros por whitespace/mismatch em .env)
+DB_USER_CHECK="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
+DB_NAME_CHECK="$(awk -F= '/^POSTGRES_DB=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
+DB_PASS_CHECK="$(awk -F= '/^POSTGRES_PASSWORD=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
+
+if [[ -z "$DB_USER_CHECK" || -z "$DB_NAME_CHECK" || -z "$DB_PASS_CHECK" ]]; then
+    echo -e "\n${NEON_GREEN}   [ERROR] POSTGRES_USER/POSTGRES_DB/POSTGRES_PASSWORD ausentes ou inválidos no $ENV_FILE${RESET}"
+    exit 1
+fi
+
+if [[ "$DB_USER_CHECK" =~ [[:space:]] || "$DB_NAME_CHECK" =~ [[:space:]] ]]; then
+    echo -e "\n${NEON_GREEN}   [ERROR] POSTGRES_USER/POSTGRES_DB contém espaços. Corrija o $ENV_FILE (remova espaços extras).${RESET}"
+    exit 1
+fi
+
+DB_PASS_ESCAPED="${DB_PASS_CHECK//\'/\'\'}"
+$DC exec -T db sh -lc "psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER_CHECK}'\" | grep -q 1 || psql -U postgres -d postgres -c \"CREATE ROLE \\\"${DB_USER_CHECK}\\\" LOGIN PASSWORD '${DB_PASS_ESCAPED}';\""
+$DC exec -T db sh -lc "psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME_CHECK}'\" | grep -q 1 || psql -U postgres -d postgres -c \"CREATE DATABASE \\\"${DB_NAME_CHECK}\\\" OWNER \\\"${DB_USER_CHECK}\\\";\""
 
 # 3.2 Migrações (ANTES de subir o backend principal)
 echo -e "${WHITE}:: FASE 4: SINCRONIZAÇÃO DE SCHEMA${RESET}"

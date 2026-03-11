@@ -328,6 +328,61 @@ export function TransactionList() {
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
+            <div className="sm:hidden p-4 space-y-3">
+              {isLoading ? (
+                <div className="text-center py-10 text-muted-foreground">Carregando...</div>
+              ) : filteredTransactions.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">Nenhuma transação encontrada.</div>
+              ) : (
+                filteredTransactions.map((transaction) => (
+                  <div key={transaction.id} className="rounded-2xl border border-border/50 bg-background/60 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold truncate">{transaction.description}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          {transaction.category_details ? (
+                            <span
+                              className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                              style={{ backgroundColor: transaction.category_details.color + "20", color: transaction.category_details.color }}
+                            >
+                              {transaction.category_details.name}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Sem categoria</span>
+                          )}
+                          <StatusBadge status={transaction.status} />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <div className="text-xs text-muted-foreground">
+                            Venc.: {format(new Date(transaction.due_date), "dd/MM/yyyy")}
+                          </div>
+                          <div className={`text-sm font-bold ${transaction.type === "in" ? "text-emerald-500" : "text-rose-500"}`}>
+                            {transaction.type === "in" ? "+" : "-"}
+                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(parseFloat(transaction.amount))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(transaction)} aria-label="Editar transação">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteTransaction.mutate(transaction.id)}
+                          className="text-destructive hover:text-destructive"
+                          aria-label="Excluir transação"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="hidden sm:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -385,6 +440,7 @@ export function TransactionList() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -414,7 +470,7 @@ export function TransactionList() {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="amount"
@@ -452,7 +508,7 @@ export function TransactionList() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="due_date"
@@ -492,7 +548,7 @@ export function TransactionList() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="competence_date"

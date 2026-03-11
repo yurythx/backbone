@@ -1,8 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import useWebSocket from 'react-use-websocket';
+
+import { ensureFreshAccessToken } from '@/lib/ws-auth';
+import { isJwtExpired } from '@/lib/jwt';
 
 export type UserStatus = 'online' | 'busy' | 'offline';
 
@@ -20,9 +23,10 @@ const UserPresenceContext = createContext<UserPresenceContextValue>({
 
 export function UserPresenceProvider({ children }: { children: React.ReactNode }) {
     const [userStatuses, setUserStatuses] = useState<Map<number, UserStatus>>(new Map());
+    const [socketUrl, setSocketUrl] = useState<string | null>(null);
+    const refreshAttemptRef = useRef(0);
 
-    // Memoize socket URL logic
-    const getSocketUrl = useCallback((): string | null => {
+    const computeSocketUrl = useCallback(async (): Promise<string | null> => {
         if (typeof window === 'undefined') return null;
 
         // Check if user is on a public page (no auth required)
@@ -31,8 +35,16 @@ export function UserPresenceProvider({ children }: { children: React.ReactNode }
         const isPublic = PUBLIC_PATHS.some(p => path === p || path.startsWith(p + '/')) || path.startsWith('/p/');
         if (isPublic) return null;
 
-        const token = localStorage.getItem('accessToken');
+        let token = localStorage.getItem('accessToken');
         if (!token) return null;
+        if (isJwtExpired(token)) {
+            try {
+                const fresh = await ensureFreshAccessToken();
+                if (fresh) token = fresh;
+            } catch {
+                return null;
+            }
+        }
 
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005';
         const isSecure = apiUrl.startsWith('https') || window.location.protocol === 'https:';
@@ -48,7 +60,15 @@ export function UserPresenceProvider({ children }: { children: React.ReactNode }
     }, []);
 
     const pathname = usePathname();
-    const socketUrl = useMemo(() => getSocketUrl(), [getSocketUrl, pathname]);
+    useEffect(() => {
+        let active = true;
+        computeSocketUrl().then((url) => {
+            if (active) setSocketUrl(url);
+        });
+        return () => {
+            active = false;
+        };
+    }, [computeSocketUrl, pathname]);
 
     const websocketOptions = useMemo(() => ({
         shouldReconnect: () => {
@@ -59,6 +79,21 @@ export function UserPresenceProvider({ children }: { children: React.ReactNode }
         reconnectAttempts: 10,
         reconnectInterval: 3000,
         share: true,
+        onClose: async () => {
+            if (typeof window === 'undefined') return;
+            const token = localStorage.getItem('accessToken');
+            if (!token || !isJwtExpired(token)) return;
+            if (refreshAttemptRef.current >= 2) return;
+            refreshAttemptRef.current += 1;
+            try {
+                const fresh = await ensureFreshAccessToken();
+                if (!fresh) return;
+                const url = await computeSocketUrl();
+                setSocketUrl(url);
+            } catch {
+                return;
+            }
+        },
         onMessage: (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
@@ -83,7 +118,7 @@ export function UserPresenceProvider({ children }: { children: React.ReactNode }
                 console.error("[UserPresence] WS message parse error", err);
             }
         },
-    }), []);
+    }), [computeSocketUrl]);
 
     const { sendJsonMessage, readyState } = useWebSocket(socketUrl, websocketOptions);
 

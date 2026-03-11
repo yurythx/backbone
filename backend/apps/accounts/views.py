@@ -268,6 +268,9 @@ class UserViewSet(viewsets.ModelViewSet):
     def me(self, request):
         user = request.user
         if request.method == 'GET':
+            company = getattr(request, "company", None) or getattr(user, "company", None)
+            if company:
+                AccountService.ensure_default_roles(company)
             serializer = self.get_serializer(user)
             return Response(serializer.data)
 
@@ -347,7 +350,13 @@ class RoleViewSet(viewsets.ModelViewSet):
         return Role.objects.filter(company=company).order_by('name')
 
     def perform_create(self, serializer):
-        serializer.save(company=self._get_company())
+        from django.db import IntegrityError
+        from rest_framework.exceptions import ValidationError
+
+        try:
+            serializer.save(company=self._get_company())
+        except IntegrityError:
+            raise ValidationError({"detail": "Já existe um papel com esse nome nesta empresa."})
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()

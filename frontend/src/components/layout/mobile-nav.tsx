@@ -11,24 +11,28 @@ import { cn } from "@/lib/utils"
 import { useModules } from "@/hooks/use-modules"
 import { useTheme } from "@/components/theme-provider"
 import { useAuth } from "@/hooks/use-auth"
+import { usePermission } from "@/hooks/use-permission"
 import { api } from "@/lib/axios"
 import Image from "next/image"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 interface SidebarItem {
     title: string
     href: string
     icon: React.ComponentType<{ className?: string }>
     module?: string
+    permission?: string
+    requireSuperuser?: boolean
 }
 
 const navItems: SidebarItem[] = [
-    { title: "Painel Admin", href: "/admin", icon: LayoutDashboard },
+    { title: "Painel Admin", href: "/admin", icon: LayoutDashboard, permission: "admin.view_dashboard" },
     { title: "Mensagens", href: "/messenger", icon: MessageSquare, module: "messenger" },
     { title: "Páginas", href: "/cms", icon: ShieldCheck, module: "pages" },
     { title: "Artigos", href: "/artigos", icon: FileText, module: "articles" },
     { title: "Financeiro", href: "/finance", icon: DollarSign, module: "finance" },
     { title: "Agenda", href: "/calendar", icon: Calendar, module: "calendar" },
-    { title: "Módulos", href: "/admin/modules", icon: Box },
+    { title: "Módulos", href: "/admin/modules", icon: Box, permission: "admin.settings_manage" },
     { title: "Configurações", href: "/settings", icon: Settings },
 ]
 
@@ -40,6 +44,7 @@ export function MobileNav() {
     const { isModuleActive } = useModules()
     const { logo, companyName } = useTheme()
     const { user } = useAuth()
+    const { hasPermission } = usePermission()
 
     const handleLogout = async () => {
         setIsLoggingOut(true)
@@ -67,10 +72,10 @@ export function MobileNav() {
 
     // Prevent body scroll when menu is open
     React.useEffect(() => {
-        if (isOpen) {
-            document.body.style.overflow = 'hidden'
-        } else {
-            document.body.style.overflow = 'unset'
+        if (typeof window === "undefined") return
+        if (isOpen) document.body.style.overflow = "hidden"
+        return () => {
+            document.body.style.overflow = ""
         }
     }, [isOpen])
 
@@ -107,9 +112,9 @@ export function MobileNav() {
                             animate={{ x: 0 }}
                             exit={{ x: "-100%" }}
                             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                            className="fixed inset-y-0 left-0 w-3/4 max-w-sm bg-background border-r z-[101] shadow-2xl flex flex-col p-6"
+                            className="fixed inset-y-0 left-0 w-[85vw] max-w-sm bg-background border-r z-[101] shadow-2xl flex flex-col p-4 pb-[env(safe-area-inset-bottom)]"
                         >
-                            <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center relative">
                                         {logo ? (
@@ -129,9 +134,15 @@ export function MobileNav() {
                                 </Button>
                             </div>
 
-                            <nav className="flex-1 space-y-2" role="navigation" aria-label="Navegação móvel">
+                            <nav className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-2 -mr-2" role="navigation" aria-label="Navegação móvel">
                                 {navItems.map((item) => {
                                     if (item.module && !isModuleActive(item.module)) {
+                                        return null
+                                    }
+                                    if (item.requireSuperuser && !user?.is_superuser) {
+                                        return null
+                                    }
+                                    if (item.permission && !hasPermission(item.permission)) {
                                         return null
                                     }
 
@@ -144,7 +155,7 @@ export function MobileNav() {
                                             href={item.href}
                                             aria-current={isActive ? "page" : undefined}
                                             className={cn(
-                                                "flex items-center gap-4 px-4 py-3 rounded-xl text-lg font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                                                "flex items-center gap-3 px-4 py-2.5 rounded-xl text-base font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                                                 isActive
                                                     ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
                                                     : "text-muted-foreground hover:bg-muted"
@@ -170,6 +181,11 @@ export function MobileNav() {
                                         </p>
                                         <p className="text-xs text-muted-foreground truncate">{user?.email || ''}</p>
                                     </div>
+                                </div>
+
+                                <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border">
+                                    <span className="text-sm font-semibold">Tema</span>
+                                    <ThemeToggle />
                                 </div>
 
                                 <Button

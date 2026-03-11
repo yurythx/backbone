@@ -131,7 +131,7 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Validade</Label>
                                             <Input defaultValue="12/28" className="bg-background/90 text-center" readOnly />

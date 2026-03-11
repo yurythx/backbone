@@ -314,7 +314,7 @@ export default function LDAPSettingsPage() {
                         <h3 className="font-semibold text-lg">Mapeamento de Atributos</h3>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium mb-2">
                                 Username Attribute

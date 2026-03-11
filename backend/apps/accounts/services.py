@@ -1,11 +1,13 @@
-from django.contrib.auth import get_user_model
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import force_bytes, force_str
-from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+
 from shared_kernel.email import send_notification_email
-from .models import Role, Invitation
+
+from .models import Invitation, Role
 
 User = get_user_model()
 
@@ -19,9 +21,9 @@ class AccountService:
             user = User.all_objects.get(email=email)
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
-            
+
             reset_url = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
-            
+
             send_notification_email(
                 subject="Recuperação de Senha - Backbone",
                 recipient_list=[email],
@@ -43,7 +45,7 @@ class AccountService:
         try:
             user_id = force_str(urlsafe_base64_decode(uid))
             user = User.all_objects.get(pk=user_id)
-            
+
             if default_token_generator.check_token(user, token):
                 user.set_password(new_password)
                 user.save()
@@ -63,9 +65,9 @@ class AccountService:
             email=email,
             role=role
         )
-        
+
         invite_url = f"{settings.FRONTEND_URL}/accept-invite?token={invitation.token}"
-        
+
         send_notification_email(
             subject=f"Convite para {company.name} - Backbone",
             recipient_list=[email],
@@ -128,9 +130,10 @@ class AccountService:
         Garante que os papéis padrão existam para a empresa.
         Útil para inicializar novas empresas ou migrar as existentes.
         """
-        from .permissions import DEFAULT_ROLES
         from django.db import IntegrityError, transaction
-        
+
+        from .permissions import DEFAULT_ROLES
+
         roles_processed = []
         for role_name, config in DEFAULT_ROLES.items():
             try:
@@ -144,19 +147,34 @@ class AccountService:
                             'is_system_role': True
                         }
                     )
-                    if not created and role.is_system_role:
-                        role.permissions = config['permissions']
-                        role.description = config['description']
-                        role.save(update_fields=['permissions', 'description'])
+                    if not created:
+                        existing = list(role.permissions or [])
+                        desired = list(config['permissions'] or [])
+                        merged = list(dict.fromkeys(desired + existing))
+                        updates = []
+                        if role.description != config['description']:
+                            role.description = config['description']
+                            updates.append('description')
+                        if merged != existing:
+                            role.permissions = merged
+                            updates.append('permissions')
+                        if not role.is_system_role:
+                            role.is_system_role = True
+                            updates.append('is_system_role')
+                        if updates:
+                            role.save(update_fields=updates)
             except IntegrityError:
                 # Race condition: someone created it between get and create.
                 # Recover by fetching and updating using the global manager.
                 role = Role.all_objects.get(company=company, name=role_name)
-                if role.is_system_role:
-                    role.permissions = config['permissions']
-                    role.description = config['description']
-                    role.save(update_fields=['permissions', 'description'])
-            
+                existing = list(role.permissions or [])
+                desired = list(config['permissions'] or [])
+                merged = list(dict.fromkeys(desired + existing))
+                role.description = config['description']
+                role.permissions = merged
+                role.is_system_role = True
+                role.save(update_fields=['permissions', 'description', 'is_system_role'])
+
             roles_processed.append(role_name)
-        
+
         return roles_processed

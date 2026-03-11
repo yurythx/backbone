@@ -25,7 +25,6 @@ import { MobileNav } from "@/components/layout/mobile-nav"
 import { NotificationBell } from "@/components/layout/notification-bell"
 import { usePresence } from "@/hooks/use-presence"
 import { useModules } from "@/hooks/use-modules"
-import { GlobalSearch } from "@/components/layout/global-search"
 import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
 
@@ -89,9 +88,9 @@ export function Header() {
   }
 
   return (
-    <header className="h-20 sticky top-0 z-50 px-8 flex items-center justify-between border-b glass shadow-sm transition-all duration-500" role="banner" aria-label="Cabeçalho">
-      <div className="flex items-center gap-12">
-        <SlideUp className="flex items-center gap-12">
+    <header className="h-20 sticky top-0 z-50 px-4 sm:px-6 lg:px-8 flex items-center justify-between border-b glass shadow-sm transition-all duration-500" role="banner" aria-label="Cabeçalho">
+      <div className="flex items-center gap-4 sm:gap-12 min-w-0">
+        <SlideUp className="flex items-center gap-4 sm:gap-12 min-w-0">
           <Link href="/" className="flex items-center gap-3 group" aria-label="Ir para a página inicial">
             {me ? (
               <div className="h-10 w-10 relative flex items-center justify-center overflow-hidden rounded-xl bg-primary/10 shadow-inner">
@@ -145,16 +144,11 @@ export function Header() {
             </SlideUp>
           ))}
         </nav>
-        {/* Global Search CMD+K */}
-        {me && (
-          <div className="hidden lg:block ml-4">
-            <GlobalSearch />
-          </div>
-        )}
+        
       </div>
 
 
-      <FadeIn delay={0.4} className="flex items-center gap-4">
+      <FadeIn delay={0.4} className="flex items-center gap-2 sm:gap-4">
         {/* Mobile Navigation Trigger */}
         {me && (
           <div className="md:hidden">
@@ -163,7 +157,9 @@ export function Header() {
         )}
 
         {/* Theme Toggle Premium */}
-        <ThemeToggle />
+        <div className="hidden sm:block">
+          <ThemeToggle />
+        </div>
 
         {/* Quick Action Menu */}
         {me && (
@@ -179,7 +175,7 @@ export function Header() {
                 Atalhos de Criação
               </DropdownMenuLabel>
               <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
-                <Link href="/artigos?action=create" className="flex items-center gap-3">
+                <Link href="/artigos/novo" className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
                     <FileText className="h-4 w-4 text-orange-500" aria-hidden="true" />
                   </div>

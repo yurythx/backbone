@@ -1,8 +1,9 @@
+from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
+
+from apps.accounts.models import Invitation, Role, UserThemePreference
 from apps.core.models import Company
-from apps.accounts.models import Role, Invitation, UserThemePreference
 
 User = get_user_model()
 
@@ -10,7 +11,7 @@ class AccountsAPITest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Test Corp", slug="test-corp")
         # Set generous limits for testing
-        from apps.licensing.models import License, Plan, Feature, PlanFeature
+        from apps.licensing.models import Feature, License, Plan, PlanFeature
         plan = Plan.objects.create(name="Enterprise")
         feat = Feature.objects.create(code="max_users", name="Max Users")
         PlanFeature.objects.create(plan=plan, feature=feat, value="100")
@@ -50,7 +51,7 @@ class AccountsAPITest(APITestCase):
 
     def test_role_crud_and_protect_system_role(self):
         # Create role
-        res = self.client.post('/api/accounts/roles/', {"name": "Editor", "permissions": ["articles.article_manage"]}, format='json')
+        res = self.client.post('/api/accounts/roles/', {"name": "Editor Custom", "permissions": ["articles.article_manage"]}, format='json')
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         role_id = res.data['id']
         # Delete allowed
@@ -69,7 +70,7 @@ class AccountsAPITest(APITestCase):
         if res.status_code != status.HTTP_201_CREATED:
             print(f"Invitation Error: {res.data}")
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        
+
         inv = Invitation.objects.latest('created_at')
         self.assertEqual(inv.email, "new@test.corp")
         # Accept invitation via service endpoint
@@ -86,7 +87,7 @@ class AccountsAPITest(APITestCase):
 
     def test_theme_preference_update(self):
         # Ensure preference object exists
-        pref, _ = UserThemePreference.objects.get_or_create(user=self.user, defaults={
+        _, _ = UserThemePreference.objects.get_or_create(user=self.user, defaults={
             "theme_palette": "blue",
             "use_tenant_theme": True,
             "dark_mode_preference": "system"
@@ -105,6 +106,7 @@ class AccountsAPITest(APITestCase):
 
         # Create a temporary image file for avatar upload
         import tempfile
+
         from PIL import Image
 
         image = Image.new('RGB', (100, 100))
@@ -118,23 +120,23 @@ class AccountsAPITest(APITestCase):
             'role': role.id,
             'avatar': tmp_file
         }
-        
+
         # Perform PATCH request
         # Note: We use the user's ID in the URL
         url = f'/api/accounts/users/{self.user.id}/'
         res = self.client.patch(url, data, format='multipart')
-        
+
         if res.status_code != status.HTTP_200_OK:
             print(f"User Update Error: {res.data}")
-            
+
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        
+
         # Verify database update
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, 'Updated Name')
         self.assertEqual(self.user.role.id, role.id)
         self.assertTrue(bool(self.user.avatar)) # Check if avatar exists
-        
+
         tmp_file.close()
 
     def test_user_update_password(self):
@@ -144,7 +146,7 @@ class AccountsAPITest(APITestCase):
         }
         res = self.client.patch(url, data, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        
+
         # Verify login with new password
         self.client.logout()
         login_res = self.client.post('/api/accounts/token/', {

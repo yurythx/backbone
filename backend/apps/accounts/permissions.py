@@ -67,6 +67,16 @@ DEFAULT_ROLES = {
             'messenger.view',
             'finance.view_financial',
         ]
+    },
+    'Colaborador': {
+        'description': 'Acesso básico para colaboradores (inclui Financeiro pessoal).',
+        'permissions': [
+            'articles.article_view',
+            'pages.page_view',
+            'media.media_view',
+            'messenger.view',
+            'finance.view_financial',
+        ]
     }
 }
 
