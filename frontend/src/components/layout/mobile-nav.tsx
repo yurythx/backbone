@@ -155,10 +155,10 @@ export function MobileNav() {
                                             href={item.href}
                                             aria-current={isActive ? "page" : undefined}
                                             className={cn(
-                                                "flex items-center gap-3 px-4 py-2.5 rounded-xl text-base font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                                                "flex items-center gap-3 px-4 py-3 rounded-xl text-base font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                                                 isActive
                                                     ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                                                    : "text-muted-foreground hover:bg-muted"
+                                                    : "text-foreground bg-muted/30 hover:bg-muted/60 border border-border/60"
                                             )}
                                         >
                                             <Icon className="h-5 w-5" aria-hidden="true" />

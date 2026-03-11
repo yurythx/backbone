@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { isJwtExpired } from './jwt';
 
 const isServer = typeof window === 'undefined';
 const API_URL = isServer
@@ -42,12 +43,44 @@ const processQueue = (error: unknown, token: string | null = null) => {
 };
 
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null;
     const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG;
 
-    if (token) {
+    const isAuthEndpoint = Boolean(config.url?.includes('/api/accounts/token/'));
+    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
+
+    if (!isAuthEndpoint && token && isJwtExpired(token) && refreshToken) {
+      if (isRefreshing) {
+        const newToken = await new Promise<string>((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        });
+        config.headers.Authorization = `Bearer ${newToken}`;
+      } else {
+        isRefreshing = true;
+        try {
+          const response = await axios.post(`${API_URL}/api/accounts/token/refresh/`, {
+            refresh: refreshToken,
+          }, {
+            headers: companySlug ? { 'X-Company-Slug': companySlug } : {}
+          });
+
+          const { access, refresh: newRefresh } = response.data as { access: string; refresh?: string };
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('accessToken', access);
+            if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
+          }
+          api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+          processQueue(null, access);
+          config.headers.Authorization = `Bearer ${access}`;
+        } catch (err) {
+          processQueue(err, null);
+        } finally {
+          isRefreshing = false;
+        }
+      }
+    } else if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 

@@ -201,6 +201,21 @@
   border-color: var(--primary);
 }
 
+@media (max-width: 640px) {
+  .glass {
+    background: var(--background);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid var(--border);
+  }
+
+  .glass-card {
+    background: var(--card);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

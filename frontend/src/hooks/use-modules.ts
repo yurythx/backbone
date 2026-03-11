@@ -3,8 +3,12 @@ import { api } from '@/lib/axios'
 import { TenantModule } from '@/types'
 
 export function useModules() {
+    const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
+    const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
+    const effectiveCompany = companySlug || envCompany || 'unknown'
+
     const { data: rawData, isLoading, error } = useQuery<TenantModule[] | { results: TenantModule[] }>({
-        queryKey: ['my-modules'],
+        queryKey: ['my-modules', effectiveCompany],
         queryFn: async () => {
             const res = await api.get<TenantModule[] | { results: TenantModule[] }>('/api/modules/my-modules/')
             return res.data
@@ -24,7 +28,9 @@ export function useModules() {
      * Helper to check if a module is active by its code
      */
     const isModuleActive = (moduleCode: string): boolean => {
-        if (!modules || modules.length === 0) return false
+        if (isLoading) return true
+        if (error) return true
+        if (!modules || modules.length === 0) return true
 
         return modules.some((tm: TenantModule) =>
             tm && tm.is_active === true && tm.module_code === moduleCode

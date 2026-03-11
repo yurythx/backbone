@@ -45,6 +45,29 @@ interface RoleFormProps {
     onCancel: () => void
 }
 
+function normalizeStringArray(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value.filter((v): v is string => typeof v === "string")
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim()
+        if (!trimmed) return []
+        if (trimmed.startsWith("[")) {
+            try {
+                const parsed = JSON.parse(trimmed)
+                if (Array.isArray(parsed)) {
+                    return parsed.filter((v): v is string => typeof v === "string")
+                }
+            } catch { }
+        }
+        return trimmed
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+    }
+    return []
+}
+
 export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
     const queryClient = useQueryClient()
     const { data: availablePermissions = [], isLoading: isLoadingPermissions } = useQuery<Permission[]>({
@@ -60,7 +83,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
         defaultValues: {
             name: initialData?.name || "",
             description: initialData?.description || "",
-            permissions: initialData?.permissions || [],
+            permissions: normalizeStringArray(initialData?.permissions),
         },
     })
 
@@ -157,7 +180,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                                 name="permissions"
                                 render={({ field }) => {
                                     const togglePermission = (permissionId: string) => {
-                                        const current = field.value || []
+                                        const current = normalizeStringArray(field.value)
                                         const next = current.includes(permissionId)
                                             ? current.filter((id: string) => id !== permissionId)
                                             : [...current, permissionId]

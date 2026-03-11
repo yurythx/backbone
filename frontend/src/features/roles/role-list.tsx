@@ -26,6 +26,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Role } from "@/types"
 import { usePermission } from "@/hooks/use-permission"
 
+type RolesResponse = Role[] | { results?: Role[] }
+
 export function RoleList() {
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [editingRole, setEditingRole] = useState<Role | null>(null)
@@ -37,8 +39,10 @@ export function RoleList() {
     const { data: roles, isLoading } = useQuery<Role[]>({
         queryKey: ['roles'],
         queryFn: async ({ signal }) => {
-            const res = await api.get<Role[]>('/api/accounts/roles/', { signal })
-            return res.data
+            const res = await api.get<RolesResponse>('/api/accounts/roles/', { signal })
+            const payload = res.data as RolesResponse
+            if (Array.isArray(payload)) return payload
+            return Array.isArray(payload?.results) ? payload.results : []
         }
     })
 
