@@ -166,16 +166,24 @@ simulate_loading "INFRA: DB & REDIS" 4
 
 # Aguarda DB ficar saudável
 echo -n "   Aguardando DB..."
+DB_READY=0
 for i in {1..20}; do
     DB_USER_CHECK="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
     DB_NAME_CHECK="$(awk -F= '/^POSTGRES_DB=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
     if $DC exec -T db pg_isready -U "$DB_USER_CHECK" -d "$DB_NAME_CHECK" >/dev/null 2>&1; then
         echo -e "${NEON_GREEN} [READY]${RESET}"
+        DB_READY=1
         break
     fi
     sleep 1
     echo -n "."
 done
+
+if [[ "$DB_READY" -ne 1 ]]; then
+    echo -e "\n${NEON_GREEN}   [ERROR] DB não ficou pronto a tempo. Verifique logs do container db.${RESET}"
+    $DC logs db --tail=200 || true
+    exit 1
+fi
 
 # Garante usuário e banco consistentes (evita erros por whitespace/mismatch em .env)
 DB_USER_CHECK="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
@@ -193,8 +201,27 @@ if [[ "$DB_USER_CHECK" =~ [[:space:]] || "$DB_NAME_CHECK" =~ [[:space:]] ]]; the
 fi
 
 DB_PASS_ESCAPED="${DB_PASS_CHECK//\'/\'\'}"
-$DC exec -T db sh -lc "psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER_CHECK}'\" | grep -q 1 || psql -U postgres -d postgres -c \"CREATE ROLE \\\"${DB_USER_CHECK}\\\" LOGIN PASSWORD '${DB_PASS_ESCAPED}';\""
-$DC exec -T db sh -lc "psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME_CHECK}'\" | grep -q 1 || psql -U postgres -d postgres -c \"CREATE DATABASE \\\"${DB_NAME_CHECK}\\\" OWNER \\\"${DB_USER_CHECK}\\\";\""
+$DC exec -T db sh -lc "
+set -e
+
+ADMIN_DB='template1'
+ADMIN_USER='${DB_USER_CHECK}'
+
+if ! psql -U \"\$ADMIN_USER\" -d \"\$ADMIN_DB\" -c 'SELECT 1' >/dev/null 2>&1; then
+  if psql -U postgres -d \"\$ADMIN_DB\" -c 'SELECT 1' >/dev/null 2>&1; then
+    ADMIN_USER='postgres'
+  else
+    echo 'Não foi possível autenticar no Postgres. Verifique POSTGRES_USER/POSTGRES_PASSWORD e se o volume do db não foi inicializado com outro usuário.'
+    exit 1
+  fi
+fi
+
+psql -U \"\$ADMIN_USER\" -d \"\$ADMIN_DB\" -tc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER_CHECK}'\" | grep -q 1 || \
+  psql -U \"\$ADMIN_USER\" -d \"\$ADMIN_DB\" -c \"CREATE ROLE \\\"${DB_USER_CHECK}\\\" LOGIN PASSWORD '${DB_PASS_ESCAPED}';\"
+
+psql -U \"\$ADMIN_USER\" -d \"\$ADMIN_DB\" -tc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME_CHECK}'\" | grep -q 1 || \
+  psql -U \"\$ADMIN_USER\" -d \"\$ADMIN_DB\" -c \"CREATE DATABASE \\\"${DB_NAME_CHECK}\\\" OWNER \\\"${DB_USER_CHECK}\\\";\"
+"
 
 # 3.2 Migrações (ANTES de subir o backend principal)
 echo -e "${WHITE}:: FASE 4: SINCRONIZAÇÃO DE SCHEMA${RESET}"
