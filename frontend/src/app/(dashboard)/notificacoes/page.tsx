@@ -1,27 +1,39 @@
 "use client"
 
 import { useNotifications, Notification } from "@/hooks/use-notifications-v2"
-import { SlideUp, FadeIn } from "@/components/ui/motion"
 import { Button } from "@/components/ui/button"
 import { Bell, MessageSquare, ShieldCheck, CheckCircle2, Calendar, ChevronRight, Search } from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
+import { useDebounce } from "@/hooks/use-debounce"
 
 export default function NotificationsPage() {
     const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications({ showToasts: false })
     const router = useRouter()
     const [filter, setFilter] = useState<'all' | 'message' | 'system' | 'approval'>('all')
     const [search, setSearch] = useState('')
+    const debouncedSearch = useDebounce(search, 200)
+
+    const formatDateTime = (value: string) => {
+        const dt = new Date(value)
+        if (Number.isNaN(dt.getTime())) return ""
+        return new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        }).format(dt)
+    }
 
     const safeNotifications = Array.isArray(notifications) ? notifications : []
     const filteredNotifications = safeNotifications.filter(n => {
         if (!n) return false
         const matchesType = filter === 'all' || n.notification_type === filter
-        const matchesSearch = (n.title || '').toLowerCase().includes(search.toLowerCase()) ||
-            (n.message || '').toLowerCase().includes(search.toLowerCase())
+        const s = debouncedSearch.toLowerCase()
+        const matchesSearch = (n.title || '').toLowerCase().includes(s) ||
+            (n.message || '').toLowerCase().includes(s)
         return matchesType && matchesSearch
     })
 
@@ -80,7 +92,7 @@ export default function NotificationsPage() {
 
     return (
         <div className="max-w-5xl mx-auto py-8 space-y-8">
-            <SlideUp>
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="space-y-1">
                         <h1 className="text-4xl font-black tracking-tight flex items-center gap-4">
@@ -101,9 +113,9 @@ export default function NotificationsPage() {
                         Marcar todas como lidas
                     </Button>
                 </div>
-            </SlideUp>
+            </div>
 
-            <SlideUp delay={0.1}>
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className="relative flex-1 group">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
@@ -128,9 +140,9 @@ export default function NotificationsPage() {
                         ))}
                     </div>
                 </div>
-            </SlideUp>
+            </div>
 
-            <FadeIn delay={0.2}>
+            <div className="animate-in fade-in duration-300">
                 <div className="space-y-4">
                     {isLoading ? (
                         Array.from({ length: 5 }).map((_, i) => (
@@ -167,7 +179,7 @@ export default function NotificationsPage() {
                                             </div>
                                             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter text-muted-foreground opacity-50">
                                                 <Calendar className="h-3 w-3" />
-                                                {format(new Date(n.created_at), "dd MMM, HH:mm", { locale: ptBR })}
+                                                {formatDateTime(n.created_at)}
                                             </div>
                                         </div>
                                         <p className={`text-sm leading-relaxed ${n.is_read ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
@@ -212,7 +224,7 @@ export default function NotificationsPage() {
                         </div>
                     )}
                 </div>
-            </FadeIn>
+            </div>
         </div>
     )
 }

@@ -3,16 +3,60 @@
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Users, FileText, MessageSquare, Zap, Layout, Code } from "lucide-react"
-import { DjangoHero } from "@/components/dashboard/django-hero"
-import { AnalyticsChart } from "@/components/dashboard/analytics-chart"
 import { H2, P } from "@/components/ui/typography"
 import { SlideUp, FadeIn } from "@/components/ui/motion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { OnboardingWizard } from "@/features/onboarding/onboarding-wizard"
 import { Company } from "@/types"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+
+const DjangoHero = dynamic(
+  () => import("@/components/dashboard/django-hero").then((m) => m.DjangoHero),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="-mx-8 -mt-8">
+        <div className="h-[400px] w-full bg-muted/20 animate-pulse flex flex-col justify-center px-12 space-y-6 border-b">
+          <div className="space-y-3">
+            <Skeleton className="h-14 w-[60%] rounded-2xl" />
+            <Skeleton className="h-6 w-[40%] rounded-xl" />
+          </div>
+          <div className="flex gap-4 pt-4">
+            <Skeleton className="h-12 w-40 rounded-full" />
+            <Skeleton className="h-12 w-40 rounded-full" />
+          </div>
+        </div>
+      </div>
+    ),
+  }
+)
+
+const AnalyticsChart = dynamic(
+  () => import("@/components/dashboard/analytics-chart").then((m) => m.AnalyticsChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[400px] rounded-2xl border border-primary/5 bg-card/30 p-8 flex flex-col space-y-6" role="status" aria-live="polite" aria-label="Carregando analytics">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-6 w-48" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-24" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+        </div>
+        <Skeleton className="flex-1 w-full rounded-xl" />
+      </div>
+    ),
+  }
+)
+
+const OnboardingWizard = dynamic(
+  () => import("@/features/onboarding/onboarding-wizard").then((m) => m.OnboardingWizard),
+  { ssr: false }
+)
 
 export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -31,7 +75,36 @@ export default function DashboardPage() {
     }
   })
 
-  if (statsLoading || companyLoading) return null
+  if (statsLoading || companyLoading) {
+    return (
+      <div className="space-y-12 pb-20" role="status" aria-live="polite" aria-label="Carregando dashboard">
+        <div className="-mx-8 -mt-8">
+          <div className="h-[400px] w-full bg-muted/20 animate-pulse flex flex-col justify-center px-12 space-y-6 border-b">
+            <div className="space-y-3">
+              <Skeleton className="h-14 w-[60%] rounded-2xl" />
+              <Skeleton className="h-6 w-[40%] rounded-xl" />
+            </div>
+            <div className="flex gap-4 pt-4">
+              <Skeleton className="h-12 w-40 rounded-full" />
+              <Skeleton className="h-12 w-40 rounded-full" />
+            </div>
+          </div>
+        </div>
+
+        <div className="container mx-auto px-6 space-y-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-primary/5 bg-card/30 p-5 space-y-3">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-3 w-40" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-12 pb-20">

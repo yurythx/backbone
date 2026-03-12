@@ -1,14 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { CompanyList } from "@/features/admin/companies/company-list"
-import { CompanyDialog } from "@/features/admin/companies/company-dialog"
 import { Button } from "@/components/ui/button"
 import { Plus, Building2 } from "lucide-react"
 import { Company } from "@/types"
 import { api } from "@/lib/axios"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import dynamic from "next/dynamic"
+import { Skeleton, TableSkeleton } from "@/components/ui/skeleton"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -19,6 +19,26 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+
+const CompanyList = dynamic(
+    () => import("@/features/admin/companies/company-list").then((m) => m.CompanyList),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando empresas">
+                <Skeleton className="h-10 w-72 rounded-xl" />
+                <div className="rounded-2xl border border-primary/5 bg-card/30 p-4 shadow-sm">
+                    <TableSkeleton rows={7} columns={5} />
+                </div>
+            </div>
+        ),
+    }
+)
+
+const CompanyDialog = dynamic(
+    () => import("@/features/admin/companies/company-dialog").then((m) => m.CompanyDialog),
+    { ssr: false }
+)
 
 export default function CompaniesPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)

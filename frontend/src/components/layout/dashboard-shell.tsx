@@ -1,13 +1,20 @@
 "use client"
 
-import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { cn } from "@/lib/utils"
 import { usePathname } from "next/navigation"
-import { SetupAlert } from "@/components/layout/setup-alert"
+import dynamic from "next/dynamic"
 
 
 import { useUIStore } from "@/hooks/use-ui-store"
+
+const Sidebar = dynamic(() => import("@/components/layout/sidebar").then((m) => m.Sidebar), {
+  ssr: false,
+})
+
+const SetupAlert = dynamic(() => import("@/components/layout/setup-alert").then((m) => m.SetupAlert), {
+  ssr: false,
+})
 
 export function DashboardShell({
   children,

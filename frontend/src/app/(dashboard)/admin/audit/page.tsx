@@ -15,9 +15,6 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { History, Search, Filter, Activity, Database, Info } from "lucide-react"
 import { useState } from "react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
-import { SlideUp, FadeIn } from "@/components/ui/motion"
 import {
     Tooltip,
     TooltipContent,
@@ -48,6 +45,19 @@ export default function AuditPage() {
         created_at: string
         details?: unknown
     } | null>(null)
+
+    const formatDateTime = (value: string) => {
+        const dt = new Date(value)
+        if (Number.isNaN(dt.getTime())) return ""
+        return new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        }).format(dt)
+    }
 
     const { data: logs, isLoading } = useQuery({
         queryKey: ['audit-logs', searchTerm, actionFilter],
@@ -80,7 +90,7 @@ export default function AuditPage() {
     return (
         <Protected requiredPermissions={['admin.view_dashboard']}>
         <div className="max-w-6xl mx-auto py-8 space-y-8">
-            <SlideUp>
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1">
                         <h1 className="text-4xl font-black tracking-tight flex items-center gap-4 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
@@ -92,9 +102,9 @@ export default function AuditPage() {
                         <p className="text-muted-foreground text-lg ml-1">Rastreie todas as atividades críticas realizadas no sistema.</p>
                     </div>
                 </div>
-            </SlideUp>
+            </div>
 
-            <SlideUp delay={0.1}>
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 relative group">
                         <div className="absolute inset-0 bg-primary/5 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
@@ -123,9 +133,9 @@ export default function AuditPage() {
                         </select>
                     </div>
                 </div>
-            </SlideUp>
+            </div>
 
-            <FadeIn delay={0.3}>
+            <div className="animate-in fade-in duration-300">
                 <div className="rounded-[2.5rem] border border-border/50 bg-card/30 backdrop-blur-xl overflow-hidden shadow-2xl relative">
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
 
@@ -171,7 +181,7 @@ export default function AuditPage() {
                                             <div className="flex items-center gap-2">
                                                 {getActionBadge(log.action)}
                                                 <span className="text-xs font-bold text-muted-foreground truncate">
-                                                    {format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                                                    {formatDateTime(log.created_at)}
                                                 </span>
                                             </div>
                                             <div className="font-bold truncate">
@@ -274,7 +284,7 @@ export default function AuditPage() {
                                         {log.ip_address || "Internal"}
                                     </TableCell>
                                     <TableCell className="text-xs font-bold">
-                                        {format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                                        {formatDateTime(log.created_at)}
                                     </TableCell>
                                     <TableCell className="text-right pr-4 sm:pr-10">
                                             <TooltipProvider>
@@ -313,7 +323,7 @@ export default function AuditPage() {
                     )}
                     </div>
                 </div>
-            </FadeIn>
+            </div>
 
             <Dialog
                 open={isDetailsOpen}

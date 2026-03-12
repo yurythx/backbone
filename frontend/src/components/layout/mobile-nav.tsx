@@ -15,6 +15,7 @@ import { usePermission } from "@/hooks/use-permission"
 import { api } from "@/lib/axios"
 import Image from "next/image"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { useMobileNavStore } from "@/hooks/use-mobile-nav-store"
 
 interface SidebarItem {
     title: string
@@ -39,6 +40,7 @@ const navItems: SidebarItem[] = [
 export function MobileNav() {
     const [isOpen, setIsOpen] = React.useState(false)
     const [isLoggingOut, setIsLoggingOut] = React.useState(false)
+    const setMobileNavOpen = useMobileNavStore((s) => s.setMobileNavOpen)
     const pathname = usePathname()
     const router = useRouter()
     const { isModuleActive } = useModules()
@@ -49,6 +51,7 @@ export function MobileNav() {
     const handleLogout = async () => {
         setIsLoggingOut(true)
         setIsOpen(false)
+        setMobileNavOpen(false)
         try {
             const refreshToken = localStorage.getItem('refreshToken')
             if (refreshToken) {
@@ -68,14 +71,17 @@ export function MobileNav() {
     // Close menu when route changes
     React.useEffect(() => {
         setIsOpen(false)
+        setMobileNavOpen(false)
     }, [pathname])
 
     // Prevent body scroll when menu is open
     React.useEffect(() => {
         if (typeof window === "undefined") return
         if (isOpen) document.body.style.overflow = "hidden"
+        setMobileNavOpen(isOpen)
         return () => {
             document.body.style.overflow = ""
+            setMobileNavOpen(false)
         }
     }, [isOpen])
 

@@ -3,8 +3,6 @@
 import { useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { UserList } from "@/features/users/user-list"
-import { UserForm } from "@/features/users/user-form"
 import { User } from "@/types"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatsCard } from "@/components/ui/stats-card"
@@ -14,6 +12,7 @@ import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import dynamic from "next/dynamic"
 import { Protected } from "@/components/auth/protected"
+import { Skeleton, TableSkeleton } from "@/components/ui/skeleton"
 
 const AnalyticsChart = dynamic(() =>
   import("../../../components/dashboard/analytics-chart").then(mod => mod.AnalyticsChart),
@@ -23,6 +22,37 @@ const AnalyticsChart = dynamic(() =>
 const ActivityTimeline = dynamic(() =>
   import("../../../components/dashboard/activity-timeline").then(mod => mod.ActivityTimeline),
   { ssr: false }
+)
+
+const UserList = dynamic(
+  () => import("@/features/users/user-list").then((m) => m.UserList),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando usuários">
+        <Skeleton className="h-10 w-72 rounded-xl" />
+        <div className="rounded-2xl border border-primary/5 bg-card/30 p-4 shadow-sm">
+          <TableSkeleton rows={7} columns={5} />
+        </div>
+      </div>
+    ),
+  }
+)
+
+const UserForm = dynamic(
+  () => import("@/features/users/user-form").then((m) => m.UserForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando formulário de usuário">
+        <Skeleton className="h-8 w-60 rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-40 rounded-xl" />
+      </div>
+    ),
+  }
 )
 
 function AdminPageContent() {

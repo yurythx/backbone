@@ -16,7 +16,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CreditCard, ShieldCheck, Loader2, CheckCircle2 } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 
@@ -78,15 +77,8 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
             }
         }}>
             <DialogContent className="sm:max-w-[450px] overflow-hidden glass-morphism border-0 shadow-2xl p-0">
-                <AnimatePresence mode="wait">
-                    {step === 'details' && (
-                        <motion.div
-                            key="details"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            className="p-6"
-                        >
+                {step === 'details' && (
+                        <div className="p-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <DialogHeader>
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -159,15 +151,12 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                                     Confirmar Assinatura
                                 </Button>
                             </DialogFooter>
-                        </motion.div>
+                        </div>
                     )}
 
                     {step === 'processing' && (
-                        <motion.div
-                            key="processing"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="p-12 flex flex-col items-center justify-center text-center space-y-6"
+                        <div
+                            className="p-12 flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in zoom-in duration-300"
                             role="status"
                             aria-live="polite"
                             aria-label="Processando pagamento"
@@ -182,16 +171,11 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                                 <h3 className="text-xl font-black uppercase tracking-tighter">Processando Pagamento</h3>
                                 <p className="text-sm text-muted-foreground">Validando dados do cartão e ativando sua licença...</p>
                             </div>
-                        </motion.div>
+                        </div>
                     )}
 
                     {step === 'success' && (
-                        <motion.div
-                            key="success"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="p-12 flex flex-col items-center justify-center text-center space-y-6"
-                        >
+                        <div className="p-12 flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in zoom-in duration-300">
                             <div className="h-20 w-20 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
                                 <CheckCircle2 className="h-12 w-12 text-green-500" aria-hidden="true" />
                             </div>
@@ -205,9 +189,8 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                             >
                                 Começar a Usar
                             </Button>
-                        </motion.div>
+                        </div>
                     )}
-                </AnimatePresence>
             </DialogContent>
         </Dialog>
     )

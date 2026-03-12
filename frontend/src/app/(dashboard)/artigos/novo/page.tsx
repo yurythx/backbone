@@ -1,34 +1,36 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/axios"
-import { ArticleForm } from "@/features/articles/article-form"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ModuleGuard } from "@/components/module-guard"
+import { Protected } from "@/components/auth/protected"
+
+const ArticleForm = dynamic(
+  () => import("@/features/articles/article-form").then((m) => m.ArticleForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-6" role="status" aria-live="polite" aria-label="Carregando editor de artigo">
+        <Skeleton className="h-10 w-72 rounded-2xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-[520px] w-full rounded-2xl" />
+      </div>
+    ),
+  }
+)
 
 export default function NovoArtigoPage() {
   const router = useRouter()
 
-  const { data: me, isLoading } = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      try {
-        const res = await api.get('/api/accounts/users/me/')
-        return res.data
-      } catch {
-        return null
-      }
-    },
-    retry: false
-  })
-
-  if (isLoading || !me) {
-    return <div className="flex items-center justify-center h-full">Carregando...</div>
-  }
-
   return (
-    <ArticleForm
-      onSuccess={() => router.push('/artigos')}
-      onCancel={() => router.push('/artigos')}
-    />
+    <Protected requiredPermissions={["articles.article_create"]}>
+      <ModuleGuard moduleCode="articles">
+        <ArticleForm
+          onSuccess={() => router.push('/artigos')}
+          onCancel={() => router.push('/artigos')}
+        />
+      </ModuleGuard>
+    </Protected>
   )
 }

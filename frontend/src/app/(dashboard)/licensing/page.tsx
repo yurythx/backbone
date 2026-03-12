@@ -6,10 +6,14 @@ import { api } from "@/lib/axios"
 import { Plan, License } from "@/types"
 import { PlanCard } from "@/features/licensing/plan-card"
 import { H2, P } from "@/components/ui/typography"
-import { CheckoutModal } from "@/features/licensing/checkout-modal"
-import { SlideUp, FadeIn } from "@/components/ui/motion"
 import { Sparkles, ShieldCheck, Zap } from "lucide-react"
 import Image from "next/image"
+import dynamic from "next/dynamic"
+
+const CheckoutModal = dynamic(
+  () => import("@/features/licensing/checkout-modal").then((m) => m.CheckoutModal),
+  { ssr: false }
+)
 
 export default function LicensingPage() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
@@ -57,39 +61,39 @@ export default function LicensingPage() {
 
       <div className="max-w-7xl mx-auto px-6 pt-12 space-y-16 relative z-10">
         <header className="text-center space-y-6 max-w-3xl mx-auto">
-          <FadeIn>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 mb-4">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-primary">Upgrade de Potência</span>
-            </div>
-          </FadeIn>
+          <div className="animate-in fade-in duration-300">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 mb-4">
+                <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Upgrade de Potência</span>
+              </div>
+          </div>
 
-          <SlideUp>
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <H2 className="border-none text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/50 leading-tight">
               O plano perfeito para o seu crescimento.
             </H2>
-          </SlideUp>
+          </div>
 
-          <SlideUp delay={0.1}>
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <P className="text-muted-foreground text-lg md:text-xl font-medium leading-relaxed">
               Liberte todo o potencial do seu tenant com recursos avançados, segurança reforçada e suporte dedicado.
             </P>
-          </SlideUp>
+          </div>
         </header>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end pb-12">
           {safePlans.map((plan, index) => (
-            <SlideUp key={plan.id} delay={0.2 + index * 0.1}>
+            <div key={plan.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${(0.1 + index * 0.05).toFixed(2)}s` }}>
               <PlanCard
                 plan={plan}
                 isCurrent={license?.plan === plan.id}
                 onUpgrade={() => handleUpgrade(plan)}
               />
-            </SlideUp>
+            </div>
           ))}
         </section>
 
-        <FadeIn delay={0.6}>
+        <div className="animate-in fade-in duration-300">
           <div className="glass-morphism rounded-3xl p-8 border border-white/5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden relative group">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
 
@@ -119,7 +123,7 @@ export default function LicensingPage() {
               </div>
             </div>
           </div>
-        </FadeIn>
+        </div>
 
         <div className="text-center space-y-4 pb-20">
           <div className="flex items-center justify-center gap-8 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
@@ -132,11 +136,13 @@ export default function LicensingPage() {
         </div>
       </div>
 
-      <CheckoutModal
-        plan={selectedPlan}
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
-      />
+      {(isCheckoutOpen || selectedPlan) && (
+        <CheckoutModal
+          plan={selectedPlan}
+          isOpen={isCheckoutOpen}
+          onClose={() => setIsCheckoutOpen(false)}
+        />
+      )}
     </div>
   )
 }

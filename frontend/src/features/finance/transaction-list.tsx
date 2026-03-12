@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useFinance, Transaction } from "./use-finance"
+import dynamic from "next/dynamic"
 import {
   Table,
   TableBody,
@@ -13,41 +14,15 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2, Edit2, TrendingUp, TrendingDown } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
 import { endOfMonth, endOfWeek, format, parseISO, startOfWeek } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-const transactionSchema = z.object({
-  description: z.string().min(1, "Descrição obrigatória"),
-  amount: z.string().min(1, "Valor obrigatório"),
-  type: z.enum(["in", "out"]),
-  status: z.enum(["pending", "paid", "overdue", "cancelled"]),
-  due_date: z.string(),
-  competence_date: z.string(),
-  category: z.string().optional(), // ID as string for Select
-})
-
-type TransactionFormValues = z.infer<typeof transactionSchema>
+const TransactionDialog = dynamic(
+  () => import("./transaction-dialog").then((m) => m.TransactionDialog),
+  { ssr: false }
+)
 
 export function TransactionList() {
   const now = useMemo(() => new Date(), [])
@@ -88,70 +63,15 @@ export function TransactionList() {
   })
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
-  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
-
-  const categoryForm = useForm<{ name: string; color: string }>({
-    defaultValues: {
-      name: "",
-      color: "#000000",
-    }
-  })
-
-  const form = useForm<TransactionFormValues>({
-    resolver: zodResolver(transactionSchema),
-    defaultValues: {
-      description: "",
-      amount: "",
-      type: "out",
-      status: "pending",
-      due_date: format(new Date(), "yyyy-MM-dd"),
-      competence_date: format(new Date(), "yyyy-MM-dd"),
-    }
-  })
 
   const handleCreate = () => {
     setSelectedTransaction(null)
-    form.reset({
-      description: "",
-      amount: "",
-      type: "out",
-      status: "pending",
-      due_date: format(new Date(), "yyyy-MM-dd"),
-      competence_date: format(new Date(), "yyyy-MM-dd"),
-    })
     setIsDialogOpen(true)
   }
 
   const handleEdit = (transaction: Transaction) => {
     setSelectedTransaction(transaction)
-    form.reset({
-      description: transaction.description,
-      amount: transaction.amount,
-      type: transaction.type,
-      status: transaction.status,
-      due_date: transaction.due_date,
-      competence_date: transaction.competence_date,
-      category: transaction.category?.toString()
-    })
     setIsDialogOpen(true)
-  }
-
-  const onSubmit = async (data: TransactionFormValues) => {
-    try {
-      const payload = {
-        ...data,
-        category: data.category ? parseInt(data.category) : undefined
-      }
-
-      if (selectedTransaction) {
-        await updateTransaction.mutateAsync({ id: selectedTransaction.id, ...payload })
-      } else {
-        await createTransaction.mutateAsync(payload)
-      }
-      setIsDialogOpen(false)
-    } catch (error) {
-      // Error handled in hook
-    }
   }
 
   // Calculate totals
@@ -173,9 +93,6 @@ export function TransactionList() {
     .reduce((acc, curr) => acc + parseFloat(curr.amount), 0)
 
   const balance = totalIn - totalOut
-
-  const sharedCategories = useMemo(() => categories.filter(c => c.is_shared !== false), [categories])
-  const personalCategories = useMemo(() => categories.filter(c => c.is_shared === false), [categories])
 
   return (
     <div className="space-y-6">
@@ -445,221 +362,23 @@ export function TransactionList() {
         </CardContent>
       </Card>
 
-      {/* Dialog Form */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selectedTransaction ? 'Editar Transação' : 'Nova Transação'}</DialogTitle>
-            <DialogDescription className="sr-only">
-              Formulário de criação e edição de transações financeiras.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descrição</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Pagamento AWS" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="in">Receita</SelectItem>
-                          <SelectItem value="out">Despesa</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="due_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vencimento</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="pending">Pendente</SelectItem>
-                          <SelectItem value="paid">Pago</SelectItem>
-                          <SelectItem value="overdue">Atrasado</SelectItem>
-                          <SelectItem value="cancelled">Cancelado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="competence_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Competência</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-end justify-between gap-2">
-                        <FormLabel>Categoria</FormLabel>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            categoryForm.reset({ name: "", color: "#000000" })
-                            setIsCategoryDialogOpen(true)
-                          }}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Nova categoria
-                        </Button>
-                      </div>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {sharedCategories.length > 0 && (
-                            <SelectItem value="__shared__" disabled>
-                              Empresa
-                            </SelectItem>
-                          )}
-                          {sharedCategories.map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                          {personalCategories.length > 0 && (
-                            <SelectItem value="__personal__" disabled>
-                              Minhas
-                            </SelectItem>
-                          )}
-                          {personalCategories.map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                <Button type="submit">Salvar</Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nova categoria</DialogTitle>
-            <DialogDescription className="sr-only">Criar categoria pessoal.</DialogDescription>
-          </DialogHeader>
-          <form
-            className="space-y-4"
-            onSubmit={categoryForm.handleSubmit(async (values) => {
-              const created = await createCategory.mutateAsync({ name: values.name, color: values.color })
-              form.setValue("category", String(created.id), { shouldDirty: true })
-              setIsCategoryDialogOpen(false)
-            })}
-          >
-            <div className="grid gap-2">
-              <FormLabel>Nome</FormLabel>
-              <Input {...categoryForm.register("name", { required: true })} placeholder="Ex: Pessoal" />
-            </div>
-            <div className="grid gap-2">
-              <FormLabel>Cor</FormLabel>
-              <Input type="color" {...categoryForm.register("color", { required: true })} />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={createCategory.isPending}>
-                Salvar
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <TransactionDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        transaction={selectedTransaction}
+        categories={categories}
+        onCreateTransaction={async (values) => {
+          await createTransaction.mutateAsync(values)
+        }}
+        onUpdateTransaction={async (values) => {
+          await updateTransaction.mutateAsync(values)
+        }}
+        onCreateCategory={async (values) => {
+          return await createCategory.mutateAsync(values)
+        }}
+        isSaving={createTransaction.isPending || updateTransaction.isPending}
+        isCreatingCategory={createCategory.isPending}
+      />
     </div>
   )
 }

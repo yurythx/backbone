@@ -1,14 +1,27 @@
 "use client"
 // Force recompile: 2026-01-30
 
-import { LoginForm } from "@/features/auth/login-form"
-import { useTheme } from "@/components/theme-provider"
 import { H2, P } from "@/components/ui/typography"
 import { useState } from "react"
 import Image from "next/image"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+
+const LoginForm = dynamic(
+  () => import("@/features/auth/login-form").then((m) => m.LoginForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando login">
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+      </div>
+    ),
+  }
+)
 
 export default function LoginPage() {
-  const {} = useTheme()
   const [previewCompany, setPreviewCompany] = useState<{ name: string, logo?: string | null } | null>(null)
 
   return (

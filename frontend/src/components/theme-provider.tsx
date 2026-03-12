@@ -6,6 +6,7 @@ import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from "n
 import { api } from "@/lib/axios"
 import axios from "axios"
 import { usePathname } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 
 // --- Types ---
 interface TenantTheme {
@@ -90,6 +91,7 @@ function getContrastColor(hex: string) {
 
 function useThemeHooks(): ThemeConfigShape {
   const pathname = usePathname()
+  const queryClient = useQueryClient()
   const isPublicRoute = useMemo(() => {
     if (!pathname) return true;
     const publicPaths = ["/", "/login", "/register", "/forgot-password", "/reset-password", "/accept-invite"];
@@ -105,6 +107,9 @@ function useThemeHooks(): ThemeConfigShape {
     try {
       // Check if user is logged in
       const token = typeof window !== "undefined" ? localStorage.getItem('accessToken') : null
+      const companySlug = typeof window !== "undefined" ? localStorage.getItem('companySlug') : null
+      const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
+      const effectiveCompany = companySlug || envCompany || 'unknown'
 
       // Fetch Tenant branding
       // Use public endpoint for public routes or when not authenticated to avoid 401 loops
@@ -121,7 +126,8 @@ function useThemeHooks(): ThemeConfigShape {
       // Fetch User preferences ONLY if not a public route AND user has token
       if (!isPublicRoute && token) {
         try {
-          const prefRes = await api.get('/api/accounts/users/me/')
+          const cachedUser = queryClient.getQueryData<{ theme_palette?: string; use_tenant_theme?: boolean }>(['auth', 'user', effectiveCompany])
+          const prefRes = cachedUser ? { data: cachedUser } : await api.get('/api/accounts/users/me/')
           const prefs: UserPreferences = {
             theme_palette: prefRes.data.theme_palette,
             use_tenant_theme: prefRes.data.use_tenant_theme !== false,
@@ -138,7 +144,7 @@ function useThemeHooks(): ThemeConfigShape {
     } finally {
       setIsLoading(false)
     }
-  }, [isPublicRoute])
+  }, [isPublicRoute, queryClient])
 
   useEffect(() => {
     fetchConfig()

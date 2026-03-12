@@ -1,19 +1,59 @@
 "use client"
 
-
-
-import { ProfileForm } from "@/features/settings/profile-form"
-import { CompanyForm } from "@/features/settings/company-form"
-import { BrandingSettings } from "@/components/settings/branding-settings"
-import { UserThemeSelector } from "@/components/settings/user-theme-selector"
-import { SmtpSettings } from "@/features/settings/smtp-settings"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { User, Building, Palette, Settings2, Mail } from "lucide-react"
+import { Building, Settings2, Mail } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { motion, AnimatePresence } from "framer-motion"
 import { useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Protected } from "@/components/auth/protected"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+
+const CompanyForm = dynamic(
+  () => import("@/features/settings/company-form").then((m) => m.CompanyForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando configurações da empresa">
+        <Skeleton className="h-8 w-56 rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-40 rounded-xl" />
+      </div>
+    ),
+  }
+)
+
+const BrandingSettings = dynamic(
+  () => import("@/components/settings/branding-settings").then((m) => m.BrandingSettings),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando configurações de marca">
+        <Skeleton className="h-8 w-56 rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-2xl" />
+      </div>
+    ),
+  }
+)
+
+const SmtpSettings = dynamic(
+  () => import("@/features/settings/smtp-settings").then((m) => m.SmtpSettings),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando configurações de e-mail">
+        <Skeleton className="h-8 w-56 rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-40 rounded-xl" />
+      </div>
+    ),
+  }
+)
 
 function SettingsContent() {
   const searchParams = useSearchParams()
@@ -56,22 +96,16 @@ function SettingsContent() {
           </TabsList>
         </div>
 
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-            className="glass rounded-3xl p-6 md:p-10 border shadow-sm outline-none"
-          >
+        <div
+          key={activeTab}
+          className="glass rounded-3xl p-6 md:p-10 border shadow-sm outline-none animate-in fade-in slide-in-from-bottom-2 duration-300"
+        >
             <Protected requireStaff>
               {activeTab === "company" && <CompanyForm />}
               {activeTab === "branding" && <BrandingSettings isOnboarding={false} />}
               {activeTab === "email" && <SmtpSettings isOnboarding={false} />}
             </Protected>
-          </motion.div>
-        </AnimatePresence>
+        </div>
       </Tabs>
     </div>
   )

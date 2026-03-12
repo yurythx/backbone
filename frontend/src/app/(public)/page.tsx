@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { ExternalLink, Play, Music, FileVideo, Cloud, Database, MessageCircle, Settings, Workflow, Shield, Wrench, Server, BookOpen, LayoutTemplate } from "lucide-react"
 import Link from "next/link"
 
-import { Header } from "@/components/layout/header"
+import { PublicHeader } from "@/components/layout/public-header"
 
 export const metadata: Metadata = {
   title: "Backbone Services - Central de Serviços",
@@ -225,7 +225,7 @@ export default function ServicesLandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
-      <Header />
+      <PublicHeader />
 
       <main role="main" aria-labelledby="titulo-ecossistema">
         <section className="relative overflow-hidden py-20">

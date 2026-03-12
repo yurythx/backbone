@@ -2,6 +2,7 @@
 
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { PresenceHeartbeat } from "@/components/layout/presence-heartbeat"
+import { PresenceProvider } from "@/hooks/use-presence"
 
 /**
  * DashboardLayout — proteção primária feita via middleware.ts (server-side).
@@ -14,9 +15,11 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <DashboardShell>
-      <PresenceHeartbeat />
-      {children}
-    </DashboardShell>
+    <PresenceProvider>
+      <DashboardShell>
+        <PresenceHeartbeat />
+        {children}
+      </DashboardShell>
+    </PresenceProvider>
   )
 }

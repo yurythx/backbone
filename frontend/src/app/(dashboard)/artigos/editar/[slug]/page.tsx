@@ -3,8 +3,25 @@
 import { useParams, useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
-import { ArticleForm } from "@/features/articles/article-form"
 import { Loader2 } from "lucide-react"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ModuleGuard } from "@/components/module-guard"
+import { Protected } from "@/components/auth/protected"
+
+const ArticleForm = dynamic(
+  () => import("@/features/articles/article-form").then((m) => m.ArticleForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-6" role="status" aria-live="polite" aria-label="Carregando editor de artigo">
+        <Skeleton className="h-10 w-72 rounded-2xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-[520px] w-full rounded-2xl" />
+      </div>
+    ),
+  }
+)
 
 export default function EditarArtigoPage() {
   const params = useParams<{ slug: string }>()
@@ -44,10 +61,14 @@ export default function EditarArtigoPage() {
   }
 
   return (
-    <ArticleForm
-      initialData={article}
-      onSuccess={() => router.push('/artigos')}
-      onCancel={() => router.push('/artigos')}
-    />
+    <Protected requiredPermissions={["articles.article_edit"]}>
+      <ModuleGuard moduleCode="articles">
+        <ArticleForm
+          initialData={article}
+          onSuccess={() => router.push('/artigos')}
+          onCancel={() => router.push('/artigos')}
+        />
+      </ModuleGuard>
+    </Protected>
   )
 }

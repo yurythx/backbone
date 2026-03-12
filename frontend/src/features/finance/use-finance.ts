@@ -34,6 +34,17 @@ export interface FinanceRange {
   end?: string
 }
 
+type Paginated<T> = { results?: T[] }
+
+function normalizeList<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[]
+  if (value && typeof value === 'object') {
+    const v = value as Paginated<T>
+    if (Array.isArray(v.results)) return v.results
+  }
+  return []
+}
+
 export function useFinance(range?: FinanceRange) {
   const queryClient = useQueryClient()
 
@@ -45,8 +56,12 @@ export function useFinance(range?: FinanceRange) {
       if (range?.start) params.set('start', range.start)
       if (range?.end) params.set('end', range.end)
       const qs = params.toString()
-      const response = await api.get<Transaction[]>(`/api/finance/transactions/${qs ? `?${qs}` : ''}`)
-      return response.data
+      try {
+        const response = await api.get<Transaction[] | Paginated<Transaction>>(`/api/finance/transactions/${qs ? `?${qs}` : ''}`)
+        return normalizeList<Transaction>(response.data)
+      } catch {
+        return []
+      }
     }
   })
 
@@ -54,8 +69,12 @@ export function useFinance(range?: FinanceRange) {
   const { data: categories = [] } = useQuery({
     queryKey: ['finance-categories'],
     queryFn: async () => {
-      const response = await api.get<FinanceCategory[]>('/api/finance/categories/')
-      return response.data
+      try {
+        const response = await api.get<FinanceCategory[] | Paginated<FinanceCategory>>('/api/finance/categories/')
+        return normalizeList<FinanceCategory>(response.data)
+      } catch {
+        return []
+      }
     }
   })
 

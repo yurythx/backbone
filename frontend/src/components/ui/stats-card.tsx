@@ -1,7 +1,6 @@
 "use client"
 
 import { LucideIcon, ArrowUpRight, ArrowDownRight } from "lucide-react"
-import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -44,10 +43,9 @@ export function StatsCard({
         )
     }
     return (
-        <motion.div
-            whileHover={{ y: -4 }}
+        <div
             className={cn(
-                "glass-card p-6 rounded-3xl shadow-sm border h-full flex flex-col justify-between transition-all hover:shadow-xl hover:shadow-primary/5 group",
+                "glass-card p-6 rounded-3xl shadow-sm border h-full flex flex-col justify-between transition-all hover:shadow-xl hover:shadow-primary/5 group hover:-translate-y-1",
                 className
             )}
         >
@@ -79,6 +77,6 @@ export function StatsCard({
                     </p>
                 )}
             </div>
-        </motion.div>
+        </div>
     )
 }

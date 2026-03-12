@@ -1,5 +1,28 @@
 import { useAuth } from "@/hooks/use-auth"
 
+function normalizeStringArray(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value.filter((v): v is string => typeof v === "string")
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim()
+        if (!trimmed) return []
+        if (trimmed.startsWith("[")) {
+            try {
+                const parsed = JSON.parse(trimmed)
+                if (Array.isArray(parsed)) {
+                    return parsed.filter((v): v is string => typeof v === "string")
+                }
+            } catch { }
+        }
+        return trimmed
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+    }
+    return []
+}
+
 export function usePermission() {
     const { user } = useAuth()
 
@@ -14,7 +37,8 @@ export function usePermission() {
             return false
         }
 
-        return user.role_details.permissions.includes(permissionSlug)
+        const perms = normalizeStringArray(user.role_details.permissions)
+        return perms.includes(permissionSlug)
     }
 
     const hasRole = (roleName: string): boolean => {

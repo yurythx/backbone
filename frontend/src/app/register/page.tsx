@@ -1,10 +1,27 @@
 "use client"
 
-import { RegisterForm } from "@/features/auth/register-form"
 import { useTheme } from "@/components/theme-provider"
 import { H2, P } from "@/components/ui/typography"
 import Link from "next/link"
 import Image from "next/image"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+
+const RegisterForm = dynamic(
+  () => import("@/features/auth/register-form").then((m) => m.RegisterForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando cadastro">
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+      </div>
+    ),
+  }
+)
 
 export default function RegisterPage() {
   const { logo, companyName } = useTheme()

@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Check, Zap, Rocket, Crown, Star } from "lucide-react"
 import { Plan } from "@/types"
 import { cn } from "@/lib/utils"
-import { motion } from "framer-motion"
 
 interface PlanCardProps {
     plan: Plan
@@ -25,11 +24,7 @@ export function PlanCard({ plan, isCurrent, onUpgrade, isLoading }: PlanCardProp
     }
 
     return (
-        <motion.div
-            whileHover={{ y: -8 }}
-            transition={{ type: "spring", stiffness: 400, damping: 17 }}
-            className="flex h-full"
-        >
+        <div className="flex h-full transition-transform duration-300 hover:-translate-y-2">
             <Card className={cn(
                 "relative flex flex-col overflow-hidden transition-all duration-500 w-full h-full",
                 "glass-morphism border-white/5 shadow-2xl rounded-3xl",
@@ -103,7 +98,7 @@ export function PlanCard({ plan, isCurrent, onUpgrade, isLoading }: PlanCardProp
                     </Button>
                 </CardFooter>
             </Card>
-        </motion.div>
+        </div>
     )
 }
 

@@ -4,13 +4,10 @@ import { useState, useEffect, Suspense, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
-import axios from "axios"
-import { TagList } from "@/features/articles/tag-list"
-import { ArticleAnalytics } from "@/features/articles/article-analytics"
+import dynamic from "next/dynamic"
 import { Article, Category } from "@/types"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { PublicArticleCard } from "@/components/public/article-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Search, BookOpen, Plus } from "lucide-react"
@@ -18,30 +15,49 @@ import { ModuleGuard } from "@/components/module-guard"
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/hooks/use-auth"
+import { useDebounce } from "@/hooks/use-debounce"
+
+const TagList = dynamic(
+    () => import("@/features/articles/tag-list").then((m) => m.TagList),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando tags e categorias">
+                <Skeleton className="h-10 w-64 rounded-2xl" />
+                <Skeleton className="h-[520px] w-full rounded-2xl" />
+            </div>
+        ),
+    }
+)
+
+const ArticleAnalytics = dynamic(
+    () => import("@/features/articles/article-analytics").then((m) => m.ArticleAnalytics),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando analytics de artigos">
+                <Skeleton className="h-10 w-64 rounded-2xl" />
+                <Skeleton className="h-[520px] w-full rounded-2xl" />
+            </div>
+        ),
+    }
+)
 
 function ArtigosPageContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') ?? "")
+    const debouncedSearchTerm = useDebounce(searchTerm, 250)
     const [visibility, setVisibility] = useState<'all' | 'private'>(() => (searchParams.get('v') === 'private' ? 'private' : 'all'))
+    const [activeTab, setActiveTab] = useState<'articles' | 'tags' | 'analytics'>('articles')
     const [categoryId, setCategoryId] = useState<number | null>(() => {
         const raw = searchParams.get('category')
         const n = raw ? Number(raw) : NaN
         return Number.isFinite(n) && n > 0 ? n : null
     })
 
-    const { data: me, isLoading } = useQuery({
-        queryKey: ['me'],
-        queryFn: async ({ signal }) => {
-            try {
-                const res = await api.get('/api/accounts/users/me/', { signal })
-                return res.data
-            } catch {
-                return null
-            }
-        },
-        retry: false
-    })
+    const { user: me, isLoading } = useAuth()
 
     const { data: categories } = useQuery<Category[]>({
         queryKey: ['categories'],
@@ -60,11 +76,11 @@ function ArtigosPageContent() {
         hasNextPage,
         error,
     } = useInfiniteQuery({
-        queryKey: ['dashboard-articles-grid', visibility, searchTerm, categoryId],
+        queryKey: ['dashboard-articles-grid', visibility, debouncedSearchTerm, categoryId],
         queryFn: async ({ pageParam }) => {
             const params = new URLSearchParams()
             params.set('visibility', visibility === 'all' ? 'all' : 'private')
-            if (searchTerm.trim()) params.set('search', searchTerm.trim())
+            if (debouncedSearchTerm.trim()) params.set('search', debouncedSearchTerm.trim())
             if (categoryId) params.set('category', String(categoryId))
             if (pageParam) params.set('page', String(pageParam))
             const url = `/api/articles/articles/?${params.toString()}`
@@ -92,27 +108,19 @@ function ArtigosPageContent() {
         return Array.isArray(p?.results) ? (p.results as Article[]) : []
     })
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'
-    const cleanAxios = useMemo(() => {
-        return axios.create({
-            baseURL: API_URL,
-            headers: { 'Content-Type': 'application/json' }
-        })
-    }, [API_URL])
-
     const {
         data: publicData,
         isFetchingNextPage: isFetchingNextPagePublic,
         fetchNextPage: fetchNextPagePublic,
         hasNextPage: hasNextPagePublic,
     } = useInfiniteQuery({
-        queryKey: ['dashboard-public-articles', searchTerm, categoryId],
+        queryKey: ['dashboard-public-articles', debouncedSearchTerm, categoryId],
         queryFn: async ({ pageParam }) => {
             const params = new URLSearchParams()
-            if (searchTerm.trim()) params.set('search', searchTerm.trim())
+            if (debouncedSearchTerm.trim()) params.set('search', debouncedSearchTerm.trim())
             if (categoryId) params.set('category', String(categoryId))
             if (pageParam) params.set('page', String(pageParam))
-            const res = await cleanAxios.get('/api/articles/public/articles/', { params })
+            const res = await api.get('/api/articles/public/articles/', { params })
             return res.data
         },
         initialPageParam: 1,
@@ -185,12 +193,12 @@ function ArtigosPageContent() {
 
     useEffect(() => {
         const params = new URLSearchParams()
-        if (searchTerm.trim()) params.set('q', searchTerm.trim())
+        if (debouncedSearchTerm.trim()) params.set('q', debouncedSearchTerm.trim())
         if (visibility === 'private') params.set('v', 'private')
         if (categoryId) params.set('category', String(categoryId))
         const qs = params.toString()
         router.replace(qs ? `?${qs}` : '?', { scroll: false })
-    }, [searchTerm, visibility, categoryId, router])
+    }, [debouncedSearchTerm, visibility, categoryId, router])
 
     useEffect(() => {
         const q = searchParams.get('q') ?? ""
@@ -203,12 +211,6 @@ function ArtigosPageContent() {
         if (c !== categoryId) setCategoryId(c)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams])
-
-    useEffect(() => {
-        if (!isLoading && !me) {
-            router.push('/login')
-        }
-    }, [me, isLoading, router])
 
     if (isLoading || !me) {
         return <div className="flex items-center justify-center h-full">Carregando...</div>
@@ -233,7 +235,7 @@ function ArtigosPageContent() {
                 </div>
             </div>
 
-            <Tabs defaultValue="articles" className="w-full">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'articles' | 'tags' | 'analytics')} className="w-full">
                 <TabsList className="bg-muted/50 p-1 rounded-xl">
                     <TabsTrigger value="articles" className="rounded-lg px-6">Artigos</TabsTrigger>
                     <TabsTrigger value="tags" className="rounded-lg px-6">Tags & Categorias</TabsTrigger>
@@ -360,11 +362,11 @@ function ArtigosPageContent() {
                 </TabsContent>
 
                 <TabsContent value="tags" className="mt-6">
-                    <TagList />
+                    {activeTab === 'tags' && <TagList />}
                 </TabsContent>
 
                 <TabsContent value="analytics" className="mt-6">
-                    <ArticleAnalytics />
+                    {activeTab === 'analytics' && <ArticleAnalytics />}
                 </TabsContent>
             </Tabs>
         </div>

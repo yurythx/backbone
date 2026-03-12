@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
 import useWebSocket from 'react-use-websocket';
 
 import { ensureFreshAccessToken } from '@/lib/ws-auth';
@@ -59,16 +58,34 @@ export function UserPresenceProvider({ children }: { children: React.ReactNode }
         return `${protocol}//${host}/ws/presence/?${qs}`;
     }, []);
 
-    const pathname = usePathname();
     useEffect(() => {
         let active = true;
-        computeSocketUrl().then((url) => {
-            if (active) setSocketUrl(url);
-        });
+        const refresh = () => {
+            computeSocketUrl().then((url) => {
+                if (active) setSocketUrl(url);
+            });
+        };
+
+        refresh();
+
+        const onCompanyChanged = () => refresh();
+        const onLogin = () => refresh();
+        const onStorage = (e: StorageEvent) => {
+            if (!e.key) return;
+            if (e.key === 'accessToken' || e.key === 'companySlug') refresh();
+        };
+
+        window.addEventListener('app-company-changed', onCompanyChanged);
+        window.addEventListener('app-login', onLogin);
+        window.addEventListener('storage', onStorage);
+
         return () => {
             active = false;
+            window.removeEventListener('app-company-changed', onCompanyChanged);
+            window.removeEventListener('app-login', onLogin);
+            window.removeEventListener('storage', onStorage);
         };
-    }, [computeSocketUrl, pathname]);
+    }, [computeSocketUrl]);
 
     const websocketOptions = useMemo(() => ({
         shouldReconnect: () => {

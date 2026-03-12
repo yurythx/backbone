@@ -1,13 +1,40 @@
 "use client"
 
-import { ProfileForm } from "@/features/settings/profile-form"
 import { PageHeader } from "@/components/ui/page-header"
-import { UserThemeSelector } from "@/components/settings/user-theme-selector"
-import { motion } from "framer-motion"
 import { Suspense } from "react"
 import { Protected } from "@/components/auth/protected"
-import { Separator } from "@/components/ui/separator"
 import { Palette, User } from "lucide-react"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+
+const ProfileForm = dynamic(
+  () => import("@/features/settings/profile-form").then((m) => m.ProfileForm),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando formulário de perfil">
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-10 w-40 rounded-xl" />
+      </div>
+    ),
+  }
+)
+
+const UserThemeSelector = dynamic(
+  () => import("@/components/settings/user-theme-selector").then((m) => m.UserThemeSelector),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando preferências de tema">
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-10 w-44 rounded-xl" />
+      </div>
+    ),
+  }
+)
 
 function ProfileContent() {
   return (
@@ -18,25 +45,15 @@ function ProfileContent() {
       />
 
       <div className="grid gap-8">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-          className="glass rounded-3xl p-6 md:p-10 border shadow-sm"
-        >
+        <div className="glass rounded-3xl p-6 md:p-10 border shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="flex items-center gap-2 mb-6 text-primary">
             <User className="h-5 w-5" />
             <h2 className="text-xl font-semibold">Informações Pessoais</h2>
           </div>
           <ProfileForm />
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: 0.1 }}
-          className="glass rounded-3xl p-6 md:p-10 border shadow-sm"
-        >
+        <div className="glass rounded-3xl p-6 md:p-10 border shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="flex items-center gap-2 mb-2 text-primary">
             <Palette className="h-5 w-5" />
             <h2 className="text-xl font-semibold">Aparência & Tema</h2>
@@ -46,7 +63,7 @@ function ProfileContent() {
           </p>
           
           <UserThemeSelector />
-        </motion.div>
+        </div>
       </div>
     </div>
   )

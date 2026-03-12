@@ -5,8 +5,6 @@ import { Article } from "@/types"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { CalendarDays } from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
 import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
 
@@ -18,6 +16,14 @@ interface PublicArticleCardProps {
 }
 
 export function PublicArticleCard({ article, showVisibilityBadge = false, useDashboardPreview = false, showStatusBadge = false }: PublicArticleCardProps) {
+    const dateLabel = (() => {
+        const raw = (article as unknown as { published_at?: string }).published_at || article.created_at
+        if (!raw) return null
+        const dt = new Date(raw)
+        if (Number.isNaN(dt.getTime())) return null
+        return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(dt)
+    })()
+
     const href = (useDashboardPreview)
         ? `/artigos/preview/${article.slug}`
         : { pathname: `/p/artigos/${article.slug}`, query: { company_slug: article.company_slug } }
@@ -87,7 +93,7 @@ export function PublicArticleCard({ article, showVisibilityBadge = false, useDas
                 <CardFooter className="p-5 pt-0 flex items-center justify-between text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                         <CalendarDays className="h-3 w-3" aria-hidden="true" />
-                        {format(new Date(article.created_at), "dd 'de' MMM, yyyy", { locale: ptBR })}
+                        {dateLabel || ""}
                     </div>
                     <div className="flex items-center gap-1.5 text-primary font-semibold">
                         Ler mais

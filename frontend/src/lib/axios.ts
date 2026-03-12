@@ -47,6 +47,7 @@ api.interceptors.request.use(
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null;
     const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG;
+    const effectiveCompany = companySlug || envCompany || null;
 
     const isAuthEndpoint = Boolean(config.url?.includes('/api/accounts/token/'));
     const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
@@ -63,7 +64,7 @@ api.interceptors.request.use(
           const response = await axios.post(`${API_URL}/api/accounts/token/refresh/`, {
             refresh: refreshToken,
           }, {
-            headers: companySlug ? { 'X-Company-Slug': companySlug } : {}
+            headers: effectiveCompany ? { 'X-Company-Slug': effectiveCompany } : {}
           });
 
           const { access, refresh: newRefresh } = response.data as { access: string; refresh?: string };
@@ -84,7 +85,6 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    const effectiveCompany = companySlug || envCompany || undefined;
     if (effectiveCompany) {
       config.headers['X-Company-Slug'] = effectiveCompany;
     }
@@ -157,11 +157,13 @@ api.interceptors.response.use(
       try {
         // Use a separate axios instance or manual headers to avoid interceptor recursion
         const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null;
+        const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG;
+        const effectiveCompany = companySlug || envCompany || null;
 
         const response = await axios.post(`${API_URL}/api/accounts/token/refresh/`, {
           refresh: refreshToken,
         }, {
-          headers: companySlug ? { 'X-Company-Slug': companySlug } : {}
+          headers: effectiveCompany ? { 'X-Company-Slug': effectiveCompany } : {}
         });
 
         // ROTATE_REFRESH_TOKENS=True: backend returns both new access AND new refresh token.

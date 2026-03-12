@@ -6,8 +6,8 @@ import { api } from "@/lib/axios"
 import { Page } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Plus, Pencil, Trash2, MoreHorizontal } from "lucide-react"
-import { DataTable } from "@/components/ui/data-table"
-import { ColumnDef } from "@tanstack/react-table"
+import dynamic from "next/dynamic"
+import type { ColumnDef } from "@tanstack/react-table"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -15,6 +15,20 @@ import {
     DropdownMenuLabel,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Skeleton, TableSkeleton } from "@/components/ui/skeleton"
+
+const DataTable = dynamic(
+    () => import("@/components/ui/data-table").then((m) => m.DataTable),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="rounded-2xl border border-primary/5 bg-card/30 p-4 shadow-sm space-y-4" role="status" aria-live="polite" aria-label="Carregando tabela de páginas">
+                <Skeleton className="h-10 w-72 rounded-xl" />
+                <TableSkeleton rows={7} columns={3} />
+            </div>
+        ),
+    }
+)
 
 interface PageListProps {
     onEdit: (page: Page) => void
