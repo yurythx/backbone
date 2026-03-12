@@ -48,7 +48,7 @@ const services: Service[] = [
     icon: BookOpen,
     category: "Conhecimento",
     status: "online",
-    url: "/artigos",
+    url: "/p/artigos",
     features: ["Tutoriais", "Documentação", "Guias", "Artigos Técnicos"],
     color: "from-blue-600 to-indigo-600"
   },
@@ -81,7 +81,7 @@ const services: Service[] = [
     icon: Play,
     category: "Entretenimento",
     status: "online",
-    url: "http://192.168.1.121:8096",
+    url: "https://jellyfin.projetoravenna.cloud/",
     features: ["Streaming de vídeo", "Transcodificação", "Acesso multi-dispositivo", "Biblioteca organizada"],
     color: "from-purple-500 to-pink-500"
   },
@@ -92,7 +92,7 @@ const services: Service[] = [
     icon: FileVideo,
     category: "Entretenimento",
     status: "online",
-    url: "http://192.168.1.121:8080",
+    url: "https://komga.projetoravenna.cloud/",
     features: ["Leitor web", "Suporte CBZ/CBR", "Metadados automáticos", "Coleções organizadas"],
     color: "from-blue-500 to-cyan-500"
   },
@@ -103,7 +103,7 @@ const services: Service[] = [
     icon: Music,
     category: "Entretenimento",
     status: "online",
-    url: "http://192.168.1.121:4533",
+    url: "https://navidrome.projetoravenna.cloud/",
     features: ["Streaming de música", "Compatível Subsonic", "Playlists inteligentes", "Transcodificação"],
     color: "from-green-500 to-teal-500"
   },
@@ -114,7 +114,7 @@ const services: Service[] = [
     icon: Cloud,
     category: "Produtividade",
     status: "online",
-    url: "http://192.168.1.121:8081",
+    url: "https://nextcloud.projetoravenna.cloud/",
     features: ["Armazenamento em nuvem", "Sincronização com Samba", "Colaboração em tempo real", "Aplicativos integrados"],
     color: "from-sky-500 to-blue-500"
   },
@@ -158,18 +158,18 @@ const services: Service[] = [
     icon: MessageCircle,
     category: "Comunicação",
     status: "online",
-    url: "http://192.168.1.121:8082",
+    url: "http://evolution.projetoravenna.cloud/",
     features: ["WhatsApp Business", "API REST", "Webhooks", "Multi-instância"],
     color: "from-emerald-500 to-green-500"
   },
   {
     id: "chatwoot",
-    name: "Chatwoot",
+    name: "Atendimento",
     description: "Plataforma de atendimento ao cliente com chat ao vivo, tickets e integração com múltiplos canais.",
     icon: MessageCircle,
     category: "Comunicação",
     status: "online",
-    url: "http://192.168.1.121:3000",
+    url: "https://atendimento.projetoravanna.cloud/",
     features: ["Chat ao vivo", "Gestão de tickets", "Multi-canal", "Analytics de atendimento"],
     color: "from-violet-500 to-purple-500"
   },
@@ -180,7 +180,7 @@ const services: Service[] = [
     icon: Settings,
     category: "Gerenciamento",
     status: "online",
-    url: "http://192.168.1.121:9443",
+    url: "https://portainer.projetoravenna.cloud/",
     features: ["Gestão de containers", "Dashboard visual", "Stacks e serviços", "Monitoramento"],
     color: "from-indigo-500 to-blue-500"
   },
@@ -191,7 +191,7 @@ const services: Service[] = [
     icon: Workflow,
     category: "Automação",
     status: "online",
-    url: "http://192.168.1.121:5678",
+    url: "https://n8n.projetoravenna.cloud/",
     features: ["Automação de workflows", "Integrações nativas", "Webhook triggers", "Code nodes"],
     color: "from-yellow-500 to-orange-500"
   },
@@ -202,7 +202,7 @@ const services: Service[] = [
     icon: Shield,
     category: "Monitoramento",
     status: "online",
-    url: "http://192.168.1.121:8083",
+    url: "https://zabbix.projetoravenna.cloud/",
     features: ["Monitoramento de serviços", "Alertas automáticos", "Dashboards customizados", "Relatórios detalhados"],
     color: "from-blue-600 to-indigo-600"
   },
@@ -213,7 +213,7 @@ const services: Service[] = [
     icon: Wrench,
     category: "Gerenciamento",
     status: "online",
-    url: "http://192.168.1.121:8084",
+    url: "https://glpi.projetoravenna.cloud/",
     features: ["Gestão de ativos", "Help desk", "Inventário de TI", "Relatórios técnicos"],
     color: "from-teal-500 to-cyan-500"
   }

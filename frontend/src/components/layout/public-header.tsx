@@ -10,14 +10,13 @@ export function PublicHeader() {
         </Link>
         <nav className="flex items-center gap-2" aria-label="Ações">
           <Button asChild variant="ghost" className="rounded-xl">
-            <Link href="/login">Entrar</Link>
+            <Link href="/p/artigos">Artigos</Link>
           </Button>
-          <Button asChild className="rounded-xl shadow-lg shadow-primary/20">
-            <Link href="/register">Solicitar acesso</Link>
+          <Button asChild variant="ghost" className="rounded-xl">
+            <Link href="/login">Entrar</Link>
           </Button>
         </nav>
       </div>
     </header>
   )
 }
-
