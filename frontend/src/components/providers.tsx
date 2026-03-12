@@ -34,13 +34,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }))
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
         {children}
         <Toaster
           position="bottom-right"
@@ -55,8 +55,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             },
           }}
         />
-      </QueryClientProvider>
-
-    </ThemeProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   )
 }

@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Users, FileText, MessageSquare, Zap, Layout, Code } from "lucide-react"
 import { H2, P } from "@/components/ui/typography"
-import { SlideUp, FadeIn } from "@/components/ui/motion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -126,31 +125,31 @@ export default function DashboardPage() {
 
         {/* Quick Stats Grid */}
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <SlideUp delay={0.1}>
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.08s" }}>
             <StatItem
               title="Usuários Ativos"
               value={stats?.counters?.users?.total || 0}
               growth={stats?.counters?.users?.growth}
               icon={Users}
             />
-          </SlideUp>
-          <SlideUp delay={0.2}>
+          </div>
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.12s" }}>
             <StatItem
               title="Conteúdo Publicado"
               value={stats?.counters?.articles?.published || 0}
               growth={stats?.counters?.articles?.growth}
               icon={FileText}
             />
-          </SlideUp>
-          <SlideUp delay={0.3}>
+          </div>
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.16s" }}>
             <StatItem
               title="Mensagens Trocadas"
               value={stats?.counters?.messages?.total || 0}
               growth={stats?.counters?.messages?.growth}
               icon={MessageSquare}
             />
-          </SlideUp>
-          <SlideUp delay={0.4}>
+          </div>
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.20s" }}>
             <StatItem
               title="Status do Sistema"
               value={stats?.system_status?.api_uptime || "Online"}
@@ -159,20 +158,20 @@ export default function DashboardPage() {
               isStatus
               statusColor={stats?.system_status?.api_uptime ? "text-green-500" : "text-red-500"}
             />
-          </SlideUp>
+          </div>
         </section>
 
         {/* Analytics Section */}
         <section id="analytics-section" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <FadeIn delay={0.4} className="lg:col-span-2">
+          <div className="lg:col-span-2 animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.22s" }}>
             <AnalyticsChart
               data={stats?.charts?.views_series || []}
               title="Tráfego de Conteúdo (30d)"
               isLoading={statsLoading}
             />
-          </FadeIn>
+          </div>
           <div className="space-y-6">
-            <SlideUp delay={0.5}>
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.26s" }}>
               <div className="p-6 rounded-2xl border bg-card shadow-sm">
                 <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4">Módulos Ativos</h3>
                 <div className="space-y-3">
@@ -182,20 +181,20 @@ export default function DashboardPage() {
                   <ActiveModule title="API Hub" status="Stable" icon={Code} />
                 </div>
               </div>
-            </SlideUp>
-            <SlideUp delay={0.6}>
+            </div>
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.30s" }}>
               <div className="p-6 rounded-2xl border bg-background/90 shadow-inner">
                 <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-2 text-center">Armazenamento</h3>
                 <div className="text-2xl font-bold text-center text-foreground">{stats?.system_status?.storage_used || "1.2GB"}</div>
               </div>
-            </SlideUp>
+            </div>
           </div>
         </section>
 
         {/* Main Content Split: Activity vs Categories */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
           {/* Recent Activity */}
-          <FadeIn delay={0.7} className="space-y-6">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.34s" }}>
             <div className="flex items-center justify-between">
               <H2 className="border-none text-2xl font-bold">Atividade Recente</H2>
               <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80" asChild>
@@ -229,10 +228,10 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-          </FadeIn>
+          </div>
 
           {/* Popular Categories */}
-          <SlideUp delay={0.8} className="space-y-6">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.38s" }}>
             <H2 className="border-none text-2xl font-bold">Distribuição de Conteúdo</H2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {(stats?.charts?.categories || []).map((cat: { name: string; article_count: number }, i: number) => (
@@ -247,7 +246,7 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          </SlideUp>
+          </div>
         </div>
       </div>
     </div>

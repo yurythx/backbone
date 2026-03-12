@@ -3,7 +3,6 @@
 import * as React from "react"
 import { Moon, Sun, Monitor, Check } from "lucide-react"
 import { useTheme } from "next-themes"
-import { motion, AnimatePresence } from "framer-motion"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -30,43 +29,20 @@ export function ThemeToggle() {
         )
     }
 
+    const icon =
+        theme === "light" ? (
+            <Sun className="h-4 w-4 text-orange-500" aria-hidden="true" />
+        ) : theme === "dark" ? (
+            <Moon className="h-4 w-4 text-blue-400" aria-hidden="true" />
+        ) : (
+            <Monitor className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        )
+
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="h-9 w-9 relative overflow-hidden group glass-morphism border-0 transition-all" aria-label="Alternar tema">
-                    <AnimatePresence mode="wait" initial={false}>
-                        {theme === "light" ? (
-                            <motion.div
-                                key="sun"
-                                initial={{ y: 20, opacity: 0, rotate: -45 }}
-                                animate={{ y: 0, opacity: 1, rotate: 0 }}
-                                exit={{ y: -20, opacity: 0, rotate: 45 }}
-                                transition={{ duration: 0.2, ease: "easeInOut" }}
-                            >
-                                <Sun className="h-4 w-4 text-orange-500" aria-hidden="true" />
-                            </motion.div>
-                        ) : theme === "dark" ? (
-                            <motion.div
-                                key="moon"
-                                initial={{ y: 20, opacity: 0, rotate: -45 }}
-                                animate={{ y: 0, opacity: 1, rotate: 0 }}
-                                exit={{ y: -20, opacity: 0, rotate: 45 }}
-                                transition={{ duration: 0.2, ease: "easeInOut" }}
-                            >
-                                <Moon className="h-4 w-4 text-blue-400" aria-hidden="true" />
-                            </motion.div>
-                        ) : (
-                            <motion.div
-                                key="system"
-                                initial={{ y: 20, opacity: 0, rotate: -45 }}
-                                animate={{ y: 0, opacity: 1, rotate: 0 }}
-                                exit={{ y: -20, opacity: 0, rotate: 45 }}
-                                transition={{ duration: 0.2, ease: "easeInOut" }}
-                            >
-                                <Monitor className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                    <span className="transition-transform duration-300 group-hover:rotate-12">{icon}</span>
                     <span className="sr-only">Alternar tema</span>
                 </Button>
             </DropdownMenuTrigger>
