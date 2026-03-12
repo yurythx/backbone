@@ -10,10 +10,8 @@ from apps.core.media_proxy import MediaProxyView
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health_check, name="health_check"),
-
     # Media Proxy (para servir arquivos do MinIO/S3 via API)
     path("media/<path:path>", MediaProxyView.as_view(), name="media_proxy"),
-
     # Core APIs
     path("api/core/", include("apps.core.urls")),
     path("api/accounts/", include("apps.accounts.urls")),
@@ -29,12 +27,10 @@ urlpatterns = [
     path("api/finance/", include("apps.finance.urls")),
     path("api/calendar/", include("apps.calendar.urls")),
     path("api/payroll/", include("apps.payroll.urls")),
-
     # Documentation
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     # Sitemap & Robots
     path("", include("apps.seo.urls")),
 ]

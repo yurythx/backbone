@@ -1,11 +1,14 @@
 import json
 import logging
+
 from celery import shared_task
 from django.conf import settings
-from pywebpush import webpush, WebPushException
+from pywebpush import WebPushException, webpush
+
 from .models import PushSubscription
 
 logger = logging.getLogger(__name__)
+
 
 @shared_task(bind=True, max_retries=3, ignore_result=True)
 def send_push_notification(self, subscription_id, title, message, link=None, icon=None):
@@ -22,21 +25,9 @@ def send_push_notification(self, subscription_id, title, message, link=None, ico
     except PushSubscription.DoesNotExist:
         return f"Subscription {subscription_id} not found or inactive"
 
-    subscription_info = {
-        "endpoint": sub.endpoint,
-        "keys": {
-            "p256dh": sub.p256dh,
-            "auth": sub.auth
-        }
-    }
+    subscription_info = {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}}
 
-    data = {
-        "title": title,
-        "body": message,
-        "data": {
-            "url": link or "/"
-        }
-    }
+    data = {"title": title, "body": message, "data": {"url": link or "/"}}
     if icon:
         data["icon"] = icon
 
@@ -45,9 +36,7 @@ def send_push_notification(self, subscription_id, title, message, link=None, ico
             subscription_info=subscription_info,
             data=json.dumps(data),
             vapid_private_key=settings.VAPID_PRIVATE_KEY,
-            vapid_claims={
-                "sub": f"mailto:{settings.VAPID_ADMIN_EMAIL}"
-            }
+            vapid_claims={"sub": f"mailto:{settings.VAPID_ADMIN_EMAIL}"},
         )
         return f"Push sent to {sub.user.username}"
     except WebPushException as e:
@@ -55,7 +44,7 @@ def send_push_notification(self, subscription_id, title, message, link=None, ico
         # If 410 Gone, the subscription is no longer valid
         if e.response is not None and e.response.status_code == 410:
             sub.is_active = False
-            sub.save(update_fields=['is_active'])
+            sub.save(update_fields=["is_active"])
             return f"Subscription for {sub.user.username} marked as inactive (410 Gone)"
         # Retry for transient failures (5xx, network errors)
         raise self.retry(exc=e, countdown=60)
@@ -69,7 +58,7 @@ def send_websocket_notification(group_name, message_payload):
     """
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
-    
+
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(group_name, message_payload)
     return f"WebSocket notification sent to {group_name}"

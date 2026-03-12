@@ -5,27 +5,26 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0009_add_encrypted_smtp_password'),
+        ("core", "0009_add_encrypted_smtp_password"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddIndex(
-            model_name='auditlog',
-            index=models.Index(fields=['company', 'created_at'], name='audit_company_created_idx'),
+            model_name="auditlog",
+            index=models.Index(fields=["company", "created_at"], name="audit_company_created_idx"),
         ),
         migrations.AddIndex(
-            model_name='auditlog',
-            index=models.Index(fields=['company', 'action'], name='audit_company_action_idx'),
+            model_name="auditlog",
+            index=models.Index(fields=["company", "action"], name="audit_company_action_idx"),
         ),
         migrations.AddIndex(
-            model_name='auditlog',
-            index=models.Index(fields=['company', 'user'], name='audit_company_user_idx'),
+            model_name="auditlog",
+            index=models.Index(fields=["company", "user"], name="audit_company_user_idx"),
         ),
         migrations.AddIndex(
-            model_name='auditlog',
-            index=models.Index(fields=['resource', 'resource_id'], name='audit_resource_idx'),
+            model_name="auditlog",
+            index=models.Index(fields=["resource", "resource_id"], name="audit_resource_idx"),
         ),
     ]

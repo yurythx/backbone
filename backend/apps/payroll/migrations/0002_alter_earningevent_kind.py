@@ -4,15 +4,25 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('payroll', '0001_initial'),
+        ("payroll", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='earningevent',
-            name='kind',
-            field=models.CharField(choices=[('daily', 'Diária'), ('overtime', 'Hora Extra'), ('bonus', 'Bônus'), ('discount', 'Desconto'), ('vacation', 'Férias'), ('thirteenth', '13º')], db_index=True, max_length=20),
+            model_name="earningevent",
+            name="kind",
+            field=models.CharField(
+                choices=[
+                    ("daily", "Diária"),
+                    ("overtime", "Hora Extra"),
+                    ("bonus", "Bônus"),
+                    ("discount", "Desconto"),
+                    ("vacation", "Férias"),
+                    ("thirteenth", "13º"),
+                ],
+                db_index=True,
+                max_length=20,
+            ),
         ),
     ]

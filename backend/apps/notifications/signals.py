@@ -1,10 +1,13 @@
+from urllib.parse import quote
+
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from .tasks import send_websocket_notification
-from urllib.parse import quote
-from apps.messenger.models import Message
+
 from apps.articles.models import Article
+from apps.messenger.models import Message
+
 from .models import Notification
+from .tasks import send_websocket_notification
 
 
 @receiver(post_save, sender=Message)
@@ -23,24 +26,24 @@ def notify_new_message(sender, instance, created, **kwargs):
                 notification_type=Notification.TYPE_MESSAGE,
                 title=f"Nova mensagem de {instance.sender.username}",
                 message=instance.content[:100] if instance.content else "Anexo enviado",
-                link=f"/messenger?conversation={conversation.id}&message_id={instance.id}&created_at={created_at_encoded}"
+                link=f"/messenger?conversation={conversation.id}&message_id={instance.id}&created_at={created_at_encoded}",
             )
 
             # Send to WebSocket via Celery
             send_websocket_notification.delay(
-                f'notifications_user_{participant.id}',
+                f"notifications_user_{participant.id}",
                 {
-                    'type': 'notification_message',
-                    'notification_id': str(notification.id),
-                    'notification_type': notification.notification_type,
-                    'title': notification.title,
-                    'message': notification.message,
-                    'link': notification.link,
-                    'conversation_id': conversation.id,
-                    'message_id': instance.id,
-                    'message_created_at': instance.created_at.isoformat(),
-                    'created_at': notification.created_at.isoformat(),
-                }
+                    "type": "notification_message",
+                    "notification_id": str(notification.id),
+                    "notification_type": notification.notification_type,
+                    "title": notification.title,
+                    "message": notification.message,
+                    "link": notification.link,
+                    "conversation_id": conversation.id,
+                    "message_id": instance.id,
+                    "message_created_at": instance.created_at.isoformat(),
+                    "created_at": notification.created_at.isoformat(),
+                },
             )
 
 
@@ -53,8 +56,8 @@ def track_article_status(sender, instance, **kwargs):
     if instance.pk:
         try:
             # Busca apenas o campo status para performance
-            previous = Article.objects.filter(pk=instance.pk).values('status').first()
-            instance._original_status = previous['status'] if previous else None
+            previous = Article.objects.filter(pk=instance.pk).values("status").first()
+            instance._original_status = previous["status"] if previous else None
         except Exception:
             instance._original_status = None
     else:
@@ -69,7 +72,7 @@ def notify_article_status(sender, instance, created, **kwargs):
     if created:
         return
 
-    original_status = getattr(instance, '_original_status', None)
+    original_status = getattr(instance, "_original_status", None)
 
     # Só notifica se houve transição real para 'published'
     if instance.status == Article.STATUS_PUBLISHED and original_status != Article.STATUS_PUBLISHED:
@@ -80,18 +83,18 @@ def notify_article_status(sender, instance, created, **kwargs):
                 notification_type=Notification.TYPE_APPROVAL,
                 title="Artigo Publicado!",
                 message=f"Seu artigo '{instance.title}' foi publicado com sucesso.",
-                link=f"/p/artigos/{instance.slug}"
+                link=f"/p/artigos/{instance.slug}",
             )
 
             send_websocket_notification.delay(
-                f'notifications_user_{instance.author.id}',
+                f"notifications_user_{instance.author.id}",
                 {
-                    'type': 'notification_message',
-                    'notification_id': str(notification.id),
-                    'notification_type': notification.notification_type,
-                    'title': notification.title,
-                    'message': notification.message,
-                    'link': notification.link,
-                    'created_at': notification.created_at.isoformat(),
-                }
+                    "type": "notification_message",
+                    "notification_id": str(notification.id),
+                    "notification_type": notification.notification_type,
+                    "title": notification.title,
+                    "message": notification.message,
+                    "link": notification.link,
+                    "created_at": notification.created_at.isoformat(),
+                },
             )

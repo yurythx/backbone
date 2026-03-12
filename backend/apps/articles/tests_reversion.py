@@ -1,24 +1,21 @@
-from rest_framework import status
-from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
+from rest_framework.test import APITestCase
+
+from apps.articles.services import ArticleService
 from apps.core.models import Company
 from apps.module_manager.models import Module, TenantModule
-from apps.articles.models import Article
-from apps.articles.services import ArticleService
 
 User = get_user_model()
+
 
 class ArticlesReversionTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Rev Corp", slug="rev-corp")
         self.user = User.all_objects.create_user(
-            username="revuser",
-            email="rev@corp.com",
-            password="pass",
-            company=self.company
+            username="revuser", email="rev@corp.com", password="pass", company=self.company
         )
         self.client.force_authenticate(user=self.user)
-        self.client.credentials(HTTP_X_COMPANY_SLUG='rev-corp')
+        self.client.credentials(HTTP_X_COMPANY_SLUG="rev-corp")
 
         mod = Module.objects.create(code="articles", name="Articles")
         TenantModule.objects.create(company=self.company, module=mod, is_active=True)
@@ -35,10 +32,10 @@ class ArticlesReversionTest(APITestCase):
 
         # Find a previous version id
         from reversion.models import Version
+
         versions = Version.objects.get_for_object(article)
         self.assertGreaterEqual(versions.count(), 2)
-        previous_version = versions.first()  # Latest revision
-        older_version = versions.last()      # Oldest revision
+        older_version = versions.last()  # Oldest revision
 
         # Revert to oldest version
         reverted = ArticleService.revert_to_version(self.user, article, older_version.id)

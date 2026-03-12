@@ -11,18 +11,37 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
+import { AboutAuthor } from "@/components/articles/about-author"
+import { PublicArticleComments } from "@/components/articles/public-article-comments"
+import type { AuthorInfo } from "@/components/articles/about-author"
+
+type ArticlePreview = {
+  id: number
+  title: string
+  slug: string
+  content?: string
+  excerpt?: string | null
+  cover_image?: string | null
+  image?: string | null
+  category_name?: string | null
+  created_at: string
+  author_name?: string | null
+  is_public?: boolean
+  author_info?: AuthorInfo | null
+  company_slug?: string | null
+}
 
 export default function ArticlePreviewPage() {
   const params = useParams<{ slug: string }>()
   const router = useRouter()
   const slug = params?.slug
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<ArticlePreview | null>({
     queryKey: ["dashboard-article-preview", slug],
     queryFn: async () => {
       const res = await api.get(`/api/articles/articles/`, { params: { slug } })
       const payload = res.data?.results ?? res.data
-      return Array.isArray(payload) ? payload[0] ?? null : payload ?? null
+      return Array.isArray(payload) ? (payload[0] ?? null) : (payload ?? null)
     },
     enabled: Boolean(slug),
   })
@@ -136,6 +155,12 @@ export default function ArticlePreviewPage() {
         prose-a:text-primary prose-a:font-bold hover:prose-a:underline
         prose-img:rounded-3xl prose-blockquote:border-primary prose-blockquote:bg-primary/5 prose-blockquote:p-6 prose-blockquote:rounded-2xl"
         dangerouslySetInnerHTML={{ __html: data.content || "" }}
+      />
+
+      <AboutAuthor author={(data as ArticlePreview).author_info} companySlug={(data as ArticlePreview).company_slug} />
+      <PublicArticleComments
+        articleId={data.id}
+        companySlug={(data as ArticlePreview).company_slug}
       />
     </article>
   )

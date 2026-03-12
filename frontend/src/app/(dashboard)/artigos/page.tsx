@@ -58,6 +58,11 @@ function ArtigosPageContent() {
     })
 
     const { user: me, isLoading } = useAuth()
+    useEffect(() => {
+        if (!isLoading && !me) {
+            router.push(`/login?next=${encodeURIComponent('/artigos')}`)
+        }
+    }, [isLoading, me, router])
 
     const { data: categories } = useQuery<Category[]>({
         queryKey: ['categories'],

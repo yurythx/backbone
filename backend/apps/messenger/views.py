@@ -1,44 +1,44 @@
+import ipaddress
 import logging
-from rest_framework import viewsets, permissions, status, mixins, exceptions
+from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.utils import timezone
-from apps.module_manager.permissions import HasModuleAccess
-from apps.accounts.permissions import HasRolePermission
-from shared_kernel.sanitization import sanitize_url
-from .models import Conversation, Message, ContactBlock
-from .serializers import ConversationSerializer, MessageSerializer, ContactSerializer, ContactBlockSerializer
-from .services import MessengerService
-from urllib.parse import urlparse
-import ipaddress
-import time
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view
+from rest_framework import exceptions, mixins, permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
+
+from apps.module_manager.permissions import HasModuleAccess
+from shared_kernel.sanitization import sanitize_url
+
+from .models import ContactBlock, Conversation, Message
+from .serializers import ContactBlockSerializer, ContactSerializer, ConversationSerializer, MessageSerializer
+from .services import MessengerService
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
+
 @extend_schema_view(
-    list=extend_schema(tags=['Messenger']),
+    list=extend_schema(tags=["Messenger"]),
     retrieve=extend_schema(
-        tags=['Messenger'],
-        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+        tags=["Messenger"], parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
     ),
 )
 class ContactViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
     required_permission = None
-    module_code = 'messenger'
-    
+    module_code = "messenger"
 
     def get_queryset(self):
         user = self.request.user
         company = self.request.company
-        
+
         if not user or not user.is_authenticated:
             return User.all_objects.none()
 
@@ -56,27 +56,26 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
                 # Se não há empresa no contexto, usuário normal não deve ver nada
                 logger.warning(f"ContactViewSet: User {user.username} has no company context. Returning empty.")
                 return User.objects.none()
-                
+
             qs = User.objects.filter(company=company, is_active=True).exclude(id=user.id)
-        
-        return qs.prefetch_related('groups').order_by('username')
+
+        return qs.prefetch_related("groups").order_by("username")
+
 
 @extend_schema_view(
-    list=extend_schema(tags=['Messenger']),
-    create=extend_schema(tags=['Messenger']),
+    list=extend_schema(tags=["Messenger"]),
+    create=extend_schema(tags=["Messenger"]),
     retrieve=extend_schema(
-        tags=['Messenger'],
-        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+        tags=["Messenger"], parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
     ),
     destroy=extend_schema(
-        tags=['Messenger'],
-        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+        tags=["Messenger"], parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
     ),
 )
 class ContactBlockViewSet(viewsets.ModelViewSet):
     serializer_class = ContactBlockSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
-    module_code = 'messenger'
+    module_code = "messenger"
 
     def get_queryset(self):
         user = self.request.user
@@ -87,47 +86,44 @@ class ContactBlockViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(blocker=self.request.user, company=self.request.company)
 
+
 @extend_schema_view(
-    list=extend_schema(tags=['Messenger']),
+    list=extend_schema(tags=["Messenger"]),
     retrieve=extend_schema(
-        tags=['Messenger'],
-        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+        tags=["Messenger"], parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
     ),
-    create=extend_schema(tags=['Messenger']),
+    create=extend_schema(tags=["Messenger"]),
     update=extend_schema(
-        tags=['Messenger'],
-        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+        tags=["Messenger"], parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
     ),
     partial_update=extend_schema(
-        tags=['Messenger'],
-        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+        tags=["Messenger"], parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
     ),
     destroy=extend_schema(
-        tags=['Messenger'],
-        parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
+        tags=["Messenger"], parameters=[OpenApiParameter("id", OpenApiTypes.INT, location=OpenApiParameter.PATH)]
     ),
 )
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
-    module_code = 'messenger'
+    module_code = "messenger"
 
     def create(self, request, *args, **kwargs):
-        participant_usernames = request.data.get('participant_usernames', [])
-        target_username = request.data.get('target_username')
+        participant_usernames = request.data.get("participant_usernames", [])
+        target_username = request.data.get("target_username")
         if target_username and target_username not in participant_usernames:
             participant_usernames.append(target_username)
-            
+
         conversation = MessengerService.create_conversation(
             creator=request.user,
             company=request.company,
             participant_usernames=participant_usernames,
-            title=request.data.get('title'),
-            is_group=request.data.get('is_group', False)
+            title=request.data.get("title"),
+            is_group=request.data.get("is_group", False),
         )
         serializer = self.get_serializer(conversation)
-        
-        # If created, return 201. If it was an existing one (handled by service), 
+
+        # If created, return 201. If it was an existing one (handled by service),
         # technically 200 is better but 201 is fine for now.
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -136,9 +132,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return Conversation.all_objects.none()
 
-        from django.db.models import Count, Q, Prefetch, OuterRef, Subquery
+        from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
+
         from .models import ConversationPreference
-        
+
         # Use all_objects for superusers only if no company context exists.
         if user.is_superuser:
             if self.request.company:
@@ -147,76 +144,76 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 manager = Conversation.all_objects
         else:
             manager = Conversation.objects
-        
+
         # Subquery to get the last message per conversation
-        last_msg_qs = Message.objects.filter(conversation=OuterRef('pk')).order_by('-created_at')
+        last_msg_qs = Message.objects.filter(conversation=OuterRef("pk")).order_by("-created_at")
         pref_qs = ConversationPreference.objects.filter(user=user)
-        
+
         qs = (
-            manager
-            .filter(participants=user)
-            .select_related('company')
+            manager.filter(participants=user)
+            .select_related("company")
             .prefetch_related(
-                'participants',
-                Prefetch('preferences', queryset=pref_qs, to_attr='prefetched_pref'),
+                "participants",
+                Prefetch("preferences", queryset=pref_qs, to_attr="prefetched_pref"),
             )
             .annotate(
                 unread_count=Count(
-                    'messages',
-                    filter=Q(messages__is_read=False) & ~Q(messages__sender_id=user.id) & Q(messages__is_deleted=False)
+                    "messages",
+                    filter=Q(messages__is_read=False) & ~Q(messages__sender_id=user.id) & Q(messages__is_deleted=False),
                 ),
                 # Annotate last message details using Subqueries (Performance #26)
-                last_msg_id=Subquery(last_msg_qs.values('id')[:1]),
-                last_msg_content=Subquery(last_msg_qs.values('content')[:1]),
-                last_msg_sender_id=Subquery(last_msg_qs.values('sender_id')[:1]),
-                last_msg_sender_username=Subquery(last_msg_qs.values('sender__username')[:1]),
-                last_msg_created_at=Subquery(last_msg_qs.values('created_at')[:1]),
-                last_msg_file_name=Subquery(last_msg_qs.values('file_name')[:1]),
-                last_msg_file_type=Subquery(last_msg_qs.values('file_type')[:1]),
+                last_msg_id=Subquery(last_msg_qs.values("id")[:1]),
+                last_msg_content=Subquery(last_msg_qs.values("content")[:1]),
+                last_msg_sender_id=Subquery(last_msg_qs.values("sender_id")[:1]),
+                last_msg_sender_username=Subquery(last_msg_qs.values("sender__username")[:1]),
+                last_msg_created_at=Subquery(last_msg_qs.values("created_at")[:1]),
+                last_msg_file_name=Subquery(last_msg_qs.values("file_name")[:1]),
+                last_msg_file_type=Subquery(last_msg_qs.values("file_type")[:1]),
             )
-            .order_by('-updated_at')
+            .order_by("-updated_at")
         )
         return qs
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def find_by_participant(self, request):
-
-        target_username = request.query_params.get('username')
+        target_username = request.query_params.get("username")
         if not target_username:
             return Response({"error": "username param required"}, status=400)
-            
+
         try:
             target_user = User.objects.get(username=target_username, company=request.company)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
-            
+
         from django.db.models import Count
+
         # Find private conversation with exactly these participants
         qs = Conversation.objects.filter(is_group=False, participants=request.user)
-        
+
         if target_user.id == request.user.id:
             # Self-chat: only 1 participant
-            conversation = qs.annotate(p_count=Count('participants')).filter(p_count=1).first()
+            conversation = qs.annotate(p_count=Count("participants")).filter(p_count=1).first()
         else:
             # 1:1 Chat: exactly 2 participants
-            conversation = qs.filter(participants=target_user).annotate(p_count=Count('participants')).filter(p_count=2).first()
-        
+            conversation = (
+                qs.filter(participants=target_user).annotate(p_count=Count("participants")).filter(p_count=2).first()
+            )
+
         if conversation:
             serializer = self.get_serializer(conversation)
             return Response(serializer.data)
         else:
-            # Retorna 204 No Content para indicar que não existe conversa, 
+            # Retorna 204 No Content para indicar que não existe conversa,
             # evitando erro 404 no console do navegador que assusta o usuário.
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def add_participant(self, request, pk=None):
         conversation = self.get_object()
         if not conversation.is_group:
             return Response({"error": "Only group conversations can have participants added"}, status=400)
 
-        username = request.data.get('username')
+        username = request.data.get("username")
         try:
             target_user = User.objects.get(company=request.company, username=username)
             conversation.participants.add(target_user)
@@ -224,13 +221,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def remove_participant(self, request, pk=None):
         conversation = self.get_object()
         if not conversation.is_group:
             return Response({"error": "Only group conversations can have participants removed"}, status=400)
 
-        username = request.data.get('username')
+        username = request.data.get("username")
         try:
             target_user = User.objects.get(company=request.company, username=username)
             conversation.participants.remove(target_user)
@@ -242,46 +239,45 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
     def _get_or_create_preference(self, request, conversation):
         from .models import ConversationPreference
+
         pref, _ = ConversationPreference.all_objects.get_or_create(
-            user=request.user,
-            conversation=conversation,
-            defaults={'company': request.company or conversation.company}
+            user=request.user, conversation=conversation, defaults={"company": request.company or conversation.company}
         )
         return pref
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def mute(self, request, pk=None):
         """Silence notifications for this conversation."""
         pref = self._get_or_create_preference(request, self.get_object())
         pref.is_muted = True
-        pref.save(update_fields=['is_muted'])
-        return Response({'is_muted': True})
+        pref.save(update_fields=["is_muted"])
+        return Response({"is_muted": True})
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def unmute(self, request, pk=None):
         """Re-enable notifications for this conversation."""
         pref = self._get_or_create_preference(request, self.get_object())
         pref.is_muted = False
-        pref.save(update_fields=['is_muted'])
-        return Response({'is_muted': False})
+        pref.save(update_fields=["is_muted"])
+        return Response({"is_muted": False})
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def pin(self, request, pk=None):
         """Pin this conversation to the top of the list."""
         pref = self._get_or_create_preference(request, self.get_object())
         pref.is_pinned = True
-        pref.save(update_fields=['is_pinned'])
-        return Response({'is_pinned': True})
+        pref.save(update_fields=["is_pinned"])
+        return Response({"is_pinned": True})
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def unpin(self, request, pk=None):
         """Unpin this conversation."""
         pref = self._get_or_create_preference(request, self.get_object())
         pref.is_pinned = False
-        pref.save(update_fields=['is_pinned'])
-        return Response({'is_pinned': False})
+        pref.save(update_fields=["is_pinned"])
+        return Response({"is_pinned": False})
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def mark_all_read(self, request, pk=None):
         """Mark all messages in this conversation as read for the current user."""
         conversation = self.get_object()
@@ -290,49 +286,48 @@ class ConversationViewSet(viewsets.ModelViewSet):
             return Response({"error": "Auth required"}, status=401)
 
         unread_messages = conversation.messages.filter(is_read=False).exclude(sender_id=user.id)
-        
+
         count = unread_messages.count()
         if count > 0:
             unread_messages.update(is_read=True)
             # Broadcast read status
             MessengerService.broadcast_all_read(request.company, conversation, user.id)
-        
-        return Response({'marked_read': count})
+
+        return Response({"marked_read": count})
 
     @extend_schema(
         parameters=[OpenApiParameter("q", OpenApiTypes.STR, description="Termo de pesquisa")],
         responses={200: MessageSerializer(many=True)},
-        description="Global search in message history"
+        description="Global search in message history",
     )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def search(self, request):
-        query = request.query_params.get('q')
+        query = request.query_params.get("q")
         if not query:
             return Response({"error": "Query parameter 'q' is required"}, status=400)
-            
-        messages = Message.objects.filter(
-            conversation__participants=request.user,
-            content__icontains=query
-        ).order_by('-created_at')
-        
-        serializer = MessageSerializer(messages, many=True, context={'request': request})
+
+        messages = Message.objects.filter(conversation__participants=request.user, content__icontains=query).order_by(
+            "-created_at"
+        )
+
+        serializer = MessageSerializer(messages, many=True, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(
         request=OpenApiTypes.OBJECT,
         responses={201: MessageSerializer},
-        description="Send a message to this conversation (supports content and/or file)"
+        description="Send a message to this conversation (supports content and/or file)",
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def send_message(self, request, pk=None):
         conversation = self.get_object()
-        content = request.data.get('content')
-        file_obj = request.FILES.get('file')
-        reply_to_id = request.data.get('reply_to_id')
-        
+        content = request.data.get("content")
+        file_obj = request.FILES.get("file")
+        reply_to_id = request.data.get("reply_to_id")
+
         if not content and not file_obj:
             return Response({"error": "Content or file is required"}, status=status.HTTP_400_BAD_REQUEST)
-            
+
         message = MessengerService.send_message(
             user=request.user,
             company=request.company,
@@ -340,61 +335,62 @@ class ConversationViewSet(viewsets.ModelViewSet):
             content=content,
             file_obj=file_obj,
             request=request,
-            reply_to_id=reply_to_id
+            reply_to_id=reply_to_id,
         )
-        
-        serializer = MessageSerializer(message, context={'request': request})
+
+        serializer = MessageSerializer(message, context={"request": request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         responses={200: MessageSerializer(many=True)},
-        description="List messages in this conversation (supports ?before=<ISO datetime> for pagination)"
+        description="List messages in this conversation (supports ?before=<ISO datetime> for pagination)",
     )
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def messages(self, request, pk=None):
         conversation = self.get_object()
         # Order by -created_at for pagination (latest first) then reverse for display
-        qs = conversation.messages.all().order_by('-created_at')
-        
-        before = request.query_params.get('before')
+        qs = conversation.messages.all().order_by("-created_at")
+
+        before = request.query_params.get("before")
         if before:
             try:
                 from django.utils.dateparse import parse_datetime
+
                 dt = parse_datetime(before)
                 if dt:
                     qs = qs.filter(created_at__lt=dt)
             except Exception:
                 pass
-        
+
         # We want to return messages in chronological order for the frontend
         # but paginate from latest to oldest. list(reversed(...)) is O(n) not O(n log n) (#9 fix)
         page = self.paginate_queryset(qs)
         if page is not None:
             messages_list = list(reversed(page))
-            serializer = MessageSerializer(messages_list, many=True, context={'request': request})
+            serializer = MessageSerializer(messages_list, many=True, context={"request": request})
             return self.get_paginated_response(serializer.data)
 
-        messages_list = list(qs.order_by('created_at'))
-        serializer = MessageSerializer(messages_list, many=True, context={'request': request})
+        messages_list = list(qs.order_by("created_at"))
+        serializer = MessageSerializer(messages_list, many=True, context={"request": request})
         return Response(serializer.data)
 
 
 @extend_schema_view(
-    reaction=extend_schema(tags=['Messenger'], summary="Add or remove emoji reaction"),
-    mark_read=extend_schema(tags=['Messenger'], summary="Mark message as read by recipient"),
-    destroy=extend_schema(tags=['Messenger'], summary="Delete message (only sender)"),
-    partial_update=extend_schema(tags=['Messenger'], summary="Edit message (only sender)"),
+    reaction=extend_schema(tags=["Messenger"], summary="Add or remove emoji reaction"),
+    mark_read=extend_schema(tags=["Messenger"], summary="Mark message as read by recipient"),
+    destroy=extend_schema(tags=["Messenger"], summary="Delete message (only sender)"),
+    partial_update=extend_schema(tags=["Messenger"], summary="Edit message (only sender)"),
 )
 class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
     required_permission = None
-    module_code = 'messenger'
-    
+    module_code = "messenger"
+
     def get_throttles(self):
-        if getattr(self, 'action', None) == 'link_preview':
-            self.throttle_scope = 'link_preview'
+        if getattr(self, "action", None) == "link_preview":
+            self.throttle_scope = "link_preview"
             return [ScopedRateThrottle()]
         return super().get_throttles()
 
@@ -431,7 +427,7 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
             raise exceptions.PermissionDenied("You can only edit your own messages.")
 
         # Only allow updating content field
-        if 'content' not in serializer.validated_data:
+        if "content" not in serializer.validated_data:
             return
 
         instance.edited_at = timezone.now()
@@ -441,34 +437,34 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
         # Broadcast edit to all participants via WebSocket
         MessengerService.broadcast_edit(self.request.company, instance.conversation, instance)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def link_preview(self, request):
         def err(code, msg, status_code):
-            return Response({'error_code': code, 'message': msg}, status=status_code)
+            return Response({"error_code": code, "message": msg}, status=status_code)
 
-        url = request.query_params.get('url')
+        url = request.query_params.get("url")
         if not url:
-            return err('missing_url', 'URL is required', status.HTTP_400_BAD_REQUEST)
+            return err("missing_url", "URL is required", status.HTTP_400_BAD_REQUEST)
 
-        safe_url = sanitize_url(url, allowed_protocols=['http', 'https'])
+        safe_url = sanitize_url(url, allowed_protocols=["http", "https"])
         if not safe_url:
-            return err('invalid_url', 'Invalid URL', status.HTTP_400_BAD_REQUEST)
+            return err("invalid_url", "Invalid URL", status.HTTP_400_BAD_REQUEST)
 
         parsed = urlparse(safe_url)
-        host = parsed.hostname or ''
-        if host in ('localhost', '127.0.0.1'):
-            return err('blocked_host', 'Localhost not allowed', status.HTTP_400_BAD_REQUEST)
+        host = parsed.hostname or ""
+        if host in ("localhost", "127.0.0.1"):
+            return err("blocked_host", "Localhost not allowed", status.HTTP_400_BAD_REQUEST)
         try:
-            ip = ipaddress.ip_address(host) if host.replace('.', '').isdigit() else None
+            ip = ipaddress.ip_address(host) if host.replace(".", "").isdigit() else None
             if ip and (ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local):
-                return err('blocked_ip', 'Private IP not allowed', status.HTTP_400_BAD_REQUEST)
+                return err("blocked_ip", "Private IP not allowed", status.HTTP_400_BAD_REQUEST)
         except ValueError:
             pass
 
         # Rate limit: 15 previews/minute per (company, user)
         # Uses atomic cache.add + cache.incr pattern to prevent race conditions.
         if not request.company:
-            return err('no_company', 'Company context required', status.HTTP_400_BAD_REQUEST)
+            return err("no_company", "Company context required", status.HTTP_400_BAD_REQUEST)
         rl_key = f"lp:rl:{request.company.id}:{request.user.id}"
         # cache.add returns True only when the key did not exist (atomic)
         if not cache.add(rl_key, 1, timeout=60):
@@ -479,10 +475,11 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
                 cache.set(rl_key, 1, timeout=60)
                 count = 1
             if count > 15:
-                return err('rate_limited', 'Rate limit exceeded', status.HTTP_429_TOO_MANY_REQUESTS)
+                return err("rate_limited", "Rate limit exceeded", status.HTTP_429_TOO_MANY_REQUESTS)
 
         # Check cache first — return immediately if available
         import hashlib
+
         cache_key = f"lp:res:{hashlib.md5(safe_url.encode()).hexdigest()}"
         cached = cache.get(cache_key)
         if cached:
@@ -491,52 +488,46 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
         # Dispatch async Celery task to fetch the preview
         # Return 202 so the client can poll or retry in a moment
         from .tasks import fetch_link_preview
+
         fetch_link_preview.delay(safe_url, cache_key)
-        return Response({'status': 'processing', 'url': safe_url}, status=status.HTTP_202_ACCEPTED)
+        return Response({"status": "processing", "url": safe_url}, status=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
         request=OpenApiTypes.OBJECT,
         responses={200: OpenApiTypes.OBJECT},
-        description="Add or remove a reaction to a message"
+        description="Add or remove a reaction to a message",
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def reaction(self, request, pk=None):
         message = self.get_object()
-        emoji = request.data.get('emoji')
-        action_type = request.data.get('action', 'add') # add or remove
-        
+        emoji = request.data.get("emoji")
+        action_type = request.data.get("action", "add")  # add or remove
+
         if not emoji:
             return Response({"error": "Emoji is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if action_type == 'add':
+        if action_type == "add":
             MessengerService.add_reaction(request.user, message, emoji)
-        elif action_type == 'remove':
+        elif action_type == "remove":
             MessengerService.remove_reaction(request.user, message, emoji)
         else:
             return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
-            
-        return Response({'status': 'success'})
+
+        return Response({"status": "success"})
 
     @extend_schema(
-        request=None,
-        responses={200: OpenApiTypes.OBJECT},
-        description="Mark a message as read (only if recipient)"
+        request=None, responses={200: OpenApiTypes.OBJECT}, description="Mark a message as read (only if recipient)"
     )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def mark_read(self, request, pk=None):
         message = self.get_object()
         # Only allow marking as read if requester is participant and not the sender
         if message.sender_id == request.user.id:
-            return Response({'error': 'Sender cannot mark own message as read'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Sender cannot mark own message as read"}, status=status.HTTP_400_BAD_REQUEST)
         message.is_read = True
-        message.save(update_fields=['is_read'])
-        
+        message.save(update_fields=["is_read"])
+
         # Broadcast to conversation group
-        MessengerService.broadcast_read_receipt(
-            request.company, 
-            message.conversation, 
-            message.id, 
-            request.user.id
-        )
-        
-        return Response({'status': 'success', 'is_read': True})
+        MessengerService.broadcast_read_receipt(request.company, message.conversation, message.id, request.user.id)
+
+        return Response({"status": "success", "is_read": True})

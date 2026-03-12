@@ -100,4 +100,3 @@ def generate_thirteenth_december(self):
                 pay_date=date(year, 12, 1),
                 months=list(range(7, 13)),
             )
-

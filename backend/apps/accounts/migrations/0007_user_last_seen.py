@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0006_alter_user_options_alter_user_managers'),
+        ("accounts", "0006_alter_user_options_alter_user_managers"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='last_seen',
-            field=models.DateTimeField(blank=True, help_text='Última vez visto online', null=True),
+            model_name="user",
+            name="last_seen",
+            field=models.DateTimeField(blank=True, help_text="Última vez visto online", null=True),
         ),
     ]

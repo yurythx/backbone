@@ -1,7 +1,9 @@
 from django.test import TestCase
-from apps.core.models import Company
+
 from apps.accounts.models import User
+from apps.core.models import Company
 from shared_kernel.tenant_context import set_current_company
+
 
 class TenantIsolationTest(TestCase):
     def setUp(self):
@@ -16,7 +18,7 @@ class TenantIsolationTest(TestCase):
 
     def test_manager_isolation(self):
         """Testa se o TenantManager filtra corretamente baseada no contexto."""
-        
+
         # Cenário 1: Sem contexto definido -> deve retornar vazio (fallback seguro)
         set_current_company(None)
         self.assertEqual(User.objects.count(), 0)
@@ -37,5 +39,5 @@ class TenantIsolationTest(TestCase):
         """Testa se all_objects permite acesso global."""
         # all_objects é o manager padrão do Django (sem filtro) se configurado
         # No BaseTenantModel definimos: objects = TenantManager(), all_objects = models.Manager()
-        
+
         self.assertEqual(User.all_objects.count(), 2)

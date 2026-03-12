@@ -9,11 +9,13 @@ Covers:
   - Soft delete (is_deleted=True, content cleared)
   - Mute / unmute / pin / unpin preferences
 """
+
+from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
+
 from apps.core.models import Company
-from apps.messenger.models import Conversation, Message, ConversationPreference
+from apps.messenger.models import Conversation, ConversationPreference, Message
 from apps.module_manager.models import Module, TenantModule
 
 User = get_user_model()
@@ -53,7 +55,7 @@ class MessengerBaseTest(APITestCase):
 
     def auth(self, user, company_slug):
         self.client.force_authenticate(user=user)
-        self.client.defaults['HTTP_X_COMPANY_SLUG'] = company_slug
+        self.client.defaults["HTTP_X_COMPANY_SLUG"] = company_slug
 
 
 class MessengerIsolationTest(MessengerBaseTest):
@@ -61,23 +63,23 @@ class MessengerIsolationTest(MessengerBaseTest):
 
     def test_isolation_list(self):
         # User A1 should only see conversations from Company A
-        self.auth(self.user_a1, 'company-a')
-        response = self.client.get('/api/messenger/conversations/')
+        self.auth(self.user_a1, "company-a")
+        response = self.client.get("/api/messenger/conversations/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-        self.assertEqual(response.data['results'][0]['id'], self.conv_a.id)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], self.conv_a.id)
 
         # User B1 should only see conversations from Company B
-        self.auth(self.user_b1, 'company-b')
-        response = self.client.get('/api/messenger/conversations/')
+        self.auth(self.user_b1, "company-b")
+        response = self.client.get("/api/messenger/conversations/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-        self.assertEqual(response.data['results'][0]['id'], self.conv_b.id)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], self.conv_b.id)
 
     def test_cross_tenant_access_denied(self):
         # User A1 tries to access Conversation B via ID
-        self.auth(self.user_a1, 'company-a')
-        response = self.client.get(f'/api/messenger/conversations/{self.conv_b.id}/')
+        self.auth(self.user_a1, "company-a")
+        response = self.client.get(f"/api/messenger/conversations/{self.conv_b.id}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
@@ -86,14 +88,14 @@ class MessengerMessagingTest(MessengerBaseTest):
 
     def test_send_message_persists_to_db(self):
         """POSTing to send_message must create a DB record."""
-        self.auth(self.user_a1, 'company-a')
-        url = f'/api/messenger/conversations/{self.conv_a.id}/send_message/'
-        response = self.client.post(url, {'content': 'Hello World'})
+        self.auth(self.user_a1, "company-a")
+        url = f"/api/messenger/conversations/{self.conv_a.id}/send_message/"
+        response = self.client.post(url, {"content": "Hello World"})
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(
-            Message.objects.filter(conversation=self.conv_a, content='Hello World').exists(),
-            "Message must be persisted in the DB after send_message"
+            Message.objects.filter(conversation=self.conv_a, content="Hello World").exists(),
+            "Message must be persisted in the DB after send_message",
         )
 
     def test_edit_message_saves_content(self):
@@ -102,18 +104,15 @@ class MessengerMessagingTest(MessengerBaseTest):
         content is actually written to the DB (not just edited_at).
         """
         msg = Message.objects.create(
-            company=self.company_a,
-            conversation=self.conv_a,
-            sender=self.user_a1,
-            content="Original content"
+            company=self.company_a, conversation=self.conv_a, sender=self.user_a1, content="Original content"
         )
-        self.auth(self.user_a1, 'company-a')
-        url = f'/api/messenger/messages/{msg.id}/'
-        response = self.client.patch(url, {'content': 'Edited content'})
+        self.auth(self.user_a1, "company-a")
+        url = f"/api/messenger/messages/{msg.id}/"
+        response = self.client.patch(url, {"content": "Edited content"})
 
         self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
         msg.refresh_from_db()
-        self.assertEqual(msg.content, 'Edited content', "Edited message content must be persisted")
+        self.assertEqual(msg.content, "Edited content", "Edited message content must be persisted")
         self.assertIsNotNone(msg.edited_at, "edited_at must be set after an edit")
 
     def test_soft_delete_message(self):
@@ -122,13 +121,10 @@ class MessengerMessagingTest(MessengerBaseTest):
         rather than removing the DB record (soft delete).
         """
         msg = Message.objects.create(
-            company=self.company_a,
-            conversation=self.conv_a,
-            sender=self.user_a1,
-            content="Delete me"
+            company=self.company_a, conversation=self.conv_a, sender=self.user_a1, content="Delete me"
         )
-        self.auth(self.user_a1, 'company-a')
-        url = f'/api/messenger/messages/{msg.id}/'
+        self.auth(self.user_a1, "company-a")
+        url = f"/api/messenger/messages/{msg.id}/"
         response = self.client.delete(url)
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
@@ -140,19 +136,15 @@ class MessengerMessagingTest(MessengerBaseTest):
 
         # Default manager must not return deleted messages
         self.assertFalse(
-            Message.objects.filter(pk=msg.pk).exists(),
-            "Soft-deleted messages must be hidden by the default manager"
+            Message.objects.filter(pk=msg.pk).exists(), "Soft-deleted messages must be hidden by the default manager"
         )
 
     def test_cannot_edit_other_users_message(self):
         msg = Message.objects.create(
-            company=self.company_a,
-            conversation=self.conv_a,
-            sender=self.user_a2,
-            content="Not yours"
+            company=self.company_a, conversation=self.conv_a, sender=self.user_a2, content="Not yours"
         )
-        self.auth(self.user_a1, 'company-a')
-        response = self.client.patch(f'/api/messenger/messages/{msg.id}/', {'content': 'Hacked'})
+        self.auth(self.user_a1, "company-a")
+        response = self.client.patch(f"/api/messenger/messages/{msg.id}/", {"content": "Hacked"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -164,25 +156,21 @@ class MessengerGroupCreationTest(MessengerBaseTest):
         Regression: backend expects participant_usernames (strings), not IDs.
         The created group must contain all specified participants.
         """
-        self.auth(self.user_a1, 'company-a')
-        response = self.client.post('/api/messenger/conversations/', {
-            'participant_usernames': ['u_a2'],
-            'title': 'Test Group',
-            'is_group': True
-        }, format='json')
+        self.auth(self.user_a1, "company-a")
+        response = self.client.post(
+            "/api/messenger/conversations/",
+            {"participant_usernames": ["u_a2"], "title": "Test Group", "is_group": True},
+            format="json",
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        conv_id = response.data['id']
+        conv_id = response.data["id"]
         conv = Conversation.objects.get(pk=conv_id)
 
-        participant_ids = list(conv.participants.values_list('id', flat=True))
+        participant_ids = list(conv.participants.values_list("id", flat=True))
+        self.assertIn(self.user_a1.id, participant_ids, "Creator (u_a1) must be a participant of the created group")
         self.assertIn(
-            self.user_a1.id, participant_ids,
-            "Creator (u_a1) must be a participant of the created group"
-        )
-        self.assertIn(
-            self.user_a2.id, participant_ids,
-            "u_a2 must be a participant since they were in participant_usernames"
+            self.user_a2.id, participant_ids, "u_a2 must be a participant since they were in participant_usernames"
         )
 
 
@@ -190,47 +178,44 @@ class MessengerPreferenceTest(MessengerBaseTest):
     """Tests for mute / pin preferences (backed by ConversationPreference)."""
 
     def test_mute_conversation(self):
-        self.auth(self.user_a1, 'company-a')
-        url = f'/api/messenger/conversations/{self.conv_a.id}/mute/'
+        self.auth(self.user_a1, "company-a")
+        url = f"/api/messenger/conversations/{self.conv_a.id}/mute/"
         response = self.client.post(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data.get('is_muted'))
+        self.assertTrue(response.data.get("is_muted"))
         pref = ConversationPreference.objects.get(user=self.user_a1, conversation=self.conv_a)
         self.assertTrue(pref.is_muted)
 
     def test_unmute_conversation(self):
         ConversationPreference.objects.create(
-            user=self.user_a1, conversation=self.conv_a,
-            is_muted=True, company=self.company_a
+            user=self.user_a1, conversation=self.conv_a, is_muted=True, company=self.company_a
         )
-        self.auth(self.user_a1, 'company-a')
-        url = f'/api/messenger/conversations/{self.conv_a.id}/unmute/'
+        self.auth(self.user_a1, "company-a")
+        url = f"/api/messenger/conversations/{self.conv_a.id}/unmute/"
         response = self.client.post(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(response.data.get('is_muted'))
+        self.assertFalse(response.data.get("is_muted"))
         pref = ConversationPreference.objects.get(user=self.user_a1, conversation=self.conv_a)
         self.assertFalse(pref.is_muted)
 
     def test_pin_conversation(self):
-        self.auth(self.user_a1, 'company-a')
-        url = f'/api/messenger/conversations/{self.conv_a.id}/pin/'
+        self.auth(self.user_a1, "company-a")
+        url = f"/api/messenger/conversations/{self.conv_a.id}/pin/"
         response = self.client.post(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data.get('is_pinned'))
+        self.assertTrue(response.data.get("is_pinned"))
         pref = ConversationPreference.objects.get(user=self.user_a1, conversation=self.conv_a)
         self.assertTrue(pref.is_pinned)
 
     def test_preferences_are_per_user(self):
         """Preferences must be isolated per user — muting for A1 does not mute for A2."""
-        self.auth(self.user_a1, 'company-a')
-        self.client.post(f'/api/messenger/conversations/{self.conv_a.id}/mute/')
+        self.auth(self.user_a1, "company-a")
+        self.client.post(f"/api/messenger/conversations/{self.conv_a.id}/mute/")
 
         # A2 should not have any preference record (not muted)
         self.assertFalse(
-            ConversationPreference.objects.filter(
-                user=self.user_a2, conversation=self.conv_a, is_muted=True
-            ).exists()
+            ConversationPreference.objects.filter(user=self.user_a2, conversation=self.conv_a, is_muted=True).exists()
         )

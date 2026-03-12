@@ -4,20 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0008_tenantbranding_background_color_and_more'),
+        ("core", "0008_tenantbranding_background_color_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='tenantemailconfig',
-            name='smtp_password_encrypted',
-            field=models.BinaryField(blank=True, help_text='Senha SMTP criptografada', null=True),
+            model_name="tenantemailconfig",
+            name="smtp_password_encrypted",
+            field=models.BinaryField(blank=True, help_text="Senha SMTP criptografada", null=True),
         ),
         migrations.AlterField(
-            model_name='tenantemailconfig',
-            name='smtp_password',
-            field=models.CharField(blank=True, help_text='[DEPRECATED] Use set_smtp_password() instead', max_length=255),
+            model_name="tenantemailconfig",
+            name="smtp_password",
+            field=models.CharField(
+                blank=True, help_text="[DEPRECATED] Use set_smtp_password() instead", max_length=255
+            ),
         ),
     ]

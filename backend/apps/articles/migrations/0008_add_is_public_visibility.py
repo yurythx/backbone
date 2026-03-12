@@ -5,29 +5,33 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('articles', '0007_comment'),
-        ('core', '0011_add_ldap_config'),
+        ("articles", "0007_comment"),
+        ("core", "0011_add_ldap_config"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='article',
-            name='is_public',
-            field=models.BooleanField(db_index=True, default=False, help_text='Se True, o artigo será visível para todos, independente de autenticação. Se False, apenas membros da empresa podem ver.', verbose_name='Público'),
+            model_name="article",
+            name="is_public",
+            field=models.BooleanField(
+                db_index=True,
+                default=False,
+                help_text="Se True, o artigo será visível para todos, independente de autenticação. Se False, apenas membros da empresa podem ver.",
+                verbose_name="Público",
+            ),
         ),
         migrations.AddIndex(
-            model_name='article',
-            index=models.Index(fields=['is_public', '-published_at'], name='article_public_pub_idx'),
+            model_name="article",
+            index=models.Index(fields=["is_public", "-published_at"], name="article_public_pub_idx"),
         ),
         migrations.AddIndex(
-            model_name='article',
-            index=models.Index(fields=['is_public', 'slug'], name='article_public_slug_idx'),
+            model_name="article",
+            index=models.Index(fields=["is_public", "slug"], name="article_public_slug_idx"),
         ),
         migrations.AddIndex(
-            model_name='article',
-            index=models.Index(fields=['company', 'is_public', '-published_at'], name='article_tenant_pub_idx'),
+            model_name="article",
+            index=models.Index(fields=["company", "is_public", "-published_at"], name="article_tenant_pub_idx"),
         ),
     ]

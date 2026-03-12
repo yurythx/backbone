@@ -1,14 +1,16 @@
 import os
 import sys
+
 import django
 
 # Setup Django environment
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from apps.core.models import Company
 from apps.module_manager.models import Module, TenantModule
+
 
 def enable_modules():
     c = Company.objects.first()
@@ -17,16 +19,12 @@ def enable_modules():
         return
 
     print(f"Company: {c.name}")
-    
-    modules_to_enable = [
-        ('messenger', 'Messenger'),
-        ('pages', 'CMS Pages'),
-        ('articles', 'Articles')
-    ]
+
+    modules_to_enable = [("messenger", "Messenger"), ("pages", "CMS Pages"), ("articles", "Articles")]
 
     for code, name in modules_to_enable:
-        mod, _ = Module.objects.get_or_create(code=code, defaults={'name': name})
-        
+        mod, _ = Module.objects.get_or_create(code=code, defaults={"name": name})
+
         try:
             tm = TenantModule.objects.get(company=c, module=mod)
             if not tm.is_active:
@@ -50,8 +48,9 @@ def enable_modules():
                         tm.is_active = True
                         tm.save()
                         print(f"Recovered and enabled module: {code}")
-                except:
+                except Exception:
                     pass
+
 
 if __name__ == "__main__":
     enable_modules()

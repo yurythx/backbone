@@ -1,15 +1,18 @@
-from rest_framework import viewsets, permissions
-from shared_kernel.audit import log_create, log_update, log_delete
+from rest_framework import permissions, viewsets
+
+from apps.accounts.permissions import HasRolePermission
+from shared_kernel.audit import log_create, log_delete, log_update
+
 from .models import WebhookSubscription
 from .serializers import WebhookSubscriptionSerializer
-from apps.accounts.permissions import HasRolePermission
+
 
 class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     serializer_class = WebhookSubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated, HasRolePermission]
-    required_permission = 'settings.webhooks_manage'
+    required_permission = "settings.webhooks_manage"
     pagination_class = None
-    
+
     def get_queryset(self):
         return WebhookSubscription.objects.filter(company=self.request.company)
 

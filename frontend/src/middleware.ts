@@ -48,9 +48,22 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl)
     }
 
-    // ── Prevenção de loop: Se já estamos em rota pública, não fazemos nada ──
-    // IMPORTANTE: Removemos qualquer regra que redirecionava /login para /dashboard.
-    // Isso garante que o login page consiga carregar mesmo se o cookie estiver "sujo".
+    if (hasSession && pathname === '/p/artigos') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/artigos'
+        url.search = ''
+        return NextResponse.redirect(url)
+    }
+
+    if (hasSession && pathname.startsWith('/p/artigos/')) {
+        const slug = pathname.slice('/p/artigos/'.length)
+        if (slug) {
+            const url = request.nextUrl.clone()
+            url.pathname = `/artigos/preview/${encodeURIComponent(slug)}`
+            url.search = ''
+            return NextResponse.redirect(url)
+        }
+    }
 
     return NextResponse.next()
 }

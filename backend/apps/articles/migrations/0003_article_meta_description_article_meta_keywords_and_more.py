@@ -4,25 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('articles', '0002_alter_article_image'),
+        ("articles", "0002_alter_article_image"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='article',
-            name='meta_description',
+            model_name="article",
+            name="meta_description",
             field=models.TextField(blank=True),
         ),
         migrations.AddField(
-            model_name='article',
-            name='meta_keywords',
+            model_name="article",
+            name="meta_keywords",
             field=models.CharField(blank=True, max_length=500),
         ),
         migrations.AddField(
-            model_name='article',
-            name='meta_title',
+            model_name="article",
+            name="meta_title",
             field=models.CharField(blank=True, max_length=200),
         ),
     ]

@@ -5,24 +5,31 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0014_company_soft_delete'),
-        ('finance', '0002_category_created_by_category_is_shared'),
+        ("core", "0014_company_soft_delete"),
+        ("finance", "0002_category_created_by_category_is_shared"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterUniqueTogether(
-            name='category',
+            name="category",
             unique_together=set(),
         ),
         migrations.AddConstraint(
-            model_name='category',
-            constraint=models.UniqueConstraint(condition=models.Q(('is_shared', True)), fields=('company', 'name'), name='finance_category_unique_shared_name_per_company'),
+            model_name="category",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("is_shared", True)),
+                fields=("company", "name"),
+                name="finance_category_unique_shared_name_per_company",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='category',
-            constraint=models.UniqueConstraint(condition=models.Q(('is_shared', False)), fields=('company', 'created_by', 'name'), name='finance_category_unique_personal_name_per_user'),
+            model_name="category",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("is_shared", False)),
+                fields=("company", "created_by", "name"),
+                name="finance_category_unique_personal_name_per_user",
+            ),
         ),
     ]

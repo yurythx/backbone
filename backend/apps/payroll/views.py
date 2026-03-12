@@ -171,7 +171,9 @@ class EarningEventViewSet(viewsets.ModelViewSet):
             payout_weekday=payout_weekday if payout_mode == "weekday" else None,
             created_by=request.user,
         )
-        return Response(EarningEventSerializer(event, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        return Response(
+            EarningEventSerializer(event, context={"request": request}).data, status=status.HTTP_201_CREATED
+        )
 
     @action(detail=False, methods=["post"], url_path="generate_thirteenth")
     def generate_thirteenth(self, request):
@@ -218,7 +220,9 @@ class EarningEventViewSet(viewsets.ModelViewSet):
             payout_weekday=payout_weekday if payout_mode == "weekday" else None,
             created_by=request.user,
         )
-        return Response(EarningEventSerializer(event, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        return Response(
+            EarningEventSerializer(event, context={"request": request}).data, status=status.HTTP_201_CREATED
+        )
 
 
 class PayrollRunViewSet(viewsets.ReadOnlyModelViewSet):

@@ -3,14 +3,16 @@ Celery tasks for the core app.
 
 Contains background tasks related to auditing and housekeeping.
 """
+
 import logging
+
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(
-    name='core.create_audit_log',
+    name="core.create_audit_log",
     bind=True,
     max_retries=3,
     default_retry_delay=5,
@@ -36,8 +38,9 @@ def create_audit_log_async(
 
     Retries up to 3 times with exponential backoff on any exception.
     """
-    from apps.core.models import AuditLog, Company
     from django.contrib.auth import get_user_model
+
+    from apps.core.models import AuditLog, Company
 
     User = get_user_model()
 

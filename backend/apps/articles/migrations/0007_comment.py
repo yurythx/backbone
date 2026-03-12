@@ -49,9 +49,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "company",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="core.company"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.company"),
                 ),
             ],
             options={

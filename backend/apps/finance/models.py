@@ -9,20 +9,23 @@ class Category(BaseTenantModel):
     """
     Categorias financeiras (ex: Vendas, Marketing, Infraestrutura).
     """
+
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    color = models.CharField(max_length=20, default='#000000')
+    color = models.CharField(max_length=20, default="#000000")
     is_shared = models.BooleanField(default=True, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='created_finance_categories',
+        related_name="created_finance_categories",
     )
 
     # Override company to avoid clash with articles.Category
-    company = models.ForeignKey('core.Company', on_delete=models.CASCADE, related_name='finance_categories', db_index=True)
+    company = models.ForeignKey(
+        "core.Company", on_delete=models.CASCADE, related_name="finance_categories", db_index=True
+    )
 
     class Meta:
         verbose_name = "Financial Category"
@@ -43,45 +46,53 @@ class Category(BaseTenantModel):
     def __str__(self):
         return self.name
 
+
 class Transaction(BaseTenantModel):
     """
     Representa uma transação financeira (Receita ou Despesa).
     """
+
     TYPE_CHOICES = (
-        ('in', 'Receita'),
-        ('out', 'Despesa'),
+        ("in", "Receita"),
+        ("out", "Despesa"),
     )
 
     STATUS_CHOICES = (
-        ('pending', 'Pendente'),
-        ('paid', 'Pago'),
-        ('overdue', 'Atrasado'),
-        ('cancelled', 'Cancelado'),
+        ("pending", "Pendente"),
+        ("paid", "Pago"),
+        ("overdue", "Atrasado"),
+        ("cancelled", "Cancelado"),
     )
 
     description = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Valor da transação")
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
 
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
+    category = models.ForeignKey(
+        Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="transactions"
+    )
 
     due_date = models.DateField(help_text="Data de vencimento")
     payment_date = models.DateField(null=True, blank=True, help_text="Data do pagamento efetivo")
     competence_date = models.DateField(help_text="Data de competência (mês de referência)")
 
     # Integração opcional com Calendar
-    linked_event = models.ForeignKey(Event, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
+    linked_event = models.ForeignKey(
+        Event, on_delete=models.SET_NULL, null=True, blank=True, related_name="transactions"
+    )
 
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_transactions')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="created_transactions"
+    )
 
     class Meta:
         verbose_name = "Transaction"
         verbose_name_plural = "Transactions"
         indexes = [
-            models.Index(fields=['company', 'competence_date']),
-            models.Index(fields=['company', 'status']),
-            models.Index(fields=['company', 'type']),
+            models.Index(fields=["company", "competence_date"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "type"]),
         ]
 
     def __str__(self):

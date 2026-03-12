@@ -1,27 +1,22 @@
+from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
+
 from apps.core.models import Company
 
 User = get_user_model()
 
+
 class CompanyManagementPermissionTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Base", slug="base")
-        
+
         self.superuser = User.objects.create_superuser(
-            username='superuser', 
-            password='password', 
-            email='super@admin.com',
-            company=self.company
+            username="superuser", password="password", email="super@admin.com", company=self.company
         )
-        
+
         self.regular_admin = User.objects.create_user(
-            username='admin', 
-            password='password', 
-            email='admin@test.com',
-            company=self.company,
-            is_staff=True
+            username="admin", password="password", email="admin@test.com", company=self.company, is_staff=True
         )
 
     def test_superuser_can_create_company(self):

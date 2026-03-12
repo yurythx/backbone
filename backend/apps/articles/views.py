@@ -1,63 +1,67 @@
-from rest_framework import viewsets, permissions, status, filters, serializers, mixins
-from rest_framework.throttling import ScopedRateThrottle
+from django.core.cache import cache
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import filters, mixins, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db import models
-from django.core.cache import cache
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from rest_framework.throttling import ScopedRateThrottle
+
+from apps.accounts.permissions import ActionRolePermission, HasRolePermission
 from apps.module_manager.permissions import HasModuleAccess
-from apps.accounts.permissions import HasRolePermission, ActionRolePermission
-from shared_kernel.audit import log_create, log_update, log_delete
-from .models import Article, Category, Tag, Comment, ArticleView
+from shared_kernel.audit import log_create, log_delete, log_update
+
+from .filters import ArticleFilter, PublicArticleFilter
+from .models import Article, ArticleView, Category, Comment, Tag
 from .serializers import (
-    ArticleSerializer, ArticlePublicSerializer, CategorySerializer, TagSerializer, 
-    CommentSerializer, ArticleHistorySerializer, ArticleAnalyticsSerializer,
-    GlobalArticlesAnalyticsSerializer
+    ArticleAnalyticsSerializer,
+    ArticlePublicSerializer,
+    ArticleSerializer,
+    CategorySerializer,
+    CommentSerializer,
+    GlobalArticlesAnalyticsSerializer,
+    TagSerializer,
 )
 from .services import ArticleService
-from .filters import ArticleFilter, PublicArticleFilter
+
 
 @extend_schema_view(
-    list=extend_schema(tags=['Public Articles'], description='Lista artigos públicos sem necessidade de autenticação'),
-    retrieve=extend_schema(tags=['Public Articles'], description='Detalhe de artigo público'),
+    list=extend_schema(tags=["Public Articles"], description="Lista artigos públicos sem necessidade de autenticação"),
+    retrieve=extend_schema(tags=["Public Articles"], description="Detalhe de artigo público"),
 )
 class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet público - sem autenticação requerida.
     Retorna apenas artigos marcados como públicos (is_public=True) e publicados.
     """
+
     serializer_class = ArticlePublicSerializer
     permission_classes = [permissions.AllowAny]
-    lookup_field = 'slug'
-    lookup_url_kwarg = 'slug'
+    lookup_field = "slug"
+    lookup_url_kwarg = "slug"
     filterset_class = PublicArticleFilter
-    search_fields = ['title', 'content', 'excerpt']
-    ordering_fields = ['published_at', 'created_at']
-    ordering = ['-published_at']
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["title", "content", "excerpt"]
+    ordering_fields = ["published_at", "created_at"]
+    ordering = ["-published_at"]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'public_articles'
-    
+    throttle_scope = "public_articles"
+
     def get_queryset(self):
         """
         Retorna artigos publicados.
         - Usuários anônimos: apenas públicos.
         - Usuários autenticados (do mesmo tenant): públicos e privados.
         """
-        company = getattr(self.request, 'company', None)
-        
+        company = getattr(self.request, "company", None)
+
         # Base query: apenas publicados
         # Usamos all_objects para poder filtrar manualmente o tenant se necessário (ex: acesso via slug público)
-        qs = Article.all_objects.filter(
-            status=Article.STATUS_PUBLISHED,
-            published_at__isnull=False
-        )
+        qs = Article.all_objects.filter(status=Article.STATUS_PUBLISHED, published_at__isnull=False)
 
         # Se usuário autenticado e no contexto da sua empresa, vê privados também
         user = self.request.user
-        is_same_tenant = user.is_authenticated and company and getattr(user, 'company_id', None) == company.id
-        
+        is_same_tenant = user.is_authenticated and company and getattr(user, "company_id", None) == company.id
+
         if not is_same_tenant:
             qs = qs.filter(is_public=True)
 
@@ -65,21 +69,21 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(company=company)
         else:
             # Fallback manual de tenant
-            company_slug = self.request.query_params.get('company_slug') or self.request.headers.get('X-Company-Slug')
+            company_slug = self.request.query_params.get("company_slug") or self.request.headers.get("X-Company-Slug")
             if company_slug:
                 qs = qs.filter(company__slug=company_slug)
-                
-        return qs.select_related('category', 'author', 'company').prefetch_related('tags').order_by('-published_at')
-    
+
+        return qs.select_related("category", "author", "company").prefetch_related("tags").order_by("-published_at")
+
     def retrieve(self, request, *args, **kwargs):
-        slug = kwargs.get('slug')
-        company = getattr(request, 'company', None)
-        c_slug = company.slug if company else 'public'
+        slug = kwargs.get("slug")
+        company = getattr(request, "company", None)
+        c_slug = company.slug if company else "public"
         cache_key = f"art_p_det:{c_slug}:{slug}"
-        
+
         cached = cache.get(cache_key)
         if cached:
-            ArticleService.record_view(None, article_id=cached.get('id'), ip_address=request.META.get('REMOTE_ADDR'))
+            ArticleService.record_view(None, article_id=cached.get("id"), ip_address=request.META.get("REMOTE_ADDR"))
             return Response(cached)
 
         try:
@@ -87,31 +91,33 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
         except Article.MultipleObjectsReturned:
             return Response({"error": "Multiple found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        ArticleService.record_view(request.user if request.user.is_authenticated else None, instance, request.META.get('REMOTE_ADDR'))
+        ArticleService.record_view(
+            request.user if request.user.is_authenticated else None, instance, request.META.get("REMOTE_ADDR")
+        )
         data = self.get_serializer(instance).data
         cache.set(cache_key, data, timeout=300)
         return Response(data)
 
+
 @extend_schema_view(
-    list=extend_schema(tags=['Articles']),
-    retrieve=extend_schema(tags=['Articles']),
-    create=extend_schema(tags=['Articles']),
-    update=extend_schema(tags=['Articles']),
-    partial_update=extend_schema(tags=['Articles']),
-    destroy=extend_schema(tags=['Articles']),
+    list=extend_schema(tags=["Articles"]),
+    retrieve=extend_schema(tags=["Articles"]),
+    create=extend_schema(tags=["Articles"]),
+    update=extend_schema(tags=["Articles"]),
+    partial_update=extend_schema(tags=["Articles"]),
+    destroy=extend_schema(tags=["Articles"]),
 )
 class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = 'articles.category_manage'
-    module_code = 'articles'
-    lookup_field = 'slug'
-    lookup_url_kwarg = 'slug'
+    required_permission = "articles.category_manage"
+    module_code = "articles"
+    lookup_field = "slug"
+    lookup_url_kwarg = "slug"
     pagination_class = None
-    
 
     def get_queryset(self):
-        return Category.objects.all().order_by('name')
+        return Category.objects.all().order_by("name")
 
     def perform_create(self, serializer):
         obj = serializer.save(company=self.request.company)
@@ -124,29 +130,29 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         log_delete(self.request.user, "Category", instance, request=self.request)
         instance.delete()
-    
+
     def get_permissions(self):
         return [permissions.IsAuthenticated(), HasModuleAccess(), HasRolePermission()]
 
+
 @extend_schema_view(
-    list=extend_schema(tags=['Articles']),
-    retrieve=extend_schema(tags=['Articles']),
-    create=extend_schema(tags=['Articles']),
-    update=extend_schema(tags=['Articles']),
-    partial_update=extend_schema(tags=['Articles']),
-    destroy=extend_schema(tags=['Articles']),
+    list=extend_schema(tags=["Articles"]),
+    retrieve=extend_schema(tags=["Articles"]),
+    create=extend_schema(tags=["Articles"]),
+    update=extend_schema(tags=["Articles"]),
+    partial_update=extend_schema(tags=["Articles"]),
+    destroy=extend_schema(tags=["Articles"]),
 )
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = 'articles.category_manage'
-    module_code = 'articles'
-    lookup_field = 'slug'
+    required_permission = "articles.category_manage"
+    module_code = "articles"
+    lookup_field = "slug"
     pagination_class = None
-    
 
     def get_queryset(self):
-        return Tag.objects.all().order_by('name')
+        return Tag.objects.all().order_by("name")
 
     def perform_create(self, serializer):
         obj = serializer.save(company=self.request.company)
@@ -159,49 +165,52 @@ class TagViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         log_delete(self.request.user, "Tag", instance, request=self.request)
         instance.delete()
-    
+
     def get_permissions(self):
         return [permissions.IsAuthenticated(), HasModuleAccess(), HasRolePermission()]
 
+
 @extend_schema_view(
-    list=extend_schema(tags=['Articles']),
-    retrieve=extend_schema(tags=['Articles']),
-    create=extend_schema(tags=['Articles']),
-    update=extend_schema(tags=['Articles']),
-    partial_update=extend_schema(tags=['Articles']),
-    destroy=extend_schema(tags=['Articles']),
-    history=extend_schema(tags=['Articles'], responses={200: serializers.ListSerializer(child=serializers.DictField())}),
-    revert=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
-    submit_for_review=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
-    publish=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
-    reject=extend_schema(tags=['Articles'], responses={200: serializers.DictField()}),
+    list=extend_schema(tags=["Articles"]),
+    retrieve=extend_schema(tags=["Articles"]),
+    create=extend_schema(tags=["Articles"]),
+    update=extend_schema(tags=["Articles"]),
+    partial_update=extend_schema(tags=["Articles"]),
+    destroy=extend_schema(tags=["Articles"]),
+    history=extend_schema(
+        tags=["Articles"], responses={200: serializers.ListSerializer(child=serializers.DictField())}
+    ),
+    revert=extend_schema(tags=["Articles"], responses={200: serializers.DictField()}),
+    submit_for_review=extend_schema(tags=["Articles"], responses={200: serializers.DictField()}),
+    publish=extend_schema(tags=["Articles"], responses={200: serializers.DictField()}),
+    reject=extend_schema(tags=["Articles"], responses={200: serializers.DictField()}),
 )
 class ArticleViewSet(viewsets.ModelViewSet):
-    lookup_field = 'slug'
-    lookup_url_kwarg = 'slug'
+    lookup_field = "slug"
+    lookup_url_kwarg = "slug"
     serializer_class = ArticleSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
-    module_code = 'articles'
+    module_code = "articles"
     filterset_class = ArticleFilter
-    search_fields = ['title', 'content', 'excerpt']
-    ordering_fields = ['created_at', 'updated_at', 'title']
+    search_fields = ["title", "content", "excerpt"]
+    ordering_fields = ["created_at", "updated_at", "title"]
 
     # Permissões granulares por action — gerenciadas por ActionRolePermission.
     # Isso evita mutar self.required_permission dentro de perform_create/update/destroy.
     action_permissions = {
-        'list':              'articles.article_view',
-        'retrieve':          'articles.article_view',
-        'create':            'articles.article_create',
-        'update':            'articles.article_edit',
-        'partial_update':    'articles.article_edit',
-        'destroy':           'articles.article_delete',
-        'publish':           'articles.article_publish',
-        'submit_for_review': 'articles.article_create',
-        'reject':            'articles.article_publish',
-        'revert':            'articles.article_edit',
-        'history':           'articles.article_view',
-        'analytics':         'articles.article_view',
-        'analytics_detail':  'articles.article_view',
+        "list": "articles.article_view",
+        "retrieve": "articles.article_view",
+        "create": "articles.article_create",
+        "update": "articles.article_edit",
+        "partial_update": "articles.article_edit",
+        "destroy": "articles.article_delete",
+        "publish": "articles.article_publish",
+        "submit_for_review": "articles.article_create",
+        "reject": "articles.article_publish",
+        "revert": "articles.article_edit",
+        "history": "articles.article_view",
+        "analytics": "articles.article_view",
+        "analytics_detail": "articles.article_view",
     }
 
     def get_queryset(self):
@@ -213,46 +222,54 @@ class ArticleViewSet(viewsets.ModelViewSet):
         """
         if self.request.user.is_authenticated:
             user_company = self.request.company
-            return Article.objects.filter(
-                company=user_company
-            ).select_related('category', 'author', 'company').prefetch_related('tags').order_by('-created_at')
-        
+            return (
+                Article.objects.filter(company=user_company)
+                .select_related("category", "author", "company")
+                .prefetch_related("tags")
+                .order_by("-created_at")
+            )
+
         # Usuário anônimo: apenas públicos publicados
-        return Article.objects.filter(
-            is_public=True,
-            status=Article.STATUS_PUBLISHED,
-            published_at__isnull=False
-        ).select_related('category', 'author', 'company').prefetch_related('tags').order_by('-published_at')
+        return (
+            Article.objects.filter(is_public=True, status=Article.STATUS_PUBLISHED, published_at__isnull=False)
+            .select_related("category", "author", "company")
+            .prefetch_related("tags")
+            .order_by("-published_at")
+        )
 
     def retrieve(self, request, *args, **kwargs):
-        slug = kwargs.get('slug')
-        company_slug = request.company.slug if request.company else 'unassigned'
+        slug = kwargs.get("slug")
+        company_slug = request.company.slug if request.company else "unassigned"
         cache_key = f"art_det:{company_slug}:{slug}"
-        
+
         cached = cache.get(cache_key)
         if cached:
-            ArticleService.record_view(request.user, article_id=cached.get('id'), ip_address=request.META.get('REMOTE_ADDR'))
+            ArticleService.record_view(
+                request.user, article_id=cached.get("id"), ip_address=request.META.get("REMOTE_ADDR")
+            )
             return Response(cached)
 
         instance = self.get_object()
-        ArticleService.record_view(request.user, instance, request.META.get('REMOTE_ADDR'))
+        ArticleService.record_view(request.user, instance, request.META.get("REMOTE_ADDR"))
         data = self.get_serializer(instance).data
-        cache.set(cache_key, data, timeout=60) # Cache mais curto para editores
+        cache.set(cache_key, data, timeout=60)  # Cache mais curto para editores
         return Response(data)
 
     def perform_create(self, serializer):
         # Permission already verified by ActionRolePermission before this point.
         from shared_kernel.licensing import check_feature_limit
-        can_add, limit, current = check_feature_limit(self.request.company, 'max_articles')
+
+        can_add, limit, current = check_feature_limit(self.request.company, "max_articles")
         if not can_add:
             from rest_framework.exceptions import ValidationError
+
             raise ValidationError(f"Limite de artigos atingido ({current}/{limit}). Faça um upgrade do seu plano.")
 
         article = ArticleService.create_article(
             user=self.request.user,
             company=self.request.company,
             data=serializer.validated_data,
-            image=self.request.FILES.get('image')
+            image=self.request.FILES.get("image"),
         )
         serializer.instance = article
         log_create(self.request.user, "Article", article, request=self.request)
@@ -263,7 +280,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
             user=self.request.user,
             article=serializer.instance,
             data=serializer.validated_data,
-            image=self.request.FILES.get('image')
+            image=self.request.FILES.get("image"),
         )
         serializer.instance = updated_article
         log_update(self.request.user, "Article", updated_article, request=self.request)
@@ -274,78 +291,82 @@ class ArticleViewSet(viewsets.ModelViewSet):
         log_delete(self.request.user, "Article", instance, request=self.request)
         instance.delete()
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def history(self, request, slug=None):
         """
         Retorna o histórico de versões do artigo.
         """
         import reversion
+
         article = self.get_object()
         versions = reversion.models.Version.objects.get_for_object(article)
-        
+
         data = []
         for version in versions:
-            data.append({
-                'id': version.id,
-                'created_at': version.revision.date_created,
-                'user': version.revision.user.username if version.revision.user else 'System',
-                'comment': version.revision.comment,
-                # We could deserialize the data here if needed, but for now metadata is enough
-            })
-            
+            data.append(
+                {
+                    "id": version.id,
+                    "created_at": version.revision.date_created,
+                    "user": version.revision.user.username if version.revision.user else "System",
+                    "comment": version.revision.comment,
+                    # We could deserialize the data here if needed, but for now metadata is enough
+                }
+            )
+
         return Response(data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def revert(self, request, slug=None):
         """
         Reverte o artigo para uma versão específica.
         """
         article = self.get_object()
-        version_id = request.data.get('version_id')
-        
+        version_id = request.data.get("version_id")
+
         if not version_id:
             return Response({"error": "version_id is required"}, status=400)
-            
+
         try:
             ArticleService.revert_to_version(request.user, article, version_id)
-            return Response({'status': 'restored'})
+            return Response({"status": "restored"})
         except ValueError as e:
             return Response({"error": str(e)}, status=400)
 
-    @action(detail=True, methods=['post'], url_path='submit')
+    @action(detail=True, methods=["post"], url_path="submit")
     def submit_for_review(self, request, slug=None):
         article = self.get_object()
         try:
             ArticleService.submit_for_review(request.user, article)
-            return Response({'status': 'submitted'})
+            return Response({"status": "submitted"})
         except ValueError as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({"error": str(e)}, status=400)
 
-    @action(detail=True, methods=['post'], url_path='publish')
+    @action(detail=True, methods=["post"], url_path="publish")
     def publish(self, request, slug=None):
-        self.required_permission = 'articles.article_publish'
+        self.required_permission = "articles.article_publish"
         if not HasRolePermission().has_permission(request, self):
-             from rest_framework.exceptions import PermissionDenied
-             raise PermissionDenied("Sem permissão para publicar artigos.")
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Sem permissão para publicar artigos.")
 
         article = self.get_object()
         try:
             ArticleService.publish_article(request.user, article)
-            return Response({'status': 'published'})
+            return Response({"status": "published"})
         except ValueError as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({"error": str(e)}, status=400)
 
-    @action(detail=True, methods=['post'], url_path='reject')
+    @action(detail=True, methods=["post"], url_path="reject")
     def reject(self, request, slug=None):
         article = self.get_object()
-        reason = request.data.get('reason', '')
+        reason = request.data.get("reason", "")
         try:
             ArticleService.reject_article(request.user, article, reason=reason)
-            return Response({'status': 'rejected'})
+            return Response({"status": "rejected"})
         except ValueError as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({"error": str(e)}, status=400)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def analytics(self, request):
         """
         Retorna estatísticas globais de visualizações dos artigos do tenant.
@@ -353,138 +374,145 @@ class ArticleViewSet(viewsets.ModelViewSet):
         from django.db.models import Count, Q
         from django.db.models.functions import TruncDate
         from django.utils import timezone
-        from .models import ArticleView
-        from .serializers import GlobalArticlesAnalyticsSerializer
-        
+
         company = request.company
         thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
-        
+
         # 1. Estatísticas globais
         total_articles = Article.objects.filter(company=company).count()
         total_views = ArticleView.objects.filter(company=company).count()
-        
+
         # 2. Artigos mais vistos (Top 5)
         most_viewed_qs = (
             Article.objects.filter(company=company)
             .annotate(
-                total_views=Count('views'),
-                views_last_30_days=Count('views', filter=Q(views__viewed_at__gte=thirty_days_ago)),
-                unique_visitors=Count('views__ip_address', distinct=True),
+                total_views=Count("views"),
+                views_last_30_days=Count("views", filter=Q(views__viewed_at__gte=thirty_days_ago)),
+                unique_visitors=Count("views__ip_address", distinct=True),
             )
-            .order_by('-total_views')[:5]
+            .order_by("-total_views")[:5]
         )
-        
+
         # 3. Visualizações por data (Últimos 15 dias)
         fifteen_days_ago = timezone.now().date() - timezone.timedelta(days=15)
-        views_by_date_qs = ArticleView.objects.filter(
-            company=company,
-            viewed_at__date__gte=fifteen_days_ago
-        ).annotate(
-            date=TruncDate('viewed_at')
-        ).values('date').annotate(
-            count=Count('id')
-        ).order_by('date')
-        
-        views_by_date = [
-            {'date': item['date'].isoformat(), 'count': item['count']}
-            for item in views_by_date_qs
-        ]
+        views_by_date_qs = (
+            ArticleView.objects.filter(company=company, viewed_at__date__gte=fifteen_days_ago)
+            .annotate(date=TruncDate("viewed_at"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
+
+        views_by_date = [{"date": item["date"].isoformat(), "count": item["count"]} for item in views_by_date_qs]
 
         data = {
-            'total_articles': total_articles,
-            'total_views': total_views,
-            'most_viewed': most_viewed_qs,
-            'views_by_date': views_by_date
+            "total_articles": total_articles,
+            "total_views": total_views,
+            "most_viewed": most_viewed_qs,
+            "views_by_date": views_by_date,
         }
-        
+
         serializer = GlobalArticlesAnalyticsSerializer(data)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def analytics_detail(self, request, slug=None):
         """
         Retorna estatísticas detalhadas de um artigo específico.
         """
         from django.db.models import Count, Q
         from django.utils import timezone
-        
+
         thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
-        
+
         # Use get_object logic but with pre-annotation
-        queryset = self.get_queryset().filter(slug=slug).annotate(
-            total_views=Count('views'),
-            views_last_30_days=Count('views', filter=Q(views__viewed_at__gte=thirty_days_ago)),
-            unique_visitors=Count('views__ip_address', distinct=True)
+        queryset = (
+            self.get_queryset()
+            .filter(slug=slug)
+            .annotate(
+                total_views=Count("views"),
+                views_last_30_days=Count("views", filter=Q(views__viewed_at__gte=thirty_days_ago)),
+                unique_visitors=Count("views__ip_address", distinct=True),
+            )
         )
         article = queryset.first()
-        
+
         if not article:
-             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-             
-        from .serializers import ArticleAnalyticsSerializer
-        
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
         # Agregação básica (já calculada pelo serializer se passarmos o objeto)
         serializer = ArticleAnalyticsSerializer(article)
         return Response(serializer.data)
 
+
 @extend_schema_view(
-    list=extend_schema(tags=['Articles']),
-    retrieve=extend_schema(tags=['Articles']),
-    create=extend_schema(tags=['Articles']),
-    update=extend_schema(tags=['Articles']),
-    partial_update=extend_schema(tags=['Articles']),
-    destroy=extend_schema(tags=['Articles']),
+    list=extend_schema(tags=["Articles"]),
+    retrieve=extend_schema(tags=["Articles"]),
+    create=extend_schema(tags=["Articles"]),
+    update=extend_schema(tags=["Articles"]),
+    partial_update=extend_schema(tags=["Articles"]),
+    destroy=extend_schema(tags=["Articles"]),
 )
 class CommentViewSet(viewsets.ModelViewSet):
     """
     Gerencia comentários dos artigos (painel interno).
     Requer permissão articles.article_manage.
     """
+
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = 'articles.article_manage'
-    module_code = 'articles'
-    filterset_fields = ['article', 'is_approved']
-    ordering_fields = ['created_at']
+    required_permission = "articles.article_manage"
+    module_code = "articles"
+    filterset_fields = ["article", "is_approved"]
+    ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return Comment.objects.filter(company=self.request.company).order_by('-created_at')
+        return (
+            Comment.objects.filter(company=self.request.company)
+            .select_related("article", "author", "company")
+            .order_by("-created_at")
+        )
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company, author=self.request.user)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         """
         Aprova um comentário pendente de moderação.
         """
         comment = self.get_object()
         comment.is_approved = True
-        comment.save(update_fields=['is_approved'])
-        return Response({'status': 'approved'})
+        comment.save(update_fields=["is_approved"])
+        return Response({"status": "approved"})
+
 
 @extend_schema_view(
-    list=extend_schema(tags=['Public Articles'], description='Lista comentários aprovados de um artigo público'),
-    create=extend_schema(tags=['Public Articles'], description='Cria comentário público pendente de moderação'),
+    list=extend_schema(tags=["Public Articles"], description="Lista comentários aprovados de um artigo público"),
+    create=extend_schema(tags=["Public Articles"], description="Cria comentário público pendente de moderação"),
 )
-class PublicCommentViewSet(mixins.ListModelMixin,
-                           mixins.CreateModelMixin,
-                           viewsets.GenericViewSet):
+class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
     """
     Endpoint público de comentários com moderação e rate limit básico.
     """
+
     serializer_class = CommentSerializer
     permission_classes = [permissions.AllowAny]
-    filterset_fields = ['article']
-    ordering_fields = ['created_at']
-    ordering = ['-created_at']
+    filterset_fields = ["article"]
+    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         from .models import Article
-        qs = Comment.objects.filter(is_approved=True).select_related('article', 'author', 'company').order_by('-created_at')
-        article_slug = self.request.query_params.get('article_slug')
-        article_id = self.request.query_params.get('article')
-        company = getattr(self.request, 'company', None)
+
+        qs = (
+            Comment.objects.filter(is_approved=True)
+            .select_related("article", "author", "company")
+            .order_by("-created_at")
+        )
+        article_slug = self.request.query_params.get("article_slug")
+        article_id = self.request.query_params.get("article")
+        company = getattr(self.request, "company", None)
         if article_slug:
             article_qs = Article.objects.filter(slug=article_slug, is_public=True, status=Article.STATUS_PUBLISHED)
             if company:
@@ -508,18 +536,22 @@ class PublicCommentViewSet(mixins.ListModelMixin,
         Requer article_slug ou article (id) no corpo.
         """
         from .models import Article
+
         data = request.data.copy()
-        article_slug = data.get('article_slug')
-        article_id = data.get('article')
-        company = getattr(request, 'company', None)
+        article_slug = data.get("article_slug")
+        article_id = data.get("article")
+        company = getattr(request, "company", None)
 
         # Rate limit simples: 5 comentários/10min por IP por empresa
-        ip = request.META.get('REMOTE_ADDR', 'unknown')
-        company_key = company.slug if company else 'public'
+        ip = request.META.get("REMOTE_ADDR", "unknown")
+        company_key = company.slug if company else "public"
         key = f"rate:pub_comment:{company_key}:{ip}"
         count = cache.get(key, 0)
         if count >= 5:
-            return Response({"detail": "Limite de envio de comentários atingido. Tente mais tarde."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response(
+                {"detail": "Limite de envio de comentários atingido. Tente mais tarde."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
         cache.set(key, count + 1, timeout=600)
 
         # Resolver artigo
@@ -539,12 +571,14 @@ class PublicCommentViewSet(mixins.ListModelMixin,
             return Response({"detail": "Artigo não encontrado ou não público."}, status=status.HTTP_404_NOT_FOUND)
 
         # Criar comentário pendente de moderação
-        serializer = self.get_serializer(data={
-            "article": article.id,
-            "name": data.get("name", ""),
-            "email": data.get("email", ""),
-            "content": data.get("content", ""),
-        })
+        serializer = self.get_serializer(
+            data={
+                "article": article.id,
+                "name": data.get("name", ""),
+                "email": data.get("email", ""),
+                "content": data.get("content", ""),
+            }
+        )
         serializer.is_valid(raise_exception=True)
         obj = serializer.save(company=article.company, author=None, is_approved=False)
         headers = self.get_success_headers(serializer.data)

@@ -1,17 +1,20 @@
-import hmac
 import hashlib
-import json
-import requests
-import time
-import logging
-from celery import shared_task
-from django.conf import settings
-from .models import WebhookSubscription
-from shared_kernel.sanitization import sanitize_url
-from urllib.parse import urlparse
+import hmac
 import ipaddress
+import json
+import logging
+import time
+from urllib.parse import urlparse
+
+import requests
+from celery import shared_task
+
+from shared_kernel.sanitization import sanitize_url
+
+from .models import WebhookSubscription
 
 logger = logging.getLogger(__name__)
+
 
 @shared_task(bind=True, max_retries=3)
 def dispatch_webhook(self, subscription_id, event_name, payload):
@@ -21,57 +24,43 @@ def dispatch_webhook(self, subscription_id, event_name, payload):
         return f"Subscription {subscription_id} not found or inactive"
 
     try:
-        body = json.dumps({
-            "event": event_name,
-            "timestamp": time.time(),
-            "payload": payload
-        })
-        
+        body = json.dumps({"event": event_name, "timestamp": time.time(), "payload": payload})
+
         # Gerar assinatura HMAC-SHA256
-        signature = hmac.new(
-            sub.secret.encode('utf-8'),
-            msg=body.encode('utf-8'),
-            digestmod=hashlib.sha256
-        ).hexdigest()
+        signature = hmac.new(sub.secret.encode("utf-8"), msg=body.encode("utf-8"), digestmod=hashlib.sha256).hexdigest()
 
         headers = {
             "Content-Type": "application/json",
             "X-Backbone-Signature": signature,
             "X-Backbone-Event": event_name,
-            "User-Agent": "Backbone-Webhooks/1.0"
+            "User-Agent": "Backbone-Webhooks/1.0",
         }
 
         # SSRF protection: validate URL and block private/loopback
-        safe_url = sanitize_url(sub.url, allowed_protocols=['http', 'https'])
+        safe_url = sanitize_url(sub.url, allowed_protocols=["http", "https"])
         if not safe_url:
             return "Invalid webhook URL"
         parsed = urlparse(safe_url)
-        host = parsed.hostname or ''
-        if host in ('localhost', '127.0.0.1'):
+        host = parsed.hostname or ""
+        if host in ("localhost", "127.0.0.1"):
             return "Webhook URL host not allowed"
         try:
-            ip = ipaddress.ip_address(host) if host.replace('.', '').isdigit() else None
+            ip = ipaddress.ip_address(host) if host.replace(".", "").isdigit() else None
             if ip and (ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local):
                 return "Webhook URL IP not allowed"
         except ValueError:
             pass
 
-        response = requests.post(
-            safe_url,
-            data=body,
-            headers=headers,
-            timeout=10,
-            allow_redirects=True
-        )
-        
+        response = requests.post(safe_url, data=body, headers=headers, timeout=10, allow_redirects=True)
+
         # Validate final URL after redirects
         final_url = response.url or safe_url
         final_parsed = urlparse(final_url)
-        final_host = final_parsed.hostname or ''
-        if final_host in ('localhost', '127.0.0.1'):
+        final_host = final_parsed.hostname or ""
+        if final_host in ("localhost", "127.0.0.1"):
             return "Webhook final URL host not allowed"
         try:
-            fip = ipaddress.ip_address(final_host) if final_host.replace('.', '').isdigit() else None
+            fip = ipaddress.ip_address(final_host) if final_host.replace(".", "").isdigit() else None
             if fip and (fip.is_private or fip.is_loopback or fip.is_reserved or fip.is_link_local):
                 return "Webhook final URL IP not allowed"
         except ValueError:
@@ -83,7 +72,8 @@ def dispatch_webhook(self, subscription_id, event_name, payload):
     except requests.exceptions.RequestException as e:
         logger.error(f"Error sending webhook to {sub.url}: {e}")
         # Retry with exponential backoff
-        raise self.retry(exc=e, countdown=2 ** self.request.retries * 60)
+        raise self.retry(exc=e, countdown=2**self.request.retries * 60)
+
 
 def trigger_webhooks(company, event_name, payload):
     """

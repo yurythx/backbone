@@ -2,75 +2,77 @@
 Management command to create test articles for development and testing.
 Usage: python manage.py create_test_articles
 """
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from apps.articles.models import Article, Category
+
 from apps.accounts.models import User
+from apps.articles.models import Article, Category
 from apps.core.models import Company
 
 
 class Command(BaseCommand):
-    help = 'Creates 6 public test articles with rich content'
+    help = "Creates 6 public test articles with rich content"
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING('Creating test articles...'))
+        self.stdout.write(self.style.WARNING("Creating test articles..."))
 
         # Get first existing company
         company = Company.objects.first()
         if not company:
-            self.stdout.write(self.style.ERROR('No companies found. Please create a company first.'))
+            self.stdout.write(self.style.ERROR("No companies found. Please create a company first."))
             return
 
-        self.stdout.write(self.style.SUCCESS(f'Using company: {company.name}'))
+        self.stdout.write(self.style.SUCCESS(f"Using company: {company.name}"))
 
         # Get first user or create admin
         user = User.all_objects.filter(company=company).first()
         if not user:
             user, created = User.all_objects.get_or_create(
-                username='admin',
+                username="admin",
                 company=company,
                 defaults={
-                    'email': 'admin@test.com',
-                    'first_name': 'Admin',
-                    'last_name': 'User',
-                    'is_staff': True,
-                    'is_superuser': True
-                }
+                    "email": "admin@test.com",
+                    "first_name": "Admin",
+                    "last_name": "User",
+                    "is_staff": True,
+                    "is_superuser": True,
+                },
             )
             if created:
-                user.set_password('admin123')
+                user.set_password("admin123")
                 user.save()
-                self.stdout.write(self.style.SUCCESS(f'Created admin user: {user.username}'))
+                self.stdout.write(self.style.SUCCESS(f"Created admin user: {user.username}"))
 
         # Get existing categories or use first available
         categories = {}
         try:
-            categories['tecnologia'] = Category.objects.filter(company=company, slug__icontains='tecno').first()
-            categories['tutoriais'] = Category.objects.filter(company=company, slug__icontains='tutor').first()
-            categories['novidades'] = Category.objects.filter(company=company, slug__icontains='novid').first()
-        except:
+            categories["tecnologia"] = Category.objects.filter(company=company, slug__icontains="tecno").first()
+            categories["tutoriais"] = Category.objects.filter(company=company, slug__icontains="tutor").first()
+            categories["novidades"] = Category.objects.filter(company=company, slug__icontains="novid").first()
+        except Exception:
             pass
-        
+
         # If no specific categories found, just get first three or None
         default_category = Category.objects.filter(company=company).first()
-        if not categories.get('tecnologia'):
-            categories['tecnologia'] = default_category
-        if not categories.get('tutoriais'):
-            categories['tutoriais'] = default_category
-        if not categories.get('novidades'):
-            categories['novidades'] = default_category
+        if not categories.get("tecnologia"):
+            categories["tecnologia"] = default_category
+        if not categories.get("tutoriais"):
+            categories["tutoriais"] = default_category
+        if not categories.get("novidades"):
+            categories["novidades"] = default_category
 
         # Test articles data
         articles_data = [
             {
-                'title': 'Introdução ao Django: Guia Completo para Iniciantes',
-                'slug': 'introducao-ao-django-guia-completo',
-                'excerpt': 'Aprenda Django do zero com este guia completo. Descubra como criar aplicações web poderosas usando o framework Python mais popular.',
-                'category': categories['tutoriais'],
-                'content': '''
+                "title": "Introdução ao Django: Guia Completo para Iniciantes",
+                "slug": "introducao-ao-django-guia-completo",
+                "excerpt": "Aprenda Django do zero com este guia completo. Descubra como criar aplicações web poderosas usando o framework Python mais popular.",
+                "category": categories["tutoriais"],
+                "content": """
                     <h2>Por que aprender Django?</h2>
                     <p>Django é um framework web de alto nível que permite o desenvolvimento rápido de aplicações seguras e escaláveis. Usado por empresas como Instagram, Pinterest e NASA, Django se destaca por sua filosofia "batteries included".</p>
-                    
+
                     <h3>Principais Vantagens</h3>
                     <ul>
                         <li><strong>Desenvolvimento Rápido:</strong> Com Django, você pode criar protótipos funcionais em questão de horas.</li>
@@ -94,16 +96,16 @@ python manage.py runserver</code></pre>
                     <blockquote>
                         <p>"Django me permite focar na lógica de negócio sem me preocupar com a infraestrutura básica. É produtividade elevada ao máximo." - Desenvolvedor Python</p>
                     </blockquote>
-                ''',
-                'meta_title': 'Django Tutorial Completo: Aprenda o Framework Python',
-                'meta_description': 'Guia completo de Django para iniciantes. Aprenda a criar aplicações web modernas com Python e Django framework.',
+                """,
+                "meta_title": "Django Tutorial Completo: Aprenda o Framework Python",
+                "meta_description": "Guia completo de Django para iniciantes. Aprenda a criar aplicações web modernas com Python e Django framework.",
             },
             {
-                'title': 'TypeScript vs JavaScript: Quando Usar Cada Um?',
-                'slug': 'typescript-vs-javascript-quando-usar',
-                'excerpt': 'Entenda as diferenças fundamentais entre TypeScript e JavaScript e descubra qual é a melhor escolha para seu próximo projeto.',
-                'category': categories['tecnologia'],
-                'content': '''
+                "title": "TypeScript vs JavaScript: Quando Usar Cada Um?",
+                "slug": "typescript-vs-javascript-quando-usar",
+                "excerpt": "Entenda as diferenças fundamentais entre TypeScript e JavaScript e descubra qual é a melhor escolha para seu próximo projeto.",
+                "category": categories["tecnologia"],
+                "content": """
                     <h2>A Evolução do JavaScript</h2>
                     <p>JavaScript dominou o desenvolvimento web por décadas, mas TypeScript emergiu como um superconjunto que adiciona tipagem estática. A grande questão é: você realmente precisa disso?</p>
 
@@ -130,16 +132,16 @@ python manage.py runserver</code></pre>
                     </ul>
 
                     <p>A verdade é que não existe uma resposta única. TypeScript é especialmente valioso em bases de código grandes, mas adiciona complexidade inicial. JavaScript puro ainda é incrivelmente poderoso para muitos casos de uso.</p>
-                ''',
-                'meta_title': 'TypeScript vs JavaScript: Comparação Completa 2024',
-                'meta_description': 'Comparação detalhada entre TypeScript e JavaScript. Entenda quando usar cada tecnologia para máxima produtividade.',
+                """,
+                "meta_title": "TypeScript vs JavaScript: Comparação Completa 2024",
+                "meta_description": "Comparação detalhada entre TypeScript e JavaScript. Entenda quando usar cada tecnologia para máxima produtividade.",
             },
             {
-                'title': 'Novas Funcionalidades do React 19: O Que Você Precisa Saber',
-                'slug': 'react-19-novas-funcionalidades',
-                'excerpt': 'React 19 traz mudanças significativas que vão transformar a forma como desenvolvemos interfaces. Conheça as principais novidades.',
-                'category': categories['novidades'],
-                'content': '''
+                "title": "Novas Funcionalidades do React 19: O Que Você Precisa Saber",
+                "slug": "react-19-novas-funcionalidades",
+                "excerpt": "React 19 traz mudanças significativas que vão transformar a forma como desenvolvemos interfaces. Conheça as principais novidades.",
+                "category": categories["novidades"],
+                "content": """
                     <h2>React 19: Uma Nova Era</h2>
                     <p>O React 19 representa um dos maiores avanços do framework nos últimos anos, com foco em performance, experiência do desenvolvedor e padrões modernos da web.</p>
 
@@ -169,20 +171,20 @@ const expensiveValue = compute(a, b);</code></pre>
                     </ul>
 
                     <blockquote>
-                        <p>"React 19 não é apenas uma atualização incremental – é uma reimaginação de como construímos interfaces para a web moderna." - Dan Abramov</p>
+                        <p>"React 19 não é apenas uma atualização incremental - é uma reimaginação de como construímos interfaces para a web moderna." - Dan Abramov</p>
                     </blockquote>
 
                     <p>A migração será gradual e compatível com versões anteriores, mas os benefícios são significativos o suficiente para justificar o upgrade.</p>
-                ''',
-                'meta_title': 'React 19: Novidades e Mudanças - Guia Completo',
-                'meta_description': 'Descubra todas as novidades do React 19: compiler, actions, server components e mais. Guia atualizado com exemplos práticos.',
+                """,
+                "meta_title": "React 19: Novidades e Mudanças - Guia Completo",
+                "meta_description": "Descubra todas as novidades do React 19: compiler, actions, server components e mais. Guia atualizado com exemplos práticos.",
             },
             {
-                'title': 'Arquitetura de Microserviços: Prós, Contras e Quando Usar',
-                'slug': 'arquitetura-microservicos-guia',
-                'excerpt': 'Microserviços são a solução para tudo? Descubra os verdadeiros benefícios e desafios desta arquitetura antes de implementar.',
-                'category': categories['tecnologia'],
-                'content': '''
+                "title": "Arquitetura de Microserviços: Prós, Contras e Quando Usar",
+                "slug": "arquitetura-microservicos-guia",
+                "excerpt": "Microserviços são a solução para tudo? Descubra os verdadeiros benefícios e desafios desta arquitetura antes de implementar.",
+                "category": categories["tecnologia"],
+                "content": """
                     <h2>O Que São Microserviços?</h2>
                     <p>Microserviços são uma abordagem arquitetural onde uma aplicação é composta por serviços pequenos, independentes e especializados que se comunicam através de APIs.</p>
 
@@ -216,16 +218,16 @@ const expensiveValue = compute(a, b);</code></pre>
                     </ul>
 
                     <p>Lembre-se: você pode sempre começar com um monólito e migrar para microserviços quando realmente precisar. A transição prematura pode criar complexidade desnecessária.</p>
-                ''',
-                'meta_title': 'Microserviços: Guia Completo de Arquitetura',
-                'meta_description': 'Entenda quando usar microserviços, vantagens, desvantagens e como implementar corretamente esta arquitetura.',
+                """,
+                "meta_title": "Microserviços: Guia Completo de Arquitetura",
+                "meta_description": "Entenda quando usar microserviços, vantagens, desvantagens e como implementar corretamente esta arquitetura.",
             },
             {
-                'title': 'SEO em 2024: Estratégias Que Realmente Funcionam',
-                'slug': 'seo-2024-estrategias',
-                'excerpt': 'O algoritmo do Google mudou. Descubra as técnicas de SEO modernas que trazem resultados reais em 2024.',
-                'category': categories['tutoriais'],
-                'content': '''
+                "title": "SEO em 2024: Estratégias Que Realmente Funcionam",
+                "slug": "seo-2024-estrategias",
+                "excerpt": "O algoritmo do Google mudou. Descubra as técnicas de SEO modernas que trazem resultados reais em 2024.",
+                "category": categories["tutoriais"],
+                "content": """
                     <h2>O SEO Evoluiu</h2>
                     <p>Esqueça keyword stuffing e backlinks comprados. O SEO moderno é sobre experiência do usuário, conteúdo genuíno e sinais de qualidade reais.</p>
 
@@ -270,16 +272,16 @@ const expensiveValue = compute(a, b);</code></pre>
                     </ul>
 
                     <p>O futuro do SEO é criar genuinamente o melhor conteúdo para seu público. Algoritmos estão cada vez melhores em detectar valor real versus manipulação.</p>
-                ''',
-                'meta_title': 'SEO 2024: Guia Atualizado de Otimização para Google',
-                'meta_description': 'Estratégias modernas de SEO que funcionam em 2024. Core Web Vitals, E-E-A-T, mobile-first e mais.',
+                """,
+                "meta_title": "SEO 2024: Guia Atualizado de Otimização para Google",
+                "meta_description": "Estratégias modernas de SEO que funcionam em 2024. Core Web Vitals, E-E-A-T, mobile-first e mais.",
             },
             {
-                'title': 'CI/CD com GitHub Actions: Automatize Seu Deploy',
-                'slug': 'cicd-github-actions-tutorial',
-                'excerpt': 'Configure pipelines de CI/CD profissionais usando GitHub Actions. Deploy automatizado nunca foi tão simples.',
-                'category': categories['tutoriais'],
-                'content': '''
+                "title": "CI/CD com GitHub Actions: Automatize Seu Deploy",
+                "slug": "cicd-github-actions-tutorial",
+                "excerpt": "Configure pipelines de CI/CD profissionais usando GitHub Actions. Deploy automatizado nunca foi tão simples.",
+                "category": categories["tutoriais"],
+                "content": """
                     <h2>Por Que CI/CD é Essencial?</h2>
                     <p>Continuous Integration e Continuous Deployment transformam a forma como desenvolvemos software. Com CI/CD, cada commit pode ser testado, validado e deployado automaticamente.</p>
 
@@ -349,34 +351,36 @@ jobs:
 </code></pre>
 
                     <p>Com CI/CD, você ganha confiança para fazer deploys frequentes, reduz bugs em produção e libera a equipe para focar em desenvolvimento ao invés de processos manuais.</p>
-                ''',
-                'meta_title': 'GitHub Actions Tutorial: CI/CD Completo',
-                'meta_description': 'Aprenda a configurar CI/CD com GitHub Actions. Tutorial completo com exemplos práticos de deploy automatizado.',
+                """,
+                "meta_title": "GitHub Actions Tutorial: CI/CD Completo",
+                "meta_description": "Aprenda a configurar CI/CD com GitHub Actions. Tutorial completo com exemplos práticos de deploy automatizado.",
             },
         ]
 
         created_count = 0
         for article_data in articles_data:
             article, created = Article.objects.update_or_create(
-                slug=article_data['slug'],
+                slug=article_data["slug"],
                 company=company,
                 defaults={
                     **article_data,
-                    'author': user,
-                    'is_public': True,
-                    'status': Article.STATUS_PUBLISHED,
-                    'published_at': timezone.now(),
-                }
+                    "author": user,
+                    "is_public": True,
+                    "status": Article.STATUS_PUBLISHED,
+                    "published_at": timezone.now(),
+                },
             )
-            
+
             if created:
                 created_count += 1
-                self.stdout.write(self.style.SUCCESS(f'  ✓ Created: {article.title}'))
+                self.stdout.write(self.style.SUCCESS(f"  ✓ Created: {article.title}"))
             else:
-                self.stdout.write(self.style.WARNING(f'  ↻ Updated: {article.title}'))
+                self.stdout.write(self.style.WARNING(f"  ↻ Updated: {article.title}"))
 
-        self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS(f'✅ Done! {created_count} new articles created.'))
-        self.stdout.write(self.style.SUCCESS(f'📊 Total public articles: {Article.objects.filter(is_public=True).count()}'))
-        self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS(f'🌐 View at: http://localhost:3005/p/artigos'))
+        self.stdout.write("")
+        self.stdout.write(self.style.SUCCESS(f"✅ Done! {created_count} new articles created."))
+        self.stdout.write(
+            self.style.SUCCESS(f"📊 Total public articles: {Article.objects.filter(is_public=True).count()}")
+        )
+        self.stdout.write("")
+        self.stdout.write(self.style.SUCCESS("🌐 View at: http://localhost:3005/p/artigos"))

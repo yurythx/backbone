@@ -6,31 +6,44 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('core', '0006_alter_tenantbranding_icon_alter_tenantbranding_logo'),
+        ("core", "0006_alter_tenantbranding_icon_alter_tenantbranding_logo"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Notification',
+            name="Notification",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('notification_type', models.CharField(choices=[('message', 'Mensagem'), ('system', 'Sistema'), ('approval', 'Aprovação')], default='system', max_length=20)),
-                ('title', models.CharField(max_length=255)),
-                ('message', models.TextField()),
-                ('link', models.CharField(blank=True, max_length=500, null=True)),
-                ('is_read', models.BooleanField(default=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('company', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.company')),
-                ('recipient', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='notifications', to=settings.AUTH_USER_MODEL)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "notification_type",
+                    models.CharField(
+                        choices=[("message", "Mensagem"), ("system", "Sistema"), ("approval", "Aprovação")],
+                        default="system",
+                        max_length=20,
+                    ),
+                ),
+                ("title", models.CharField(max_length=255)),
+                ("message", models.TextField()),
+                ("link", models.CharField(blank=True, max_length=500, null=True)),
+                ("is_read", models.BooleanField(default=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("company", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.company")),
+                (
+                    "recipient",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="notifications",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['recipient', 'is_read'], name='notificatio_recipie_4e3567_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [models.Index(fields=["recipient", "is_read"], name="notificatio_recipie_4e3567_idx")],
             },
         ),
     ]

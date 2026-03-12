@@ -18,6 +18,7 @@ export interface User {
   is_superuser?: boolean;
   avatar?: string | null;
   avatar_url?: string | null;
+  bio?: string | null;
   status: 'online' | 'busy' | 'offline';
   company?: number | Company;
 }
@@ -172,6 +173,13 @@ export interface Article {
   image?: string | null;
   cover_image?: string | null; // Alternative field name for image
   author_name?: string;
+  author_info?: {
+    id: number;
+    username: string;
+    full_name: string;
+    avatar_url?: string | null;
+    bio?: string | null;
+  } | null;
   category_name?: string;
   meta_title?: string;
   meta_description?: string;

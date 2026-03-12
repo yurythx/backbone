@@ -4,35 +4,34 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('messenger', '0001_initial'),
+        ("messenger", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='message',
-            name='file',
-            field=models.FileField(blank=True, null=True, upload_to='chat/attachments/'),
+            model_name="message",
+            name="file",
+            field=models.FileField(blank=True, null=True, upload_to="chat/attachments/"),
         ),
         migrations.AddField(
-            model_name='message',
-            name='file_name',
+            model_name="message",
+            name="file_name",
             field=models.CharField(blank=True, max_length=255, null=True),
         ),
         migrations.AddField(
-            model_name='message',
-            name='file_size',
+            model_name="message",
+            name="file_size",
             field=models.BigIntegerField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='message',
-            name='file_type',
+            model_name="message",
+            name="file_type",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AlterField(
-            model_name='message',
-            name='content',
+            model_name="message",
+            name="content",
             field=models.TextField(blank=True, null=True),
         ),
     ]

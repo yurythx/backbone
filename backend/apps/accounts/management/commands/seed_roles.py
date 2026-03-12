@@ -1,9 +1,11 @@
 from django.core.management.base import BaseCommand
-from apps.core.models import Company
+
 from apps.accounts.services import AccountService
+from apps.core.models import Company
+
 
 class Command(BaseCommand):
-    help = 'Seeds default roles (Admin, Editor, Membro) for all existing companies.'
+    help = "Seeds default roles (Admin, Editor, Membro) for all existing companies."
 
     def handle(self, *args, **options):
         companies = Company.objects.all()

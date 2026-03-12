@@ -1,18 +1,15 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
-from apps.core.models import Company, AuditLog
+
 from apps.accounts.models import User
+from apps.core.models import AuditLog, Company
+
 
 class OnboardingLogicTest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.company = Company.objects.create(name="New SaaS", slug="new-saas")
-        self.user = User.objects.create_user(
-            username="admin", 
-            password="password", 
-            company=self.company,
-            is_staff=True
-        )
+        self.user = User.objects.create_user(username="admin", password="password", company=self.company, is_staff=True)
         self.client.force_authenticate(user=self.user)
 
     def test_initial_onboarding_state(self):
@@ -23,21 +20,15 @@ class OnboardingLogicTest(TestCase):
     def test_complete_onboarding_action(self):
         """Testa se o endpoint marca o onboarding como concluído e loga no AuditLog."""
         # Definir contexto via header para o middleware identificar o tenant
-        response = self.client.post(
-            '/api/core/companies/complete_onboarding/',
-            HTTP_X_COMPANY_SLUG='new-saas'
-        )
-        
+        response = self.client.post("/api/core/companies/complete_onboarding/", HTTP_X_COMPANY_SLUG="new-saas")
+
         self.assertEqual(response.status_code, 200)
-        
+
         self.company.refresh_from_db()
         self.assertTrue(self.company.onboarding_completed)
-        
+
         # Verificar log de auditoria
         log_exists = AuditLog.objects.filter(
-            company=self.company,
-            action='update',
-            resource='Company',
-            details__message="Onboarding completed"
+            company=self.company, action="update", resource="Company", details__message="Onboarding completed"
         ).exists()
         self.assertTrue(log_exists)

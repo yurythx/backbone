@@ -11,6 +11,7 @@ from .models import Invitation, Role
 
 User = get_user_model()
 
+
 class AccountService:
     @staticmethod
     def request_password_reset(email):
@@ -28,10 +29,7 @@ class AccountService:
                 subject="Recuperação de Senha - Backbone",
                 recipient_list=[email],
                 template_name="emails/password_reset.html",
-                context={
-                    "reset_url": reset_url,
-                    "subject": "Recuperação de Senha"
-                }
+                context={"reset_url": reset_url, "subject": "Recuperação de Senha"},
             )
             return True
         except User.DoesNotExist:
@@ -59,12 +57,7 @@ class AccountService:
         """
         Creates an invitation and sends the invitation email.
         """
-        invitation = Invitation.objects.create(
-            company=company,
-            invited_by=sender,
-            email=email,
-            role=role
-        )
+        invitation = Invitation.objects.create(company=company, invited_by=sender, email=email, role=role)
 
         invite_url = f"{settings.FRONTEND_URL}/accept-invite?token={invitation.token}"
 
@@ -72,11 +65,7 @@ class AccountService:
             subject=f"Convite para {company.name} - Backbone",
             recipient_list=[email],
             template_name="emails/invitation.html",
-            context={
-                "company_name": company.name,
-                "invite_url": invite_url,
-                "subject": "Convite de Acesso"
-            }
+            context={"company_name": company.name, "invite_url": invite_url, "subject": "Convite de Acesso"},
         )
         return invitation
 
@@ -86,10 +75,10 @@ class AccountService:
         Validates the invitation token and creates a new user.
         """
         try:
-            invite = Invitation.all_objects.get(token=token, status='pending')
+            invite = Invitation.all_objects.get(token=token, status="pending")
 
             if invite.is_expired:
-                invite.status = 'expired'
+                invite.status = "expired"
                 invite.save()
                 return None, "Este convite expirou."
 
@@ -112,11 +101,11 @@ class AccountService:
                 first_name=first_name,
                 last_name=last_name,
                 password=password,
-                role=invite.role
+                role=invite.role,
             )
 
             # Update invitation status
-            invite.status = 'accepted'
+            invite.status = "accepted"
             invite.accepted_at = timezone.now()
             invite.save()
 
@@ -124,6 +113,7 @@ class AccountService:
 
         except Invitation.DoesNotExist:
             return None, "Convite inválido ou já utilizado."
+
     @staticmethod
     def ensure_default_roles(company):
         """
@@ -142,25 +132,25 @@ class AccountService:
                         company=company,
                         name=role_name,
                         defaults={
-                            'description': config['description'],
-                            'permissions': config['permissions'],
-                            'is_system_role': True
-                        }
+                            "description": config["description"],
+                            "permissions": config["permissions"],
+                            "is_system_role": True,
+                        },
                     )
                     if not created:
                         existing = list(role.permissions or [])
-                        desired = list(config['permissions'] or [])
+                        desired = list(config["permissions"] or [])
                         merged = list(dict.fromkeys(desired + existing))
                         updates = []
-                        if role.description != config['description']:
-                            role.description = config['description']
-                            updates.append('description')
+                        if role.description != config["description"]:
+                            role.description = config["description"]
+                            updates.append("description")
                         if merged != existing:
                             role.permissions = merged
-                            updates.append('permissions')
+                            updates.append("permissions")
                         if not role.is_system_role:
                             role.is_system_role = True
-                            updates.append('is_system_role')
+                            updates.append("is_system_role")
                         if updates:
                             role.save(update_fields=updates)
             except IntegrityError:
@@ -168,12 +158,12 @@ class AccountService:
                 # Recover by fetching and updating using the global manager.
                 role = Role.all_objects.get(company=company, name=role_name)
                 existing = list(role.permissions or [])
-                desired = list(config['permissions'] or [])
+                desired = list(config["permissions"] or [])
                 merged = list(dict.fromkeys(desired + existing))
-                role.description = config['description']
+                role.description = config["description"]
                 role.permissions = merged
                 role.is_system_role = True
-                role.save(update_fields=['permissions', 'description', 'is_system_role'])
+                role.save(update_fields=["permissions", "description", "is_system_role"])
 
             roles_processed.append(role_name)
 

@@ -1,26 +1,27 @@
+from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
-from apps.core.models import Company
+
 from apps.accounts.models import Role
+from apps.core.models import Company
 
 User = get_user_model()
+
 
 class UserSuperadminSecurityTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Test Co", slug="test")
-        
+
         self.superadmin1 = User.objects.create_superuser(
-            username='super1', email='s1@test.com', password='password', company=self.company
+            username="super1", email="s1@test.com", password="password", company=self.company
         )
         self.superadmin2 = User.objects.create_superuser(
-            username='super2', email='s2@test.com', password='password', company=self.company
+            username="super2", email="s2@test.com", password="password", company=self.company
         )
-        
-        self.admin_role = Role.objects.create(name="Admin", company=self.company, permissions=['admin.user_manage'])
+
+        self.admin_role = Role.objects.create(name="Admin", company=self.company, permissions=["admin.user_manage"])
         self.regular_admin = User.objects.create_user(
-            username='admin', email='a@test.com', password='password', 
-            company=self.company, role=self.admin_role
+            username="admin", email="a@test.com", password="password", company=self.company, role=self.admin_role
         )
 
     def test_superadmin_can_edit_another_superadmin(self):

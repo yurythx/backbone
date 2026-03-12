@@ -30,9 +30,7 @@ class Migration(migrations.Migration):
                 ("slug", models.SlugField(max_length=100)),
                 (
                     "company",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="core.company"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.company"),
                 ),
             ],
             options={
@@ -74,9 +72,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "company",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="core.company"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.company"),
                 ),
                 (
                     "category",

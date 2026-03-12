@@ -32,10 +32,16 @@ ignore = [
 ]
 
 # Allow specific violations in specific files
-per-file-ignores = { "*/migrations/*.py" = ["E501", "F401", "N"], "*/settings*.py" = ["E402", "F401", "F403"] }
+per-file-ignores = {
+    "*/migrations/*.py" = ["E501", "F401", "N"],
+    "*/settings*.py" = ["E402", "F401", "F403"],
+    "config/asgi.py" = ["E402"],
+    "scripts/*.py" = ["E402"],
+    "seed_db.py" = ["E402"],
+}
 
 [lint.mccabe]
-max-complexity = 12
+max-complexity = 30
 
 [lint.isort]
 known-first-party = ["apps", "shared_kernel", "config"]

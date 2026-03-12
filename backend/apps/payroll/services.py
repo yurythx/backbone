@@ -148,7 +148,9 @@ class PayrollService:
             raise ValidationError({"detail": "Run precisa estar fechado antes de postar."})
 
         total = (
-            PayrollLine.objects.filter(company=company, payroll_run=run).aggregate(models.Sum("amount")).get("amount__sum")
+            PayrollLine.objects.filter(company=company, payroll_run=run)
+            .aggregate(models.Sum("amount"))
+            .get("amount__sum")
         )
         if total is None:
             total = Decimal("0.00")
@@ -175,7 +177,9 @@ class PayrollService:
         return tx
 
     @staticmethod
-    def ensure_thirteenth_accrual(*, company, user_id: int, year: int, month: int, salary_monthly: Decimal) -> ThirteenthAccrual:
+    def ensure_thirteenth_accrual(
+        *, company, user_id: int, year: int, month: int, salary_monthly: Decimal
+    ) -> ThirteenthAccrual:
         if month < 1 or month > 12:
             raise ValidationError({"detail": "month inválido. Use 1-12."})
         if year < 2000 or year > 2100:
@@ -292,7 +296,9 @@ class PayrollService:
         return total, breakdown
 
     @staticmethod
-    def build_thirteenth_payload(*, salary_monthly: Decimal, months_worked: int, installment: int) -> tuple[Decimal, list[dict]]:
+    def build_thirteenth_payload(
+        *, salary_monthly: Decimal, months_worked: int, installment: int
+    ) -> tuple[Decimal, list[dict]]:
         if months_worked <= 0 or months_worked > 12:
             raise ValidationError({"detail": "months_worked inválido. Use 1-12."})
         if installment not in {1, 2, 0}:

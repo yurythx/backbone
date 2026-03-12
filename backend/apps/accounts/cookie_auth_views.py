@@ -18,24 +18,26 @@ Frontend migration path:
 
 The existing localStorage-based flow continues to work in parallel during migration.
 """
+
 import logging
+
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError
-from drf_spectacular.utils import extend_schema
 
 logger = logging.getLogger(__name__)
 
 # Cookie names
-ACCESS_COOKIE_NAME = 'backbone_access'
-REFRESH_COOKIE_NAME = 'backbone_refresh'
+ACCESS_COOKIE_NAME = "backbone_access"
+REFRESH_COOKIE_NAME = "backbone_refresh"
 
 # Cookie settings
-_COOKIE_SECURE = not getattr(settings, 'DEBUG', False)  # False in dev, True in prod
-_COOKIE_SAMESITE = 'Lax'
+_COOKIE_SECURE = not getattr(settings, "DEBUG", False)  # False in dev, True in prod
+_COOKIE_SAMESITE = "Lax"
 _COOKIE_HTTPONLY = True
-_ACCESS_MAX_AGE = 60 * 60           # 1 hour (matches SIMPLE_JWT ACCESS_TOKEN_LIFETIME)
+_ACCESS_MAX_AGE = 60 * 60  # 1 hour (matches SIMPLE_JWT ACCESS_TOKEN_LIFETIME)
 _REFRESH_MAX_AGE = 60 * 60 * 24 * 7  # 7 days (matches SIMPLE_JWT REFRESH_TOKEN_LIFETIME)
 
 
@@ -48,7 +50,7 @@ def _set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         httponly=_COOKIE_HTTPONLY,
         secure=_COOKIE_SECURE,
         samesite=_COOKIE_SAMESITE,
-        path='/',
+        path="/",
     )
     response.set_cookie(
         REFRESH_COOKIE_NAME,
@@ -57,18 +59,18 @@ def _set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         httponly=_COOKIE_HTTPONLY,
         secure=_COOKIE_SECURE,
         samesite=_COOKIE_SAMESITE,
-        path='/api/accounts/token/cookie/',  # Restrict refresh cookie to refresh endpoint
+        path="/api/accounts/token/cookie/",  # Restrict refresh cookie to refresh endpoint
     )
 
 
 def _clear_auth_cookies(response) -> None:
     """Clear auth cookies (used on logout)."""
-    response.delete_cookie(ACCESS_COOKIE_NAME, path='/')
-    response.delete_cookie(REFRESH_COOKIE_NAME, path='/api/accounts/token/cookie/')
+    response.delete_cookie(ACCESS_COOKIE_NAME, path="/")
+    response.delete_cookie(REFRESH_COOKIE_NAME, path="/api/accounts/token/cookie/")
 
 
 @extend_schema(
-    tags=['Accounts - Auth'],
+    tags=["Accounts - Auth"],
     summary="Login and receive tokens as httpOnly cookies (XSS-safe)",
     description=(
         "Alternative to POST /token/ that stores JWT tokens in httpOnly cookies "
@@ -83,16 +85,16 @@ class CookieTokenObtainView(generics.GenericAPIView):
     Sets httpOnly cookies: backbone_access, backbone_refresh
     Returns: { "detail": "Login successful." }
     """
+
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        from django.contrib.auth import get_user_model
         from .serializers import CustomTokenObtainPairSerializer
 
         serializer = CustomTokenObtainPairSerializer(
             data=request.data,
-            context={'request': request},
+            context={"request": request},
         )
 
         try:
@@ -103,8 +105,8 @@ class CookieTokenObtainView(generics.GenericAPIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        access = serializer.validated_data.get('access')
-        refresh = serializer.validated_data.get('refresh')
+        access = serializer.validated_data.get("access")
+        refresh = serializer.validated_data.get("refresh")
 
         response = Response(
             {"detail": "Login realizado com sucesso."},
@@ -115,7 +117,7 @@ class CookieTokenObtainView(generics.GenericAPIView):
 
 
 @extend_schema(
-    tags=['Accounts - Auth'],
+    tags=["Accounts - Auth"],
     summary="Refresh access token via httpOnly cookie",
 )
 class CookieTokenRefreshView(generics.GenericAPIView):
@@ -123,13 +125,15 @@ class CookieTokenRefreshView(generics.GenericAPIView):
     POST /api/accounts/token/cookie/refresh/
     Reads backbone_refresh cookie, issues new access token cookie.
     """
+
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 
     def post(self, request):
         from django.contrib.auth import get_user_model
-        from .serializers import CustomTokenObtainPairSerializer
         from rest_framework_simplejwt.tokens import RefreshToken
+
+        from .serializers import CustomTokenObtainPairSerializer
 
         refresh_token = request.COOKIES.get(REFRESH_COOKIE_NAME)
         if not refresh_token:
@@ -141,7 +145,7 @@ class CookieTokenRefreshView(generics.GenericAPIView):
         User = get_user_model()
         try:
             token = RefreshToken(refresh_token)
-            user_id = token.get('user_id')
+            user_id = token.get("user_id")
             user = User.objects.get(id=user_id)
             new_token = CustomTokenObtainPairSerializer.get_token(user)
             access = str(new_token.access_token)
@@ -163,13 +167,13 @@ class CookieTokenRefreshView(generics.GenericAPIView):
             httponly=_COOKIE_HTTPONLY,
             secure=_COOKIE_SECURE,
             samesite=_COOKIE_SAMESITE,
-            path='/',
+            path="/",
         )
         return response
 
 
 @extend_schema(
-    tags=['Accounts - Auth'],
+    tags=["Accounts - Auth"],
     summary="Logout and clear httpOnly cookies",
 )
 class CookieLogoutView(generics.GenericAPIView):
@@ -177,6 +181,7 @@ class CookieLogoutView(generics.GenericAPIView):
     POST /api/accounts/logout/cookie/
     Blacklists the refresh token from cookie and clears both cookies.
     """
+
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 

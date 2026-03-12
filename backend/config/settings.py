@@ -7,12 +7,10 @@ from pathlib import Path
 import environ
 from django.core.exceptions import ImproperlyConfigured
 
-env = environ.Env(
-    DEBUG=(bool, False)
-)
+env = environ.Env(DEBUG=(bool, False))
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
 # SECURITY: SECRET_KEY is required and must be set via environment variable
 # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
@@ -25,7 +23,7 @@ if not SECRET_KEY:
     )
 
 DEBUG = env("DEBUG")
-TESTING = 'test' in sys.argv or 'test_coverage' in sys.argv or '--test' in sys.argv
+TESTING = "test" in sys.argv or "test_coverage" in sys.argv or "--test" in sys.argv
 
 INSTALLED_APPS = [
     "daphne",
@@ -42,7 +40,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",  # JWT Blacklist — required for secure logout
     "drf_spectacular",
-    "reversion", # Version control
+    "reversion",  # Version control
     "storages",  # Django Storages
     "django_celery_beat",
     "django_filters",
@@ -84,46 +82,46 @@ MIDDLEWARE = [
 
 # Authentication Backends (LDAP + Standard)
 AUTHENTICATION_BACKENDS = [
-    'apps.core.ldap_backend.TenantLDAPBackend',  # LDAP multi-tenant
-    'django.contrib.auth.backends.ModelBackend',  # Fallback padrão
+    "apps.core.ldap_backend.TenantLDAPBackend",  # LDAP multi-tenant
+    "django.contrib.auth.backends.ModelBackend",  # Fallback padrão
 ]
 
 REST_FRAMEWORK = {
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
     ],
-    'DEFAULT_PAGINATION_CLASS': 'config.pagination.DefaultPagination',
-    'PAGE_SIZE': 10,
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.DefaultPagination",
+    "PAGE_SIZE": 10,
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
     ],
-    'DEFAULT_THROTTLE_CLASSES': [
-        'shared_kernel.throttling.TenantRateThrottle',
+    "DEFAULT_THROTTLE_CLASSES": [
+        "shared_kernel.throttling.TenantRateThrottle",
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'tenant': '5000/day',
-        'anon': '500/day',
+    "DEFAULT_THROTTLE_RATES": {
+        "tenant": "5000/day",
+        "anon": "500/day",
         # Scoped throttles
-        'link_preview': '15/min',
-        'public_articles': '60/min',
+        "link_preview": "15/min",
+        "public_articles": "60/min",
         # SECURITY: Strict limit on user registration to prevent bot account creation
-        'user_registration': '5/hour',
-    }
+        "user_registration": "5/hour",
+    },
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),  # Mais curto por segurança
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),   # Longo para evitar deslogar no mobile frequentemente
-    "ROTATE_REFRESH_TOKENS": True,                  # Novo refresh token a cada renovação
-    "BLACKLIST_AFTER_ROTATION": True,               # Invalida o antigo por segurança
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),  # Longo para evitar deslogar no mobile frequentemente
+    "ROTATE_REFRESH_TOKENS": True,  # Novo refresh token a cada renovação
+    "BLACKLIST_AFTER_ROTATION": True,  # Invalida o antigo por segurança
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
@@ -136,26 +134,26 @@ SIMPLE_JWT = {
 HEALTH_IGNORE_REDIS = env.bool("HEALTH_IGNORE_REDIS", default=False)
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Backbone SaaS API',
-    'DESCRIPTION': 'API Multi-tenant para SaaS BlackBone',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_REQUEST': True,
-    'COMPONENT_NO_READ_ONLY_FIELDS': True,
-    'CONTACT': {
-        'name': 'Backbone Team',
-        'email': 'support@backbone.com',
+    "TITLE": "Backbone SaaS API",
+    "DESCRIPTION": "API Multi-tenant para SaaS BlackBone",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "COMPONENT_NO_READ_ONLY_FIELDS": True,
+    "CONTACT": {
+        "name": "Backbone Team",
+        "email": "support@backbone.com",
     },
-    'APPEND_COMPONENTS': {
-        'securitySchemes': {
-            'ApiKeyAuth': {
-                'type': 'apiKey',
-                'in': 'header',
-                'name': 'X-Company-Slug',
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Company-Slug",
             }
         }
     },
-    'SECURITY': [{'jwtAuth': []}, {'ApiKeyAuth': []}],
+    "SECURITY": [{"jwtAuth": []}, {"ApiKeyAuth": []}],
 }
 
 # CORS Configuration
@@ -168,40 +166,50 @@ CORS_ALLOWED_ORIGINS = env.list(
         "http://localhost:3005",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3005",
-    ] if DEBUG else []
+    ]
+    if DEBUG
+    else [],
 )
 
 if not DEBUG and not CORS_ALLOWED_ORIGINS:
     raise ImproperlyConfigured(
-        "CORS_ALLOWED_ORIGINS must be set in production environment. "
-        "Set the CORS_ALLOWED_ORIGINS environment variable."
+        "CORS_ALLOWED_ORIGINS must be set in production environment. Set the CORS_ALLOWED_ORIGINS environment variable."
     )
 
-CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[
-    "https://projetoravenna.cloud",
-    "https://api.projetoravenna.cloud",
-    "http://192.168.1.121:3005",
-    "http://192.168.1.121:8005",
-    "http://localhost:3000",
-    "http://localhost:3005",
-    "http://localhost:8005",
-    "http://127.0.0.1:3005",
-    "http://127.0.0.1:8005",
-])
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[
+        "https://projetoravenna.cloud",
+        "https://api.projetoravenna.cloud",
+        "http://192.168.1.121:3005",
+        "http://192.168.1.121:8005",
+        "http://localhost:3000",
+        "http://localhost:3005",
+        "http://localhost:8005",
+        "http://127.0.0.1:3005",
+        "http://127.0.0.1:8005",
+    ],
+)
 
 # Trust X-Forwarded-Host from Cloudflare/Proxy
 USE_X_FORWARDED_HOST = True
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
-    "api.projetoravenna.cloud",
-    "projetoravenna.cloud",
-    "backbone_backend",
-    "backbone_frontend",
-    "192.168.1.121",
-    "localhost",
-    "127.0.0.1"
-])
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS",
+    default=[
+        "api.projetoravenna.cloud",
+        "projetoravenna.cloud",
+        "backbone_backend",
+        "backbone_frontend",
+        "192.168.1.121",
+        "localhost",
+        "127.0.0.1",
+    ],
+)
+
+if TESTING and "testserver" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
 
 # SECURITY: Deployment security settings
 if not DEBUG:
@@ -210,8 +218,8 @@ if not DEBUG:
     # mas isso pode quebrar healthchecks internos via HTTP.
     SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
     SECURE_REDIRECT_EXEMPT = [
-        r'^health/$',
-        r'^api/core/health/$',
+        r"^health/$",
+        r"^api/core/health/$",
     ]
     SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=True)
     CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=True)
@@ -258,7 +266,6 @@ if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 
 
-
 # Static & Media Files
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
@@ -279,7 +286,7 @@ if USE_S3:
     AWS_S3_SIGNATURE_VERSION = "s3v4"
 
     # Media files on S3
-    AWS_MEDIA_LOCATION = ''
+    AWS_MEDIA_LOCATION = ""
 
     # Modern Django 4.2+ STORAGES setting
     STORAGES = {
@@ -290,7 +297,9 @@ if USE_S3:
             },
         },
         "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if not DEBUG
+            else "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
 
@@ -300,26 +309,28 @@ if USE_S3:
     media_host = env("MEDIA_HOST", default=None)
     if not media_host:
         if DEBUG:
-            media_host = 'localhost:8005'
+            media_host = "localhost:8005"
         else:
-            media_host = ALLOWED_HOSTS[0] if ALLOWED_HOSTS else 'localhost'
+            media_host = ALLOWED_HOSTS[0] if ALLOWED_HOSTS else "localhost"
 
-    media_base_path = env("MEDIA_BASE_PATH", default='media')
-    AWS_S3_CUSTOM_DOMAIN = f"{media_host}/{media_base_path}".rstrip('/')
+    media_base_path = env("MEDIA_BASE_PATH", default="media")
+    AWS_S3_CUSTOM_DOMAIN = f"{media_host}/{media_base_path}".rstrip("/")
 
     AWS_QUERYSTRING_AUTH = False
 
-    media_proto = 'http' if DEBUG else 'https'
-    MEDIA_URL = f'{media_proto}://{AWS_S3_CUSTOM_DOMAIN}/'
+    media_proto = "http" if DEBUG else "https"
+    MEDIA_URL = f"{media_proto}://{AWS_S3_CUSTOM_DOMAIN}/"
 else:
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = BASE_DIR / 'media'
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = BASE_DIR / "media"
     STORAGES = {
         "default": {
             "BACKEND": "django.core.files.storage.FileSystemStorage",
         },
         "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if not DEBUG
+            else "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
 
@@ -362,8 +373,8 @@ DATABASES = {
 }
 # Forcing CONN_MAX_AGE=0 by default in Daphne/ASGI to prevent "too many clients"
 # Postgres errors. Connections will close after each request unless overridden.
-DATABASES['default']['CONN_MAX_AGE'] = env.int("CONN_MAX_AGE", default=0)
-DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=0)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 # Redis Channel Layer & Cache
 # Using logical DBs: 0 for Cache, 1 for Celery, 2 for Channels
@@ -373,6 +384,7 @@ if REDIS_URL:
     # D4: Parse REDIS_URL robustly using urllib instead of fragile regex.
     # Strips any DB number suffix so we can assign logical DBs explicitly below.
     from urllib.parse import urlparse as _urlparse
+
     _parsed = _urlparse(REDIS_URL)
     # Reconstruct base URL: scheme + auth (if any) + host + port (without path/db)
     _auth = ""
@@ -382,7 +394,6 @@ if REDIS_URL:
         _auth = f"{_user}{_pass}@"
     _port = f":{_parsed.port}" if _parsed.port else ""
     REDIS_BASE = f"{_parsed.scheme}://{_auth}{_parsed.hostname}{_port}"
-
 
     CHANNEL_LAYERS = {
         "default": {
@@ -401,15 +412,15 @@ if REDIS_URL:
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "KEY_FUNCTION": "shared_kernel.utils.make_key_with_tenant",
-            }
+            },
         },
         "tenants": {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": f"{REDIS_BASE}/0",
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            }
-        }
+            },
+        },
     }
 
     # In test mode, override Redis cache with in-memory cache
@@ -427,19 +438,11 @@ if REDIS_URL:
             },
         }
         # Also use in-memory channel layer in tests (no Redis needed)
-        CHANNEL_LAYERS = {
-            "default": {
-                "BACKEND": "channels.layers.InMemoryChannelLayer"
-            }
-        }
+        CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 
 else:
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels.layers.InMemoryChannelLayer"
-        }
-    }
+    CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
     # Local memory cache for dev
     CACHES = {
         "default": {
@@ -449,7 +452,7 @@ else:
         "tenants": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "tenants-cache",
-        }
+        },
     }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -478,54 +481,54 @@ AUTH_USER_MODEL = "accounts.User"
 # Logging Configuration
 # Logging Configuration
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
         },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
         },
-        'json': {
-            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
-            'format': '%(levelname)s %(asctime)s %(module)s %(message)s %(request_id)s %(user_id)s %(tenant)s',
+        "json": {
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            "format": "%(levelname)s %(asctime)s %(module)s %(message)s %(request_id)s %(user_id)s %(tenant)s",
+        },
+    },
+    "filters": {
+        "context": {
+            "()": "shared_kernel.logging_middleware.ContextLoggerFilter",
         }
     },
-    'filters': {
-        'context': {
-            '()': 'shared_kernel.logging_middleware.ContextLoggerFilter',
-        }
-    },
-    'handlers': {
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'json' if not DEBUG else 'verbose',
-            'filters': ['context'],
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "json" if not DEBUG else "verbose",
+            "filters": ["context"],
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': True,
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": True,
         },
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
+        "django.request": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
         },
     },
 }
 
 # Web Push (VAPID) Settings
 # Generate keys with: pywebpush generate-vapid-keys
-VAPID_PUBLIC_KEY = env('VAPID_PUBLIC_KEY', default=None)
-VAPID_PRIVATE_KEY = env('VAPID_PRIVATE_KEY', default=None)
-VAPID_ADMIN_EMAIL = env('VAPID_ADMIN_EMAIL', default='admin@backbone.com')
+VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", default=None)
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", default=None)
+VAPID_ADMIN_EMAIL = env("VAPID_ADMIN_EMAIL", default="admin@backbone.com")
 
 # Warn if VAPID keys are missing in production (web push will silently fail without them)
 if not DEBUG and not TESTING and not VAPID_PUBLIC_KEY:
@@ -538,8 +541,8 @@ if not DEBUG and not TESTING and not VAPID_PUBLIC_KEY:
     )
 
 # AI Settings
-GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
-OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
+GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
 # Sentry Configuration
 SENTRY_DSN = env("SENTRY_DSN", default=None)
 if SENTRY_DSN:
@@ -567,9 +570,9 @@ if SENTRY_DSN:
 # Use DB 1 for Celery
 CELERY_BROKER_URL = f"{REDIS_BASE}/1" if REDIS_URL else "redis://localhost:6379/1"
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
-CELERY_ACCEPT_CONTENT = ['application/json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ["application/json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 # IMPORTANT: CELERY_TASK_ALWAYS_EAGER must be driven by TESTING flag, NOT DEBUG.
 # Running eager in dev (DEBUG=True) masks serialization and timing bugs that
@@ -582,36 +585,36 @@ CELERY_TASK_IGNORE_RESULT = True
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
-    'cleanup-orphan-messenger-files': {
-        'task': 'apps.messenger.tasks.cleanup_orphan_chat_files',
-        'schedule': timedelta(days=1),
+    "cleanup-orphan-messenger-files": {
+        "task": "apps.messenger.tasks.cleanup_orphan_chat_files",
+        "schedule": timedelta(days=1),
     },
-    'payroll-accrue-thirteenth-previous-month': {
-        'task': 'apps.payroll.tasks.accrue_thirteenth_previous_month',
-        'schedule': crontab(minute=5, hour=0, day_of_month='1'),
+    "payroll-accrue-thirteenth-previous-month": {
+        "task": "apps.payroll.tasks.accrue_thirteenth_previous_month",
+        "schedule": crontab(minute=5, hour=0, day_of_month="1"),
     },
-    'payroll-generate-thirteenth-july': {
-        'task': 'apps.payroll.tasks.generate_thirteenth_july',
-        'schedule': crontab(minute=15, hour=0, day_of_month='1', month_of_year='7'),
+    "payroll-generate-thirteenth-july": {
+        "task": "apps.payroll.tasks.generate_thirteenth_july",
+        "schedule": crontab(minute=15, hour=0, day_of_month="1", month_of_year="7"),
     },
-    'payroll-generate-thirteenth-december': {
-        'task': 'apps.payroll.tasks.generate_thirteenth_december',
-        'schedule': crontab(minute=25, hour=0, day_of_month='1', month_of_year='12'),
+    "payroll-generate-thirteenth-december": {
+        "task": "apps.payroll.tasks.generate_thirteenth_december",
+        "schedule": crontab(minute=25, hour=0, day_of_month="1", month_of_year="12"),
     },
 }
 
 # Field Encryption (for sensitive data like SMTP passwords)
 # Generate key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-FIELD_ENCRYPTION_KEY = env('FIELD_ENCRYPTION_KEY', default=None)
+FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default=None)
 
 # SECURITY: In production, encryption key is mandatory.
 # Without it, SMTP and LDAP passwords are stored as empty bytes (silently unprotected).
 # BUILDING=True is set by the Dockerfile during collectstatic — secrets are never available at build time.
-BUILDING = env.bool('BUILDING', default=False)
+BUILDING = env.bool("BUILDING", default=False)
 if not DEBUG and not TESTING and not BUILDING and not FIELD_ENCRYPTION_KEY:
     raise ImproperlyConfigured(
         "FIELD_ENCRYPTION_KEY must be set in production. "
-        "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )
 
 # Content Security Policy (CSP)

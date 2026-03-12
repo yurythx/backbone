@@ -4,15 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('pages', '0002_page_meta_keywords'),
+        ("pages", "0002_page_meta_keywords"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='page',
-            name='status',
-            field=models.CharField(choices=[('draft', 'Rascunho'), ('published', 'Publicado')], db_index=True, default='draft', max_length=20),
+            model_name="page",
+            name="status",
+            field=models.CharField(
+                choices=[("draft", "Rascunho"), ("published", "Publicado")],
+                db_index=True,
+                default="draft",
+                max_length=20,
+            ),
         ),
     ]

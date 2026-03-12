@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0004_role_invitation_user_role'),
+        ("accounts", "0004_role_invitation_user_role"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='avatar',
-            field=models.ImageField(blank=True, help_text='Foto de perfil do usuário', null=True, upload_to='avatars/'),
+            model_name="user",
+            name="avatar",
+            field=models.ImageField(blank=True, help_text="Foto de perfil do usuário", null=True, upload_to="avatars/"),
         ),
     ]

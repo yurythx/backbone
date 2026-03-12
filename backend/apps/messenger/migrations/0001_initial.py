@@ -32,15 +32,11 @@ class Migration(migrations.Migration):
                 ("is_group", models.BooleanField(default=False)),
                 (
                     "company",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="core.company"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.company"),
                 ),
                 (
                     "participants",
-                    models.ManyToManyField(
-                        related_name="conversations", to=settings.AUTH_USER_MODEL
-                    ),
+                    models.ManyToManyField(related_name="conversations", to=settings.AUTH_USER_MODEL),
                 ),
             ],
             options={
@@ -64,9 +60,7 @@ class Migration(migrations.Migration):
                 ("is_read", models.BooleanField(default=False)),
                 (
                     "company",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="core.company"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.company"),
                 ),
                 (
                     "conversation",

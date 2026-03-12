@@ -1,24 +1,28 @@
 import os
-import django
-from django.core.asgi import get_asgi_application
-from channels.routing import ProtocolTypeRouter, URLRouter
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+import django
+from channels.routing import ProtocolTypeRouter, URLRouter
+from django.conf import settings
+from django.core.asgi import get_asgi_application
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from channels.security.websocket import AllowedHostsOriginValidator
-from shared_kernel.channels_middleware import JwtAuthMiddleware
+
 import apps.messenger.routing
 import apps.notifications.routing
+from shared_kernel.channels_middleware import JwtAuthMiddleware
 
-application = ProtocolTypeRouter({
-    "http": get_asgi_application(),
-    "websocket": AllowedHostsOriginValidator(
-        JwtAuthMiddleware(
-            URLRouter(
-                apps.messenger.routing.websocket_urlpatterns + 
-                apps.notifications.routing.websocket_urlpatterns
-            )
-        )
-    ),
-})
+websocket_app = JwtAuthMiddleware(
+    URLRouter(apps.messenger.routing.websocket_urlpatterns + apps.notifications.routing.websocket_urlpatterns)
+)
+if not settings.TESTING:
+    websocket_app = AllowedHostsOriginValidator(websocket_app)
+
+application = ProtocolTypeRouter(
+    {
+        "http": get_asgi_application(),
+        "websocket": websocket_app,
+    }
+)

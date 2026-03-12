@@ -1,14 +1,16 @@
 """
 Celery tasks for the articles app.
 """
+
 import logging
+
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(
-    name='articles.notify_article_published',
+    name="articles.notify_article_published",
     bind=True,
     max_retries=3,
     default_retry_delay=30,
@@ -20,11 +22,12 @@ def notify_article_published(self, article_id):
     Runs asynchronously to avoid blocking the Django request worker.
     """
     try:
-        from .models import Article
         from apps.accounts.models import User
         from apps.notifications.tasks import notify_user_push
 
-        article = Article.objects.select_related('company').get(pk=article_id)
+        from .models import Article
+
+        article = Article.objects.select_related("company").get(pk=article_id)
         active_users = User.objects.filter(company=article.company, is_active=True)
 
         for target_user in active_users:
@@ -33,7 +36,7 @@ def notify_article_published(self, article_id):
                     target_user,
                     title=f"Novo Artigo: {article.title}",
                     message=article.excerpt or "Confira a nova publicação!",
-                    link=f"/artigos/{article.slug}"
+                    link=f"/artigos/{article.slug}",
                 )
             except Exception:
                 pass  # individual failure must not abort the entire task
@@ -43,7 +46,7 @@ def notify_article_published(self, article_id):
 
 
 @shared_task(
-    name='articles.record_article_view',
+    name="articles.record_article_view",
     ignore_result=True,
     # Low priority — losing a view count is acceptable; no retries needed.
     max_retries=0,
@@ -59,7 +62,7 @@ def record_article_view_async(article_id, user_id=None, ip_address=None):
     from .models import Article, ArticleView
 
     try:
-        article = Article.all_objects.select_related('company').get(pk=article_id)
+        article = Article.all_objects.select_related("company").get(pk=article_id)
     except Article.DoesNotExist:
         logger.warning("record_article_view_async: Article %s not found", article_id)
         return
@@ -67,6 +70,7 @@ def record_article_view_async(article_id, user_id=None, ip_address=None):
     user = None
     if user_id is not None:
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         try:
             user = User.all_objects.get(pk=user_id)

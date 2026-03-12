@@ -65,15 +65,11 @@ class Migration(migrations.Migration):
                 ("is_active", models.BooleanField(default=True)),
                 (
                     "company",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="core.company"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.company"),
                 ),
                 (
                     "plan",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.PROTECT, to="licensing.plan"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="licensing.plan"),
                 ),
             ],
             options={
@@ -108,9 +104,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "plan",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="licensing.plan"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="licensing.plan"),
                 ),
             ],
             options={
@@ -120,8 +114,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="plan",
             name="features",
-            field=models.ManyToManyField(
-                through="licensing.PlanFeature", to="licensing.feature"
-            ),
+            field=models.ManyToManyField(through="licensing.PlanFeature", to="licensing.feature"),
         ),
     ]

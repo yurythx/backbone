@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0006_alter_tenantbranding_icon_alter_tenantbranding_logo'),
+        ("core", "0006_alter_tenantbranding_icon_alter_tenantbranding_logo"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='company',
-            name='onboarding_completed',
+            model_name="company",
+            name="onboarding_completed",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='company',
-            name='onboarding_step',
+            model_name="company",
+            name="onboarding_step",
             field=models.IntegerField(default=1),
         ),
     ]

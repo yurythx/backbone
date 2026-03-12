@@ -54,18 +54,19 @@ def _parse_range(request):
 
     return start, end
 
+
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
-    module_code = 'finance'
+    module_code = "finance"
     action_permissions = {
-        'list': 'finance.view_financial',
-        'retrieve': 'finance.view_financial',
-        'create': 'finance.view_financial',
-        'update': 'finance.view_financial',
-        'partial_update': 'finance.view_financial',
-        'destroy': 'finance.view_financial',
+        "list": "finance.view_financial",
+        "retrieve": "finance.view_financial",
+        "create": "finance.view_financial",
+        "update": "finance.view_financial",
+        "partial_update": "finance.view_financial",
+        "destroy": "finance.view_financial",
     }
 
     def get_queryset(self):
@@ -110,18 +111,19 @@ class CategoryViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "Categoria em uso. Remova das transações antes de excluir."})
         instance.delete()
 
+
 class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all()
     serializer_class = TransactionSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
-    module_code = 'finance'
+    module_code = "finance"
     action_permissions = {
-        'list': 'finance.view_financial',
-        'retrieve': 'finance.view_financial',
-        'create': 'finance.view_financial',
-        'update': 'finance.view_financial',
-        'partial_update': 'finance.view_financial',
-        'destroy': 'finance.view_financial',
+        "list": "finance.view_financial",
+        "retrieve": "finance.view_financial",
+        "create": "finance.view_financial",
+        "update": "finance.view_financial",
+        "partial_update": "finance.view_financial",
+        "destroy": "finance.view_financial",
     }
 
     def get_queryset(self):
@@ -129,7 +131,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
         if not company:
             return Transaction.objects.none()
 
-        qs = Transaction.objects.select_related("category").filter(company=company).order_by("-competence_date", "-due_date", "-id")
+        qs = (
+            Transaction.objects.select_related("category")
+            .filter(company=company)
+            .order_by("-competence_date", "-due_date", "-id")
+        )
         can_manage = _has_permission(self.request, "finance.manage_financial")
         if not can_manage:
             qs = qs.filter(created_by=self.request.user)

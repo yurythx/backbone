@@ -13,18 +13,14 @@ def sync_status_before_removal(apps, schema_editor):
     Safety net: ensure any article with is_published=True is reflected
     correctly in the status field before we drop the column.
     """
-    Article = apps.get_model('articles', 'Article')
+    Article = apps.get_model("articles", "Article")
     # If is_published=True but status is still draft, move it to published
-    Article.objects.filter(
-        is_published=True,
-        status='draft'
-    ).update(status='published')
+    Article.objects.filter(is_published=True, status="draft").update(status="published")
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('articles', '0009_add_rejection_reason'),
+        ("articles", "0009_add_rejection_reason"),
     ]
 
     operations = [
@@ -35,7 +31,7 @@ class Migration(migrations.Migration):
         ),
         # Then remove the deprecated column
         migrations.RemoveField(
-            model_name='article',
-            name='is_published',
+            model_name="article",
+            name="is_published",
         ),
     ]

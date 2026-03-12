@@ -10,14 +10,13 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0011_add_ldap_config'),
+        ("core", "0011_add_ldap_config"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='tenantemailconfig',
-            name='smtp_password',
+            model_name="tenantemailconfig",
+            name="smtp_password",
         ),
     ]

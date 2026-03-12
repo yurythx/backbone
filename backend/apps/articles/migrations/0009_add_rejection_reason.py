@@ -4,15 +4,18 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('articles', '0008_add_is_public_visibility'),
+        ("articles", "0008_add_is_public_visibility"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='article',
-            name='rejection_reason',
-            field=models.TextField(blank=True, help_text='Preenchido pelo revisor ao rejeitar um artigo.', verbose_name='Motivo da Rejeição'),
+            model_name="article",
+            name="rejection_reason",
+            field=models.TextField(
+                blank=True,
+                help_text="Preenchido pelo revisor ao rejeitar um artigo.",
+                verbose_name="Motivo da Rejeição",
+            ),
         ),
     ]

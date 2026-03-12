@@ -4,15 +4,14 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('messenger', '0010_contactblock'),
+        ("messenger", "0010_contactblock"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='contactblock',
-            new_name='messenger_c_blocker_13a1d2_idx',
-            old_name='messenger_c_blocker_54c0fa_idx',
+            model_name="contactblock",
+            new_name="messenger_c_blocker_13a1d2_idx",
+            old_name="messenger_c_blocker_54c0fa_idx",
         ),
     ]

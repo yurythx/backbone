@@ -1,10 +1,12 @@
-from django.utils.text import slugify
 from django.utils import timezone
-from .models import Article, Category, Tag
-from apps.core.models import AuditLog
-from shared_kernel.audit import log_create, log_update, log_delete
-from apps.webhooks.tasks import trigger_webhooks
+from django.utils.text import slugify
+
 from apps.accounts.models import User
+from apps.webhooks.tasks import trigger_webhooks
+from shared_kernel.audit import log_create, log_delete, log_update
+
+from .models import Article
+
 
 class ArticleService:
     @staticmethod
@@ -16,39 +18,35 @@ class ArticleService:
         from django.conf import settings
 
         with reversion.create_revision():
-            tags_data = data.pop('tags', [])
+            tags_data = data.pop("tags", [])
             # Handle image as URL/path string in payload
             image_path = None
-            if 'image' in data and isinstance(data.get('image'), str):
-                url = (data.pop('image') or '').strip()
+            if "image" in data and isinstance(data.get("image"), str):
+                url = (data.pop("image") or "").strip()
                 if url:
-                    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+                    media_url = getattr(settings, "MEDIA_URL", "/media/")
                     if url.startswith(media_url):
-                        image_path = url[len(media_url):].lstrip('/')
-                    elif '://' in url:
-                        idx = url.find('/media/')
+                        image_path = url[len(media_url) :].lstrip("/")
+                    elif "://" in url:
+                        idx = url.find("/media/")
                         if idx != -1:
-                            image_path = url[idx+1:]  # 'media/...'
+                            image_path = url[idx + 1 :]  # 'media/...'
                     else:
                         image_path = url
 
             # Auto-slug if not provided
-            if not data.get('slug'):
-                data['slug'] = slugify(data.get('title', ''))
+            if not data.get("slug"):
+                data["slug"] = slugify(data.get("title", ""))
             # Ensure slug uniqueness within the company
-            base_slug = data.get('slug') or ''
+            base_slug = data.get("slug") or ""
             candidate = base_slug
             index = 1
             while Article.objects.filter(company=company, slug=candidate).exists():
                 candidate = f"{base_slug}-{index}"
                 index += 1
-            data['slug'] = candidate
+            data["slug"] = candidate
 
-            article = Article.objects.create(
-                company=company,
-                author=user,
-                **data
-            )
+            article = Article.objects.create(company=company, author=user, **data)
 
             if tags_data:
                 article.tags.set(tags_data)
@@ -59,21 +57,21 @@ class ArticleService:
                 article.save()
             elif image_path:
                 # Assign path string relative to storage
-                article.image.name = image_path.lstrip('/')
+                article.image.name = image_path.lstrip("/")
                 article.save()
 
             reversion.set_user(user)
             reversion.set_comment(f"Created by {user.username}")
 
         from types import SimpleNamespace
+
         log_create(user, "Article", article, request=SimpleNamespace(company=company))
 
-        trigger_webhooks(company, 'article.created', {
-            'id': str(article.id),
-            'title': article.title,
-            'slug': article.slug,
-            'author': user.username
-        })
+        trigger_webhooks(
+            company,
+            "article.created",
+            {"id": str(article.id), "title": article.title, "slug": article.slug, "author": user.username},
+        )
         return article
 
     @staticmethod
@@ -85,24 +83,24 @@ class ArticleService:
         from django.conf import settings
 
         with reversion.create_revision():
-            tags_data = data.pop('tags', None)
+            tags_data = data.pop("tags", None)
             # Normalize possible image URL/path provided in data
             image_path = None
-            if 'image' in data and isinstance(data.get('image'), str):
-                url = (data.pop('image') or '').strip()
+            if "image" in data and isinstance(data.get("image"), str):
+                url = (data.pop("image") or "").strip()
                 if url:
-                    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+                    media_url = getattr(settings, "MEDIA_URL", "/media/")
                     if url.startswith(media_url):
-                        image_path = url[len(media_url):].lstrip('/')
-                    elif '://' in url:
-                        idx = url.find('/media/')
+                        image_path = url[len(media_url) :].lstrip("/")
+                    elif "://" in url:
+                        idx = url.find("/media/")
                         if idx != -1:
-                            image_path = url[idx+1:]
+                            image_path = url[idx + 1 :]
                     else:
                         image_path = url
 
             # If status is being updated, ensure valid transition
-            new_status = data.get('status')
+            new_status = data.get("status")
             if new_status and new_status != article.status:
                 # Basic validation logic could go here
                 pass
@@ -116,7 +114,7 @@ class ArticleService:
             if image:
                 article.image = image
             elif image_path:
-                article.image.name = image_path.lstrip('/')
+                article.image.name = image_path.lstrip("/")
 
             article.save()
 
@@ -124,17 +122,18 @@ class ArticleService:
             reversion.set_comment(f"Updated by {user.username}")
 
         from types import SimpleNamespace
+
         log_update(user, "Article", article, request=SimpleNamespace(company=article.company))
 
-        trigger_webhooks(article.company, 'article.updated', {
-            'id': str(article.id),
-            'title': article.title,
-            'slug': article.slug,
-            'status': article.status
-        })
-        
+        trigger_webhooks(
+            article.company,
+            "article.updated",
+            {"id": str(article.id), "title": article.title, "slug": article.slug, "status": article.status},
+        )
+
         # Invalida cache de leitura
         from django.core.cache import cache
+
         c_slug = article.company.slug
         cache.delete(f"art_det:{c_slug}:{article.slug}")
         cache.delete(f"article_pub_detail:{c_slug}:{article.slug}")
@@ -145,38 +144,38 @@ class ArticleService:
     @staticmethod
     def submit_for_review(user, article):
         if article.status != Article.STATUS_DRAFT:
-             raise ValueError("Only drafts can be submitted for review")
+            raise ValueError("Only drafts can be submitted for review")
 
-        return ArticleService.update_article(user, article, {'status': Article.STATUS_PENDING})
+        return ArticleService.update_article(user, article, {"status": Article.STATUS_PENDING})
 
     @staticmethod
     def publish_article(user, article):
-        if not user.has_perm('articles.publish_article'):
-             # This check depends on permission system setup, if strict:
-             # raise PermissionDenied("User does not have permission to publish")
-             pass
+        if not user.has_perm("articles.publish_article"):
+            # This check depends on permission system setup, if strict:
+            # raise PermissionDenied("User does not have permission to publish")
+            pass
 
         if article.status not in [Article.STATUS_PENDING, Article.STATUS_DRAFT]:
-             raise ValueError("Only pending or draft articles can be published")
+            raise ValueError("Only pending or draft articles can be published")
 
         update_data = {
-            'status': Article.STATUS_PUBLISHED,
+            "status": Article.STATUS_PUBLISHED,
         }
         if not article.published_at:
-            update_data['published_at'] = timezone.now()
+            update_data["published_at"] = timezone.now()
 
         article = ArticleService.update_article(user, article, update_data)
 
-        trigger_webhooks(article.company, 'article.published', {
-            'id': str(article.id),
-            'title': article.title,
-            'slug': article.slug,
-            'url': f"/artigos/{article.slug}"
-        })
+        trigger_webhooks(
+            article.company,
+            "article.published",
+            {"id": str(article.id), "title": article.title, "slug": article.slug, "url": f"/artigos/{article.slug}"},
+        )
 
         # Bug 3: notificações push via Celery (não bloqueia o worker)
         try:
             from apps.articles.tasks import notify_article_published
+
             notify_article_published.delay(article.id)
         except Exception:
             # Fallback síncrono se Celery não estiver disponível
@@ -187,12 +186,12 @@ class ArticleService:
     @staticmethod
     def reject_article(user, article, reason=None):
         if article.status != Article.STATUS_PENDING:
-             raise ValueError("Only pending articles can be rejected")
+            raise ValueError("Only pending articles can be rejected")
 
         # M3: rejection_reason agora é salvo no modelo
-        update_data = {'status': Article.STATUS_REJECTED}
+        update_data = {"status": Article.STATUS_REJECTED}
         if reason:
-            update_data['rejection_reason'] = reason
+            update_data["rejection_reason"] = reason
         return ArticleService.update_article(user, article, update_data)
 
     @staticmethod
@@ -203,19 +202,16 @@ class ArticleService:
         log_delete(user, "Article", article)
 
         company = article.company
-        article_data = {
-            'id': str(article.id),
-            'title': article.title
-        }
+        article_data = {"id": str(article.id), "title": article.title}
 
         article.delete()
 
-        trigger_webhooks(company, 'article.deleted', article_data)
+        trigger_webhooks(company, "article.deleted", article_data)
 
     @staticmethod
     def record_view(user, article=None, ip_address=None, article_id=None):
         from django.core.cache import cache
-        
+
         target_id = article_id or (str(article.id) if article else None)
         if not target_id:
             return
@@ -232,14 +228,14 @@ class ArticleService:
 
         # Dispatch async
         from .tasks import record_article_view_async
+
         record_article_view_async.apply_async(
             kwargs={
-                'article_id': str(target_id),
-                'user_id': user.id if user and getattr(user, 'is_authenticated', False) else None,
-                'ip_address': ip_address,
+                "article_id": str(target_id),
+                "user_id": user.id if user and getattr(user, "is_authenticated", False) else None,
+                "ip_address": ip_address,
             }
         )
-
 
     @staticmethod
     def revert_to_version(user, article, version_id):
@@ -247,8 +243,8 @@ class ArticleService:
         Reverts an article to a specific version ID.
         """
         import reversion
-        from reversion.models import Version
         from django.contrib.contenttypes.models import ContentType
+        from reversion.models import Version
 
         try:
             version = Version.objects.get(pk=version_id)
@@ -270,7 +266,14 @@ class ArticleService:
             reversion.set_comment(f"Reverted to version from {version.revision.date_created}")
 
         from types import SimpleNamespace
-        log_update(user, "Article", article, request=SimpleNamespace(company=article.company), changes={"reverted_to_version": version_id})
+
+        log_update(
+            user,
+            "Article",
+            article,
+            request=SimpleNamespace(company=article.company),
+            changes={"reverted_to_version": version_id},
+        )
         return article
 
 
@@ -278,6 +281,7 @@ def _notify_users_sync(article):
     """Fallback síncrono para notificações — usado apenas quando Celery não está disponível."""
     try:
         from apps.notifications.tasks import notify_user_push
+
         active_users = User.objects.filter(company=article.company, is_active=True)
         for target_user in active_users:
             try:
@@ -285,7 +289,7 @@ def _notify_users_sync(article):
                     target_user,
                     title=f"Novo Artigo: {article.title}",
                     message=article.excerpt or "Confira a nova publicação!",
-                    link=f"/artigos/{article.slug}"
+                    link=f"/artigos/{article.slug}",
                 )
             except Exception:
                 pass

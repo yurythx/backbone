@@ -1,23 +1,22 @@
-from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
-from apps.core.models import Company
-from apps.module_manager.models import Module, TenantModule
+from rest_framework.test import APITestCase
+
 from apps.articles.models import Article, Category
 from apps.articles.services import ArticleService
+from apps.core.models import Company
+from apps.module_manager.models import Module, TenantModule
 
 User = get_user_model()
+
 
 class ArticleStatusFlowTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Flow Corp", slug="flow-corp")
         self.user = User.all_objects.create_user(
-            username="flowuser",
-            email="flow@corp.com",
-            password="pass",
-            company=self.company
+            username="flowuser", email="flow@corp.com", password="pass", company=self.company
         )
         self.client.force_authenticate(user=self.user)
-        self.client.credentials(HTTP_X_COMPANY_SLUG='flow-corp')
+        self.client.credentials(HTTP_X_COMPANY_SLUG="flow-corp")
 
         mod = Module.objects.create(code="articles", name="Articles")
         TenantModule.objects.create(company=self.company, module=mod, is_active=True)
@@ -28,7 +27,7 @@ class ArticleStatusFlowTest(APITestCase):
         article = ArticleService.create_article(
             user=self.user,
             company=self.company,
-            data={"title": "Flow", "slug": "flow-article", "content": "x", "category": self.category}
+            data={"title": "Flow", "slug": "flow-article", "content": "x", "category": self.category},
         )
         self.assertEqual(article.status, Article.STATUS_DRAFT)
 
@@ -45,7 +44,7 @@ class ArticleStatusFlowTest(APITestCase):
         article = ArticleService.create_article(
             user=self.user,
             company=self.company,
-            data={"title": "Reject Me", "slug": "reject-me", "content": "y", "category": self.category}
+            data={"title": "Reject Me", "slug": "reject-me", "content": "y", "category": self.category},
         )
         # Rejecting draft should raise
         with self.assertRaises(ValueError):

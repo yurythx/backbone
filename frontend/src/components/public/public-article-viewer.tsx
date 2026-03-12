@@ -10,6 +10,8 @@ import { ptBR } from "date-fns/locale"
 import Link from "next/link"
 import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
+import { AboutAuthor } from "@/components/articles/about-author"
+import { PublicArticleComments } from "@/components/articles/public-article-comments"
 
 interface Article {
     id: number
@@ -21,9 +23,17 @@ interface Article {
     category_name?: string | null
     tags?: string[] | { name: string }[]
     author_name?: string | null
+    author_info?: {
+        id: number
+        username: string
+        full_name: string
+        avatar_url?: string | null
+        bio?: string | null
+    } | null
     created_at: string
     published_at?: string
     updated_at?: string
+    company_slug?: string | null
 }
 
 interface Props {
@@ -177,6 +187,9 @@ export function PublicArticleViewer({ initialArticle, slug }: Props) {
                     })}
                 </ul>
             </footer>
+
+            <AboutAuthor author={article.author_info} companySlug={article.company_slug} />
+            <PublicArticleComments articleId={article.id} companySlug={article.company_slug} />
         </article>
     )
 }

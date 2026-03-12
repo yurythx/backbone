@@ -1,6 +1,4 @@
-"use client"
-
-import { Header } from "@/components/layout/header"
+import { PublicHeader } from "@/components/layout/public-header"
 import { PublicFooter } from "@/components/public/footer"
 
 export default function PublicLayout({
@@ -16,7 +14,7 @@ export default function PublicLayout({
             >
                 Pular para conteúdo
             </a>
-            <Header />
+            <PublicHeader />
             <main id="conteudo-principal" role="main" className="flex-1 px-6 md:px-8 py-10">
                 <div className="mx-auto max-w-7xl">
                     {children}

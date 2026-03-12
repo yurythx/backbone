@@ -8,76 +8,77 @@ logger = logging.getLogger(__name__)
 
 AVAILABLE_PERMISSIONS = {
     # Artigos
-    'articles.article_view': 'Visualizar Artigos',
-    'articles.article_create': 'Criar Artigos',
-    'articles.article_edit': 'Editar Artigos',
-    'articles.article_delete': 'Excluir Artigos',
-    'articles.article_publish': 'Publicar Artigos',
-    'articles.category_manage': 'Gerenciar Categorias/Tags',
-
+    "articles.article_view": "Visualizar Artigos",
+    "articles.article_create": "Criar Artigos",
+    "articles.article_edit": "Editar Artigos",
+    "articles.article_delete": "Excluir Artigos",
+    "articles.article_publish": "Publicar Artigos",
+    "articles.category_manage": "Gerenciar Categorias/Tags",
     # CMS/Páginas
-    'pages.page_view': 'Visualizar Páginas',
-    'pages.page_create': 'Criar Páginas',
-    'pages.page_edit': 'Editar Páginas',
-    'pages.page_delete': 'Excluir Páginas',
-
+    "pages.page_view": "Visualizar Páginas",
+    "pages.page_create": "Criar Páginas",
+    "pages.page_edit": "Editar Páginas",
+    "pages.page_delete": "Excluir Páginas",
     # Mídia
-    'media.media_view': 'Ver Biblioteca de Mídia',
-    'media.media_upload': 'Fazer Upload de Mídia',
-    'media.media_delete': 'Excluir Mídia',
-
+    "media.media_view": "Ver Biblioteca de Mídia",
+    "media.media_upload": "Fazer Upload de Mídia",
+    "media.media_delete": "Excluir Mídia",
     # Messenger
-    'messenger.view': 'Acesso ao Chat',
-    'messenger.admin': 'Administrar Grupos/Conversas',
-
+    "messenger.view": "Acesso ao Chat",
+    "messenger.admin": "Administrar Grupos/Conversas",
     # Financeiro / Folha
-    'finance.view_financial': 'Visualizar Financeiro',
-    'finance.manage_financial': 'Gerenciar Financeiro',
-
+    "finance.view_financial": "Visualizar Financeiro",
+    "finance.manage_financial": "Gerenciar Financeiro",
     # Administração
-    'admin.user_manage': 'Gerenciar Equipe/Convites',
-    'admin.smtp_manage': 'Configurações de E-mail',
-    'admin.view_dashboard': 'Acessar Painel Administrativo',
-    'admin.settings_manage': 'Configurações da Empresa',
+    "admin.user_manage": "Gerenciar Equipe/Convites",
+    "admin.smtp_manage": "Configurações de E-mail",
+    "admin.view_dashboard": "Acessar Painel Administrativo",
+    "admin.settings_manage": "Configurações da Empresa",
 }
 
 DEFAULT_ROLES = {
-    'Administrador': {
-        'description': 'Acesso total a todos os recursos da empresa.',
-        'permissions': list(AVAILABLE_PERMISSIONS.keys())
+    "Administrador": {
+        "description": "Acesso total a todos os recursos da empresa.",
+        "permissions": list(AVAILABLE_PERMISSIONS.keys()),
     },
-    'Editor': {
-        'description': 'Pode criar e gerenciar conteúdo, mas sem acesso a configurações administrativas.',
-        'permissions': [
-            'articles.article_view', 'articles.article_create', 'articles.article_edit', 'articles.article_publish',
-            'articles.category_manage',
-            'pages.page_view', 'pages.page_create', 'pages.page_edit',
-            'media.media_view', 'media.media_upload',
-            'messenger.view',
-            'finance.view_financial',
-            'admin.view_dashboard',
-        ]
+    "Editor": {
+        "description": "Pode criar e gerenciar conteúdo, mas sem acesso a configurações administrativas.",
+        "permissions": [
+            "articles.article_view",
+            "articles.article_create",
+            "articles.article_edit",
+            "articles.article_publish",
+            "articles.category_manage",
+            "pages.page_view",
+            "pages.page_create",
+            "pages.page_edit",
+            "media.media_view",
+            "media.media_upload",
+            "messenger.view",
+            "finance.view_financial",
+            "admin.view_dashboard",
+        ],
     },
-    'Membro': {
-        'description': 'Acesso de visualização e uso do chat.',
-        'permissions': [
-            'articles.article_view',
-            'pages.page_view',
-            'media.media_view',
-            'messenger.view',
-            'finance.view_financial',
-        ]
+    "Membro": {
+        "description": "Acesso de visualização e uso do chat.",
+        "permissions": [
+            "articles.article_view",
+            "pages.page_view",
+            "media.media_view",
+            "messenger.view",
+            "finance.view_financial",
+        ],
     },
-    'Colaborador': {
-        'description': 'Acesso básico para colaboradores (inclui Financeiro pessoal).',
-        'permissions': [
-            'articles.article_view',
-            'pages.page_view',
-            'media.media_view',
-            'messenger.view',
-            'finance.view_financial',
-        ]
-    }
+    "Colaborador": {
+        "description": "Acesso básico para colaboradores (inclui Financeiro pessoal).",
+        "permissions": [
+            "articles.article_view",
+            "pages.page_view",
+            "media.media_view",
+            "messenger.view",
+            "finance.view_financial",
+        ],
+    },
 }
 
 
@@ -86,17 +87,18 @@ class HasRolePermission(permissions.BasePermission):
     Verifica se o usuário tem a permissão exigida pela view (definida em 'required_permission').
     As permissões são checadas através do Role do usuário.
     """
+
     def has_permission(self, request, view):
         # Admin/Superuser sempre pode
         if request.user.is_superuser:
             return True
 
-        required_permission = getattr(view, 'required_permission', None)
+        required_permission = getattr(view, "required_permission", None)
         if not required_permission:
-            return True # Se a view não exige permissão específica, passa
+            return True  # Se a view não exige permissão específica, passa
 
         # Verifica se usuário tem role
-        if not hasattr(request.user, 'role') or not request.user.role:
+        if not hasattr(request.user, "role") or not request.user.role:
             return False
 
         # Verifica se o slug da permissão está na lista de permissões da role
@@ -135,14 +137,14 @@ class ActionRolePermission(permissions.BasePermission):
             return True
 
         # Resolve a permissão: action-specific > required_permission padrão
-        action = getattr(view, 'action', None)
-        action_permissions = getattr(view, 'action_permissions', {})
-        required = action_permissions.get(action) or getattr(view, 'required_permission', None)
+        action = getattr(view, "action", None)
+        action_permissions = getattr(view, "action_permissions", {})
+        required = action_permissions.get(action) or getattr(view, "required_permission", None)
 
         if not required:
             return True
 
-        if not hasattr(request.user, 'role') or not request.user.role:
+        if not hasattr(request.user, "role") or not request.user.role:
             return False
 
         return required in request.user.role.permissions
@@ -168,34 +170,31 @@ class FeatureLimitPermission(permissions.BasePermission):
     """
 
     # Actions that trigger the license check
-    _write_actions = frozenset(['create'])
+    _write_actions = frozenset(["create"])
 
     def has_permission(self, request, view):
-        action = getattr(view, 'action', None)
+        action = getattr(view, "action", None)
         if action not in self._write_actions:
             return True  # No-op for reads
 
         if request.user.is_superuser:
             return True  # Superusers bypass license limits
 
-        feature_code = getattr(view, 'feature_limit_code', None)
+        feature_code = getattr(view, "feature_limit_code", None)
         if not feature_code:
             return True  # No limit configured on this view
 
-        company = getattr(request, 'company', None)
+        company = getattr(request, "company", None)
         if not company:
-            logger.warning(
-                "FeatureLimitPermission: no company context for action '%s'", action
-            )
+            logger.warning("FeatureLimitPermission: no company context for action '%s'", action)
             return True  # Cannot check without company — do not block
 
         try:
             from shared_kernel.licensing import check_feature_limit
+
             can_add, limit, current = check_feature_limit(company, feature_code)
         except Exception:
-            logger.exception(
-                "FeatureLimitPermission: error in check_feature_limit for '%s'", feature_code
-            )
+            logger.exception("FeatureLimitPermission: error in check_feature_limit for '%s'", feature_code)
             return True  # Fail open for licensing errors
 
         if not can_add:
@@ -206,7 +205,10 @@ class FeatureLimitPermission(permissions.BasePermission):
             )
             logger.info(
                 "FeatureLimitPermission: limit reached for '%s' on '%s' (%d/%s)",
-                feature_code, company.slug, current, limit_display,
+                feature_code,
+                company.slug,
+                current,
+                limit_display,
             )
             return False
 

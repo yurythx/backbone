@@ -6,24 +6,20 @@ import { PublicArticleCard } from "@/components/public/article-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Search, BookOpen } from "lucide-react"
-import { useState, useMemo, useMemo as useReactMemo } from "react"
-import axios from "axios"
+import { useState, useMemo } from "react"
+import { api } from "@/lib/axios"
+import { useSearchParams } from "next/navigation"
 
 export default function PublicArtigosPage() {
     const [searchTerm, setSearchTerm] = useState("")
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'
-    const cleanAxios = useReactMemo(() => {
-        return axios.create({
-            baseURL: API_URL,
-            headers: { 'Content-Type': 'application/json' }
-        })
-    }, [API_URL])
+    const searchParams = useSearchParams()
+    const authorFilter = (searchParams.get('author') || '').trim()
 
     const { data: articles, isLoading, error } = useQuery({
         queryKey: ['public-articles'],
         queryFn: async () => {
             try {
-                const res = await cleanAxios.get('/api/articles/public/articles/')
+                const res = await api.get('/api/articles/public/articles/')
                 const data = res.data?.results ?? res.data
                 return Array.isArray(data) ? data : []
             } catch (err: unknown) {
@@ -47,15 +43,25 @@ export default function PublicArtigosPage() {
     // Memoize filtered results for performance
     const filteredArticles = useMemo(() => {
         if (!articles) return []
-        if (!searchTerm.trim()) return articles
+        let out = articles
+
+        if (authorFilter) {
+            const a = authorFilter.toLowerCase()
+            out = out.filter((article: Article) => {
+                const authorName = (article.author_name || article.author_info?.username || '').toLowerCase()
+                return authorName === a || authorName.includes(a)
+            })
+        }
+
+        if (!searchTerm.trim()) return out
 
         const lowerSearch = searchTerm.toLowerCase()
-        return articles.filter((article: Article) =>
+        return out.filter((article: Article) =>
             article.title.toLowerCase().includes(lowerSearch) ||
             article.excerpt?.toLowerCase().includes(lowerSearch) ||
             article.category_name?.toLowerCase().includes(lowerSearch)
         )
-    }, [articles, searchTerm])
+    }, [articles, searchTerm, authorFilter])
 
     return (
         <>

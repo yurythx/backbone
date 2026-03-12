@@ -1,14 +1,14 @@
-from django.db import models
 from django.conf import settings
-from django.db.models import Count, Q
-from shared_kernel.models import BaseTenantModel
-from shared_kernel.utils import tenant_upload_to, make_key_with_tenant
-from shared_kernel.validators import validate_chat_file
+from django.db import models
 
+from shared_kernel.models import BaseTenantModel
+from shared_kernel.utils import tenant_upload_to
+from shared_kernel.validators import validate_chat_file
 
 
 class SoftDeleteManager(models.Manager):
     """Default manager that excludes soft-deleted messages."""
+
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
 
@@ -17,7 +17,8 @@ class Conversation(BaseTenantModel):
     """
     Uma conversa entre usuários.
     """
-    participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='conversations')
+
+    participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="conversations")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -42,18 +43,18 @@ class Message(BaseTenantModel):
     Soft delete: ao invés de excluir do banco, marcamos `is_deleted=True`.
     O conteúdo é apagado e o arquivo removido para evitar exposição de dados.
     """
-    conversation = models.ForeignKey(Conversation, related_name='messages', on_delete=models.CASCADE)
-    sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_messages', on_delete=models.CASCADE)
+
+    conversation = models.ForeignKey(Conversation, related_name="messages", on_delete=models.CASCADE)
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="sent_messages", on_delete=models.CASCADE)
     content = models.TextField(blank=True, null=True)
 
     # File attachments
     file = models.FileField(
-        upload_to=tenant_upload_to('chat/attachments'),
-
+        upload_to=tenant_upload_to("chat/attachments"),
         blank=True,
         null=True,
         validators=[validate_chat_file],
-        help_text="Anexo (Imagens/Documentos, max 10MB)"
+        help_text="Anexo (Imagens/Documentos, max 10MB)",
     )
     file_name = models.CharField(max_length=255, blank=True, null=True)
     file_type = models.CharField(max_length=100, blank=True, null=True)
@@ -67,13 +68,7 @@ class Message(BaseTenantModel):
     is_deleted = models.BooleanField(default=False, db_index=True)
 
     # Reply reference
-    reply_to = models.ForeignKey(
-        'self',
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='replies'
-    )
+    reply_to = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="replies")
 
     # managers
     objects = SoftDeleteManager()  # default: excludes deleted
@@ -81,8 +76,8 @@ class Message(BaseTenantModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=['conversation', 'created_at']),
-            models.Index(fields=['conversation', 'is_read', 'sender']),
+            models.Index(fields=["conversation", "created_at"]),
+            models.Index(fields=["conversation", "is_read", "sender"]),
         ]
 
     def __str__(self):
@@ -100,22 +95,23 @@ class Message(BaseTenantModel):
         self.file_name = None
         self.file_type = None
         self.file_size = None
-        self.save(update_fields=['is_deleted', 'content', 'file', 'file_name', 'file_type', 'file_size'])
+        self.save(update_fields=["is_deleted", "content", "file", "file_name", "file_type", "file_size"])
 
 
 class MessageReaction(BaseTenantModel):
     """
     Reações em mensagens (ex: 👍, ❤️).
     """
-    message = models.ForeignKey(Message, related_name='reactions', on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='message_reactions', on_delete=models.CASCADE)
+
+    message = models.ForeignKey(Message, related_name="reactions", on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="message_reactions", on_delete=models.CASCADE)
     emoji = models.CharField(max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('message', 'user', 'emoji')
+        unique_together = ("message", "user", "emoji")
         indexes = [
-            models.Index(fields=['message', 'emoji']),
+            models.Index(fields=["message", "emoji"]),
         ]
 
     def __str__(self):
@@ -129,24 +125,19 @@ class ConversationPreference(BaseTenantModel):
     Substitui o armazenamento em localStorage, tornando as preferências
     persistentes entre dispositivos e sessões.
     """
+
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='conversation_preferences'
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="conversation_preferences"
     )
-    conversation = models.ForeignKey(
-        Conversation,
-        on_delete=models.CASCADE,
-        related_name='preferences'
-    )
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="preferences")
     is_muted = models.BooleanField(default=False)
     is_pinned = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ('user', 'conversation')
+        unique_together = ("user", "conversation")
         indexes = [
-            models.Index(fields=['user', 'is_pinned']),
-            models.Index(fields=['user', 'is_muted']),
+            models.Index(fields=["user", "is_pinned"]),
+            models.Index(fields=["user", "is_muted"]),
         ]
 
     def __str__(self):
@@ -158,14 +149,15 @@ class ContactBlock(BaseTenantModel):
     Bloqueio de contatos entre usuários.
     Garante que as preferências de bloqueio sejam persistidas no backend.
     """
-    blocker = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='blocked_contacts', on_delete=models.CASCADE)
-    blocked = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='blocked_by', on_delete=models.CASCADE)
+
+    blocker = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="blocked_contacts", on_delete=models.CASCADE)
+    blocked = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="blocked_by", on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('blocker', 'blocked')
+        unique_together = ("blocker", "blocked")
         indexes = [
-            models.Index(fields=['blocker', 'blocked']),
+            models.Index(fields=["blocker", "blocked"]),
         ]
 
     def __str__(self):

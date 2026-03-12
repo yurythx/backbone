@@ -1,6 +1,8 @@
 from django.contrib.sitemaps import Sitemap
+
 from apps.articles.models import Article
 from apps.pages.models import Page
+
 
 class ArticleSitemap(Sitemap):
     changefreq = "weekly"
@@ -23,6 +25,7 @@ class ArticleSitemap(Sitemap):
         # For multi-tenant, it depends on how the frontend routing is set up
         # If it's custom domains or path based
         return f"/p/artigos/{obj.slug}"
+
 
 class PageSitemap(Sitemap):
     changefreq = "monthly"

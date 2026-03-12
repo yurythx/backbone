@@ -17,6 +17,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Loader2, User, Mail, UserCheck, Save } from "lucide-react"
 import { toast } from "sonner"
@@ -30,6 +31,7 @@ const profileSchema = z.object({
   email: z.string().min(1, "O e-mail é obrigatório."),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
+  bio: z.string().max(280, "A bio deve ter no máximo 280 caracteres.").optional(),
 })
 
 export function ProfileForm() {
@@ -56,6 +58,7 @@ export function ProfileForm() {
       email: "",
       first_name: "",
       last_name: "",
+      bio: "",
       avatar: null,
     },
     values: user ? {
@@ -63,6 +66,7 @@ export function ProfileForm() {
       email: user.email || "",
       first_name: user.first_name || "",
       last_name: user.last_name || "",
+      bio: user.bio || "",
       avatar: user.avatar_url || user.avatar || null,
     } : undefined
   })
@@ -73,6 +77,7 @@ export function ProfileForm() {
       formData.append('username', values.username)
       if (values.first_name) formData.append('first_name', values.first_name)
       if (values.last_name) formData.append('last_name', values.last_name)
+      if (values.bio) formData.append('bio', values.bio)
 
       // Avatar handling
       if (values.avatar instanceof File) {
@@ -247,6 +252,26 @@ export function ProfileForm() {
               )}
             />
           </div>
+
+          <FormField
+            control={form.control}
+            name="bio"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="font-semibold">Bio</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Conte um pouco sobre você (aparece em artigos e no seu perfil)."
+                    className="min-h-[120px] bg-background/50"
+                    {...field}
+                    value={field.value || ''}
+                  />
+                </FormControl>
+                <FormDescription className="text-xs">Até 280 caracteres.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField

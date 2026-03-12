@@ -1,9 +1,11 @@
-import json
+from unittest.mock import Mock, patch
+
 from django.test import TestCase, override_settings
-from unittest.mock import patch, Mock
-from apps.webhooks.models import WebhookSubscription
+
 from apps.core.models import Company
+from apps.webhooks.models import WebhookSubscription
 from apps.webhooks.tasks import dispatch_webhook
+
 
 @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
 class WebhookDispatchSecurityTest(TestCase):
@@ -20,7 +22,11 @@ class WebhookDispatchSecurityTest(TestCase):
 
     def test_block_localhost(self):
         sub = WebhookSubscription.objects.create(
-            company=self.company, url="http://localhost:8000/hook", secret="s", is_active=True, events=["article.created"]
+            company=self.company,
+            url="http://localhost:8000/hook",
+            secret="s",
+            is_active=True,
+            events=["article.created"],
         )
         res = dispatch_webhook.apply(args=(sub.id, "article.created", self.payload)).get()
         self.assertIn("host not allowed", res)

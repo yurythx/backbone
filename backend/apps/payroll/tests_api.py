@@ -100,4 +100,3 @@ class PayrollEarningEventScopeTest(APITestCase):
         )
         res = self.client.patch(f"/api/payroll/events/{ev.id}/", {"amount": "70.00"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-

@@ -1,8 +1,8 @@
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
+
 from apps.core.models import Company
 from apps.pages.models import Page
-
 
 DEFAULT_PAGES = [
     {
@@ -55,7 +55,6 @@ class Command(BaseCommand):
                         "meta_description": page_data["meta_description"],
                         "status": "published",
                     },
-
                 )
                 if created:
                     total_created += 1

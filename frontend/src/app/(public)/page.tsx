@@ -119,39 +119,6 @@ const services: Service[] = [
     color: "from-sky-500 to-blue-500"
   },
   {
-    id: "samba",
-    name: "Samba",
-    description: "Servidor de arquivos que permite compartilhamento de arquivos entre Windows, Linux e macOS na rede local.",
-    icon: Server,
-    category: "Infraestrutura",
-    status: "online",
-    url: "smb://192.168.1.121",
-    features: ["Compartilhamento de arquivos", "Acesso multiplataforma", "Integração com Nextcloud", "Permissões granulares"],
-    color: "from-orange-500 to-red-500"
-  },
-  {
-    id: "minio",
-    name: "MinIO",
-    description: "Armazenamento de objetos compatível com S3, ideal para backups e armazenamento de dados do sistema.",
-    icon: Database,
-    category: "Infraestrutura",
-    status: "online",
-    url: "http://192.168.1.121:9001",
-    features: ["API S3 compatível", "Alta performance", "Escalabilidade", "Criptografia integrada"],
-    color: "from-red-500 to-pink-500"
-  },
-  {
-    id: "redis",
-    name: "Redis",
-    description: "Banco de dados em memória usado para cache, filas e gerenciamento de sessões do sistema.",
-    icon: Database,
-    category: "Infraestrutura",
-    status: "online",
-    url: "redis://192.168.1.121:6379",
-    features: ["Cache em memória", "Filas de processamento", "Sessões rápidas", "Pub/Sub messaging"],
-    color: "from-rose-500 to-red-500"
-  },
-  {
     id: "evolution-api",
     name: "Evolution API",
     description: "API para integração com WhatsApp Business, permitindo automação de mensagens e atendimento.",
