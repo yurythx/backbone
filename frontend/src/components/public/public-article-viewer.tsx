@@ -189,7 +189,7 @@ export function PublicArticleViewer({ initialArticle, slug }: Props) {
             </footer>
 
             <AboutAuthor author={article.author_info} companySlug={article.company_slug} />
-            <PublicArticleComments articleId={article.id} companySlug={article.company_slug} />
+            <PublicArticleComments articleId={article.id} articleSlug={slug} companySlug={article.company_slug} />
         </article>
     )
 }

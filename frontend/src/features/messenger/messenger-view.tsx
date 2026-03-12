@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { ContactList } from "./contact-list"
 import { ChatWindow } from "./chat-window"
-import { User } from "@/types"
 import { Contact, Message } from "@/types/messenger"
 import { MessageSquareDashed, Loader2, SlidersHorizontal } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
@@ -16,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { useAuth } from "@/hooks/use-auth"
 
 export function MessengerView() {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
@@ -36,13 +36,7 @@ export function MessengerView() {
   const messageIdParam = searchParams.get("message_id") || searchParams.get("message") || searchParams.get("mid")
   const createdAtParam = searchParams.get("created_at") || searchParams.get("ts")
 
-  const { data: currentUser, isLoading } = useQuery<User>({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const res = await api.get('/api/accounts/users/me/')
-      return res.data
-    }
-  })
+  const { user: currentUser, isLoading } = useAuth()
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(searchTerm.trim()), 300)
@@ -66,7 +60,7 @@ export function MessengerView() {
       const res = await api.get<Message[]>(`/api/messenger/conversations/search/?q=${encodeURIComponent(debounced)}`)
       return res.data
     },
-    enabled: debounced.length >= 3
+    enabled: !!currentUser && debounced.length >= 3
   })
 
   const filteredResults = (Array.isArray(searchQuery.data) ? searchQuery.data : []).filter((m) => {
@@ -208,6 +202,14 @@ export function MessengerView() {
     return (
       <div className="flex h-full items-center justify-center border border-border/50 rounded-2xl bg-background/50 backdrop-blur-sm shadow-sm">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex h-full items-center justify-center border border-border/50 rounded-2xl bg-background/50 backdrop-blur-sm shadow-sm">
+        <div className="text-sm text-muted-foreground">Sessão expirada. Faça login novamente.</div>
       </div>
     )
   }

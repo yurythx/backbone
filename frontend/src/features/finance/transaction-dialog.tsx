@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { format } from "date-fns"
 import { Plus } from "lucide-react"
+import { toast } from "sonner"
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -308,7 +309,12 @@ export function TransactionDialog({
           <form
             className="space-y-4"
             onSubmit={categoryForm.handleSubmit(async (values) => {
-              const created = await onCreateCategory({ name: values.name, color: values.color })
+              const name = values.name.trim()
+              if (!name) {
+                toast.error("Nome da categoria é obrigatório.")
+                return
+              }
+              const created = await onCreateCategory({ name, color: values.color })
               form.setValue("category", String(created.id), { shouldDirty: true })
               setIsCategoryDialogOpen(false)
             })}

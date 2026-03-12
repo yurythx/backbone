@@ -87,6 +87,7 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
     },
     staleTime: 30_000,
     refetchInterval: 60_000,
+    enabled: !!currentUser,
   })
 
   // ── Contacts (for group dialog + participant lookup) ────────────────────────
@@ -97,6 +98,7 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
       return res.data
     },
     staleTime: 60_000,
+    enabled: !!currentUser,
   })
 
   const isLoading = convLoading || contactsLoading

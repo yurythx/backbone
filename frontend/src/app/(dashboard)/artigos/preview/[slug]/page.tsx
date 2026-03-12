@@ -160,6 +160,7 @@ export default function ArticlePreviewPage() {
       <AboutAuthor author={(data as ArticlePreview).author_info} companySlug={(data as ArticlePreview).company_slug} />
       <PublicArticleComments
         articleId={data.id}
+        articleSlug={data.slug}
         companySlug={(data as ArticlePreview).company_slug}
       />
     </article>

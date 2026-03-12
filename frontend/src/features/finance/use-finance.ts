@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { toast } from "sonner"
+import { showApiError } from "@/lib/toast-helpers"
 
 export interface Transaction {
   id: number
@@ -80,14 +81,17 @@ export function useFinance(range?: FinanceRange) {
 
   const createCategory = useMutation({
     mutationFn: async (payload: Pick<FinanceCategory, "name" | "color"> & { description?: string }) => {
-      const response = await api.post<FinanceCategory>('/api/finance/categories/', payload)
+      const response = await api.post<FinanceCategory>('/api/finance/categories/', {
+        ...payload,
+        name: payload.name.trim(),
+      })
       return response.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance-categories'] })
       toast.success("Categoria criada com sucesso!")
     },
-    onError: () => toast.error("Erro ao criar categoria.")
+    onError: (err) => showApiError(err, "Erro ao criar categoria.")
   })
 
   // Create Transaction

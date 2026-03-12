@@ -1,9 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/axios';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { showApiError } from '@/lib/toast-helpers';
+import { toast } from 'sonner';
 
 interface Comment {
     id: number;
@@ -15,10 +20,17 @@ interface Comment {
 
 interface PublicArticleCommentsProps {
     articleId: number;
+    articleSlug?: string | null;
     companySlug?: string | null;
 }
 
-export function PublicArticleComments({ articleId, companySlug }: PublicArticleCommentsProps) {
+export function PublicArticleComments({ articleId, articleSlug, companySlug }: PublicArticleCommentsProps) {
+    const queryClient = useQueryClient();
+    const [name, setName] = React.useState('');
+    const [email, setEmail] = React.useState('');
+    const [content, setContent] = React.useState('');
+    const [submitted, setSubmitted] = React.useState(false);
+
     const { data, isLoading } = useQuery({
         queryKey: ['public-article-comments', articleId, companySlug],
         queryFn: async ({ signal }) => {
@@ -36,12 +48,87 @@ export function PublicArticleComments({ articleId, companySlug }: PublicArticleC
 
     const comments = Array.isArray(data) ? data : [];
 
+    const createMutation = useMutation({
+        mutationFn: async () => {
+            const trimmed = content.trim();
+            if (!trimmed) throw new Error('Conteúdo do comentário é obrigatório.');
+
+            const payload: Record<string, unknown> = {
+                content: trimmed,
+            };
+            if (articleSlug) payload.article_slug = articleSlug;
+            else payload.article = articleId;
+            if (name.trim()) payload.name = name.trim();
+            if (email.trim()) payload.email = email.trim();
+
+            const res = await api.post('/api/articles/public/comments/', payload, {
+                headers: companySlug ? { 'X-Company-Slug': companySlug } : {},
+            });
+            return res.data;
+        },
+        onSuccess: () => {
+            setContent('');
+            setSubmitted(true);
+            toast.success('Comentário enviado', { description: 'Ele ficará visível após aprovação.' });
+            queryClient.invalidateQueries({ queryKey: ['public-article-comments', articleId, companySlug] });
+        },
+        onError: (err) => {
+            showApiError(err, 'Erro ao enviar comentário.');
+        },
+    });
+
     return (
         <section className="mt-12 pt-10 border-t border-border/50" aria-label="Comentários">
             <div className="space-y-6">
                 <div className="space-y-1">
                     <h2 className="text-lg font-bold">Comentários</h2>
                     <p className="text-sm text-muted-foreground">Veja o que outras pessoas estão dizendo.</p>
+                </div>
+
+                <div className="rounded-2xl border border-primary/10 bg-background/95 backdrop-blur p-5 space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="text-sm font-semibold">Deixe seu comentário</h3>
+                        <p className="text-xs text-muted-foreground">Comentários passam por moderação antes de aparecer.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                            <div className="text-xs font-medium text-muted-foreground">Nome (opcional)</div>
+                            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
+                        </div>
+                        <div className="space-y-1">
+                            <div className="text-xs font-medium text-muted-foreground">Email (opcional)</div>
+                            <Input
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="seu@email.com"
+                                inputMode="email"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Comentário</div>
+                        <Textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder="Escreva seu comentário..."
+                            className="min-h-[120px]"
+                        />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs text-muted-foreground">
+                            {submitted ? 'Enviado para moderação.' : ''}
+                        </div>
+                        <Button
+                            onClick={() => createMutation.mutate()}
+                            disabled={createMutation.isPending || !content.trim()}
+                            className="rounded-xl"
+                        >
+                            Enviar
+                        </Button>
+                    </div>
                 </div>
 
                 {isLoading && (
@@ -92,4 +179,3 @@ export function PublicArticleComments({ articleId, companySlug }: PublicArticleC
         </section>
     );
 }
-
