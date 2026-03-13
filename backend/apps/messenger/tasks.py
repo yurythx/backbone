@@ -109,20 +109,25 @@ def cleanup_orphan_chat_files():
 
     logger.info("Starting cleanup_orphan_chat_files task")
     try:
-        # Get all files in the chat attachments directory
-        _directories, filenames = default_storage.listdir("chat/attachments/")
-
         cleaned_count = 0
-        for filename in filenames:
-            file_path = f"chat/attachments/{filename}"
+        stack = ["tenants/"]
 
-            # Use all_objects to ensure we don't delete files from messages that
-            # might be temporarily excluded but not yet soft-deleted/cleared.
-            # But wait, soft_delete clears the 'file' field, so all_objects won't see it either.
-            if not Message.all_objects.filter(file=file_path).exists():
-                logger.info("cleanup_orphan_chat_files: deleting orphan file %s", file_path)
-                default_storage.delete(file_path)
-                cleaned_count += 1
+        while stack:
+            base = stack.pop()
+            directories, filenames = default_storage.listdir(base)
+
+            for dirname in directories:
+                stack.append(f"{base}{dirname}/")
+
+            if "/chat/attachments/" not in base:
+                continue
+
+            for filename in filenames:
+                file_path = f"{base}{filename}"
+                if not Message.all_objects.filter(file=file_path).exists():
+                    logger.info("cleanup_orphan_chat_files: deleting orphan file %s", file_path)
+                    default_storage.delete(file_path)
+                    cleaned_count += 1
 
         logger.info("cleanup_orphan_chat_files: finished. Deleted %d files.", cleaned_count)
         return cleaned_count

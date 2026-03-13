@@ -1,3 +1,4 @@
+from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
@@ -56,4 +57,28 @@ class MessengerWebsocketTest(TransactionTestCase):
         communicator = WebsocketCommunicator(application, f"/ws/chat/{self.conversation.id}/?token=invalid_token")
         connected, _subprotocol = await communicator.connect()
         self.assertFalse(connected)
+        await communicator.disconnect()
+
+    async def test_receive_read_all_update(self):
+        communicator = WebsocketCommunicator(application, f"/ws/chat/{self.conversation.id}/?token={self.access_token}")
+        connected, _subprotocol = await communicator.connect()
+        self.assertTrue(connected)
+
+        channel_layer = get_channel_layer()
+        group_name = f"chat_{self.company.slug}_{self.conversation.id}"
+        await channel_layer.group_send(
+            group_name,
+            {
+                "type": "read_all_update",
+                "conversation_id": self.conversation.id,
+                "user_id": self.user.id,
+                "read_at": "2026-01-01T00:00:00Z",
+            },
+        )
+
+        msg = await communicator.receive_json_from()
+        self.assertEqual(msg["type"], "read_all")
+        self.assertEqual(msg["conversation_id"], self.conversation.id)
+        self.assertEqual(msg["user_id"], self.user.id)
+
         await communicator.disconnect()

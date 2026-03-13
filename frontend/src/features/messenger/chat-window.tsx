@@ -19,6 +19,23 @@ import "yet-another-react-lightbox/styles.css";
 import Image from "next/image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 import {
   DropdownMenu,
@@ -52,12 +69,20 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   const topRef = React.useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const [sendError, setSendError] = React.useState<string | null>(null)
-  const lastPayloadRef = React.useRef<{ content: string; file?: File | null; replyToId?: number } | null>(null)
+  const lastPayloadRef = React.useRef<{
+    content: string
+    file?: File | null
+    replyToId?: number | null
+    clientId: string
+    optimisticId: number
+  } | null>(null)
   const retryCountRef = React.useRef<number>(0)
   const BASE_RETRY_DELAY_MS = 1000
   const [isDragging, setIsDragging] = React.useState(false)
   const [replyingTo, setReplyingTo] = React.useState<Message | null>(null)
   const [editingMessage, setEditingMessage] = React.useState<Message | null>(null)
+  const [messageToDelete, setMessageToDelete] = React.useState<Message | null>(null)
+  const [messageToInspect, setMessageToInspect] = React.useState<Message | null>(null)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   const [lightboxOpen, setLightboxOpen] = React.useState(false)
@@ -68,7 +93,7 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   const [isPinned, setIsPinned] = React.useState(false)
   const [seekingTarget, setSeekingTarget] = React.useState(false)
   const [highlightedMsgId, setHighlightedMsgId] = React.useState<number | null>(null)
-  const { onlineUsers } = usePresence()
+  const { onlineUsers, userStatuses } = usePresence()
   // Track which message IDs have already been marked as read to prevent duplicate API calls
   const markReadRef = React.useRef<Set<number>>(new Set())
   const { data: profile, isLoading: isLoadingProfile } = useQuery<User>({
@@ -81,6 +106,13 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   })
 
   const inputRef = React.useRef<HTMLInputElement>(null)
+  const generateClientId = React.useCallback(() => {
+    try {
+      return crypto.randomUUID()
+    } catch {
+      return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    }
+  }, [])
   const profilePhone = React.useMemo(() => {
     if (!profile) return undefined
     const candidate = profile as unknown as { phone?: string; phone_number?: string }
@@ -178,6 +210,25 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     enabled: conversationId ? true : !!contact.id
   })
 
+  type MessageReceipts = {
+    message_id: number
+    conversation_id: number
+    delivered: { user_id: number; username: string; delivered_at: string }[]
+    read: { user_id: number; username: string; read_at: string }[]
+    delivered_count: number
+    read_count: number
+  }
+
+  const { data: receipts, isLoading: isLoadingReceipts } = useQuery<MessageReceipts>({
+    queryKey: ['message-receipts', messageToInspect?.id],
+    queryFn: async () => {
+      if (!messageToInspect?.id) throw new Error('No message')
+      const res = await api.get<MessageReceipts>(`/api/messenger/messages/${messageToInspect.id}/receipts/`)
+      return res.data
+    },
+    enabled: !!messageToInspect?.id,
+  })
+
   // #2 Fix: Hydrate muted/pinned state from conversation.preference (API) not localStorage
   React.useEffect(() => {
     if (conversation?.preference) {
@@ -237,7 +288,16 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   })
 
   // 3. WebSocket Hook
-  const { typingUsers, handleTyping, sendTypingStatus, lastMessage } = useChat(conversation?.id ?? null)
+  const expectedReaders = React.useMemo(() => {
+    const count = Array.isArray(conversation?.participants) ? conversation!.participants.length : 0
+    return Math.max(count - 1, 1)
+  }, [conversation?.participants])
+
+  const { typingUsers, handleTyping, sendTypingStatus, markRead, lastMessage } = useChat(
+    conversation?.id ?? null,
+    currentUser?.id ?? null,
+    expectedReaders
+  )
 
   // Sound effect
   const playNotificationSound = React.useCallback(() => {
@@ -297,33 +357,79 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
 
   // 4. Send Message Mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ content, file, replyToId }: { content: string, file?: File | null, replyToId?: number | null }) => {
+    mutationFn: async ({
+      content,
+      file,
+      replyToId,
+      clientId,
+    }: {
+      content: string
+      file?: File | null
+      replyToId?: number | null
+      clientId: string
+    }) => {
       if (!conversation?.id) throw new Error("No conversation")
 
       const formData = new FormData()
       if (content) formData.append('content', content)
       if (file) formData.append('file', file)
       if (replyToId) formData.append('reply_to_id', replyToId.toString())
+      formData.append('client_id', clientId)
 
-      await api.post(`/api/messenger/conversations/${conversation.id}/send_message/`, formData, {
+      const res = await api.post<Message>(`/api/messenger/conversations/${conversation.id}/send_message/`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
+      return res.data
     },
-    onSuccess: () => {
+    onSuccess: (serverMessage, variables) => {
       setMessageInput("")
       setSelectedFile(null)
       setReplyingTo(null)
       setSendError(null)
       retryCountRef.current = 0
       lastPayloadRef.current = null
-      queryClient.invalidateQueries({ queryKey: ['messages', conversation?.id] })
+      type MessagesPage = { results: Message[]; next: string | null }
+      type MessagesData = { pages: MessagesPage[]; pageParams?: unknown[] }
+      queryClient.setQueryData<MessagesData | undefined>(['messages', conversation?.id], (old) => {
+        if (!old || !Array.isArray(old.pages)) return old
+        const pages = old.pages.map((p) => ({
+          ...p,
+          results: Array.isArray(p.results) ? p.results.filter((m) => m.client_id !== variables.clientId) : p.results,
+        }))
+        const alreadyExists = pages.some((p) => Array.isArray(p.results) && p.results.some((m) => m.id === serverMessage.id))
+        const pagesWithStatus = pages.map((p) => ({
+          ...p,
+          results: Array.isArray(p.results)
+            ? p.results.map((m) => (m.id === serverMessage.id ? { ...m, local_status: 'sent' } : m))
+            : p.results,
+        }))
+        if (alreadyExists) return { pages: pagesWithStatus, pageParams: old.pageParams ?? [] }
+        const first = pagesWithStatus[0]
+        pagesWithStatus[0] = { ...first, results: [...(first.results ?? []), { ...serverMessage, local_status: 'sent' }] }
+        return { pages: pagesWithStatus, pageParams: old.pageParams ?? [] }
+      })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
       // Clear focus anchors after sending a new message to ensure it's not excluded from refetch
       try {
         localStorage.removeItem('focusMessageId')
         localStorage.removeItem('focusMessageCreatedAt')
       } catch { }
     },
-    onError: () => {
+    onError: (_err, variables) => {
+      type MessagesPage = { results: Message[]; next: string | null }
+      type MessagesData = { pages: MessagesPage[]; pageParams?: unknown[] }
+      queryClient.setQueryData<MessagesData | undefined>(['messages', conversation?.id], (old) => {
+        if (!old || !Array.isArray(old.pages)) return old
+        return {
+          pages: old.pages.map((p) => ({
+            ...p,
+            results: Array.isArray(p.results)
+              ? p.results.map((m) => (m.client_id === variables.clientId ? { ...m, local_status: 'failed' } : m))
+              : p.results,
+          })),
+          pageParams: old.pageParams ?? [],
+        }
+      })
       const attempts = retryCountRef.current
       if (attempts < 3 && lastPayloadRef.current) {
         const next = attempts + 1
@@ -440,7 +546,55 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
       return
     }
 
-    lastPayloadRef.current = { content: messageInput, file: selectedFile, replyToId: replyingTo?.id }
+    const clientId = generateClientId()
+    const optimisticId = -1 * Date.now()
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      client_id: clientId,
+      conversation: conversation.id,
+      sender: currentUser?.id ?? 0,
+      sender_username: currentUser?.username ?? 'Você',
+      content: messageInput || null,
+      file: null,
+      file_url: null,
+      file_name: selectedFile?.name ?? null,
+      file_type: selectedFile ? (selectedFile.type || 'application/octet-stream') : null,
+      file_size: selectedFile?.size ?? null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+      edited_at: null,
+      is_deleted: false,
+      reactions: [],
+      reply_to: replyingTo
+        ? {
+            id: replyingTo.id,
+            content: replyingTo.content ?? null,
+            sender: replyingTo.sender,
+            sender_username: replyingTo.sender_username,
+            created_at: replyingTo.created_at,
+            file_name: replyingTo.file_name ?? null,
+            file_type: replyingTo.file_type ?? null,
+          }
+        : null,
+      local_status: 'sending',
+    }
+
+    type MessagesPage = { results: Message[]; next: string | null }
+    type MessagesData = { pages: MessagesPage[]; pageParams?: unknown[] }
+    queryClient.setQueryData<MessagesData | undefined>(['messages', conversation.id], (old) => {
+      if (!old || !Array.isArray(old.pages) || old.pages.length === 0) {
+        return { pages: [{ results: [optimisticMessage], next: null }], pageParams: [] }
+      }
+      const pages = old.pages.map((p) => ({
+        ...p,
+        results: Array.isArray(p.results) ? p.results.filter((m) => m.client_id !== clientId) : p.results,
+      }))
+      const first = pages[0]
+      pages[0] = { ...first, results: [...(first.results ?? []), optimisticMessage] }
+      return { pages, pageParams: old.pageParams ?? [] }
+    })
+
+    lastPayloadRef.current = { content: messageInput, file: selectedFile, replyToId: replyingTo?.id, clientId, optimisticId }
     retryCountRef.current = 0
     setSendError(null)
     if (process.env.NODE_ENV === 'development') {
@@ -667,16 +821,29 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                     ) : contact.email ? (
                       <span className="text-sm text-muted-foreground">{contact.email}</span>
                     ) : null}
-                    {contact.is_online ? (
-                      <span className="text-xs text-green-600 font-medium mt-1 flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-green-600" />
-                        Online
-                      </span>
-                    ) : (
+                  {(() => {
+                    const status = (contact.id > 0 ? userStatuses.get(contact.id) : undefined) ?? contact.status ?? (contact.is_online ? 'online' : 'offline')
+                    if (status === 'online' || status === 'busy') {
+                      const isBusy = status === 'busy'
+                      return (
+                        <span className={cn(
+                          "text-xs font-medium mt-1 flex items-center gap-1",
+                          isBusy ? "text-yellow-600" : "text-green-600"
+                        )}>
+                          <span className={cn(
+                            "h-2 w-2 rounded-full",
+                            isBusy ? "bg-yellow-600" : "bg-green-600"
+                          )} />
+                          {isBusy ? 'Ocupado' : 'Online'}
+                        </span>
+                      )
+                    }
+                    return (
                       <span className="text-xs text-muted-foreground mt-1">
                         {contact.last_seen ? `Visto por último: ${new Date(contact.last_seen).toLocaleString()}` : 'Offline'}
                       </span>
-                    )}
+                    )
+                  })()}
                   </div>
                 </div>
                 <div className="grid gap-3">
@@ -773,13 +940,21 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
             </h3>
             {/* #13 fix: show correct status label for online/busy/offline */}
             {(() => {
-              const status = onlineUsers.has(contact.id)
-                ? (contact.is_online === false ? 'busy' : 'online')
-                : contact.is_online
-                  ? 'online'
-                  : null
-              if (status === 'online' || status === 'busy') {
-                const isBusy = status === 'busy'
+              if (contact.id > 0 && typingUsers[contact.id]) {
+                return (
+                  <span className="text-[10px] font-medium mt-1 text-primary">
+                    digitando...
+                  </span>
+                )
+              }
+
+              const presenceStatus =
+                (contact.id > 0 ? userStatuses.get(contact.id) : undefined) ??
+                contact.status ??
+                (contact.is_online ? 'online' : 'offline')
+
+              if (presenceStatus === 'online' || presenceStatus === 'busy') {
+                const isBusy = presenceStatus === 'busy'
                 return (
                   <span className={cn(
                     "text-[10px] font-medium mt-1 flex items-center gap-1",
@@ -793,6 +968,7 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                   </span>
                 )
               }
+
               return (
                 <span className="text-[10px] text-muted-foreground mt-1">
                   {contact.last_seen ? `Visto por último: ${new Date(contact.last_seen).toLocaleString()}` : 'Offline'}
@@ -906,11 +1082,12 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                             // Double-check the ref before calling (React StrictMode can fire twice)
                             if (!markReadRef.current.has(msg.id)) {
                               markReadRef.current.add(msg.id)
-                              api.post(`/api/messenger/messages/${msg.id}/mark_read/`)
-                                .then(() => {
-                                  msg.is_read = true;  // Optimistic update
-                                })
-                                .catch(() => { })
+                              const sent = markRead([msg.id])
+                              if (!sent) {
+                                api.post(`/api/messenger/messages/${msg.id}/mark_read/`).catch(() => { })
+                              }
+                              msg.is_read = true
+                              msg.is_delivered = true
                             }
                             observer.disconnect()
                           }
@@ -1110,14 +1287,20 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                                   Copiar
                                 </DropdownMenuItem>
                               )}
+                              {isMe && msg.id > 0 && (
+                                <DropdownMenuItem onClick={() => setMessageToInspect(msg)}>
+                                  <CheckCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+                                  Informações
+                                </DropdownMenuItem>
+                              )}
                               {isMe && msg.content && (
                                 <DropdownMenuItem onClick={() => handleEdit(msg)}>
                                   <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
                                   Editar
                                 </DropdownMenuItem>
                               )}
-                              {isMe && (
-                                <DropdownMenuItem onClick={() => handleDelete(msg.id)} className="text-destructive focus:text-destructive">
+                              {isMe && msg.id > 0 && (
+                                <DropdownMenuItem onClick={() => setMessageToDelete(msg)} className="text-destructive focus:text-destructive">
                                   <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                                   Excluir
                                 </DropdownMenuItem>
@@ -1127,11 +1310,14 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
 
                           {isMe && (
                             <div className="flex items-center -mr-1 scale-90">
-                              {msg.is_read ? (
-                                <div className="flex -space-x-1">
-                                  <Check className="h-3 w-3 text-sky-200" strokeWidth={3} />
-                                  <Check className="h-3 w-3 text-sky-200" strokeWidth={3} />
-                                </div>
+                              {msg.local_status === 'sending' ? (
+                                <Loader2 className="h-3 w-3 animate-spin text-primary-foreground/60" />
+                              ) : msg.local_status === 'failed' ? (
+                                <X className="h-3 w-3 text-destructive-foreground/90" />
+                              ) : msg.is_read ? (
+                                <CheckCheck className="h-3 w-3 text-sky-200" strokeWidth={2.5} />
+                              ) : msg.is_delivered ? (
+                                <CheckCheck className="h-3 w-3 text-primary-foreground/70" strokeWidth={2.5} />
                               ) : (
                                 <Check className="h-3 w-3 text-primary-foreground/50" />
                               )}
@@ -1387,6 +1573,85 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
           </form>
         </div>
       </div>
+      <AlertDialog open={!!messageToDelete} onOpenChange={(open) => { if (!open) setMessageToDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir mensagem</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A mensagem será removida para todos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (!messageToDelete) return
+                handleDelete(messageToDelete.id)
+                setMessageToDelete(null)
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Dialog open={!!messageToInspect} onOpenChange={(open) => { if (!open) setMessageToInspect(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Informações da mensagem</DialogTitle>
+            <DialogDescription>
+              {messageToInspect?.content
+                ? messageToInspect.content
+                : messageToInspect?.file_name
+                  ? messageToInspect.file_name
+                  : 'Mensagem'}
+            </DialogDescription>
+          </DialogHeader>
+          {isLoadingReceipts ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <div className="text-sm font-semibold">Entregue ({receipts?.delivered_count ?? 0})</div>
+                <ScrollArea className="h-36 rounded-md border p-2">
+                  <div className="grid gap-2">
+                    {receipts?.delivered?.length ? receipts.delivered.map((d) => (
+                      <div key={`${d.user_id}:${d.delivered_at}`} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-medium">{d.username}</span>
+                        <span className="text-muted-foreground">
+                          {new Date(d.delivered_at).toLocaleString()}
+                        </span>
+                      </div>
+                    )) : (
+                      <div className="text-sm text-muted-foreground">Ainda não entregue.</div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+              <div className="grid gap-2">
+                <div className="text-sm font-semibold">Lido ({receipts?.read_count ?? 0})</div>
+                <ScrollArea className="h-36 rounded-md border p-2">
+                  <div className="grid gap-2">
+                    {receipts?.read?.length ? receipts.read.map((r) => (
+                      <div key={`${r.user_id}:${r.read_at}`} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-medium">{r.username}</span>
+                        <span className="text-muted-foreground">
+                          {new Date(r.read_at).toLocaleString()}
+                        </span>
+                      </div>
+                    )) : (
+                      <div className="text-sm text-muted-foreground">Ainda não lida.</div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <Lightbox
         open={lightboxOpen}
         close={() => setLightboxOpen(false)}

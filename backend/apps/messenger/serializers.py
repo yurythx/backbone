@@ -68,6 +68,10 @@ class MessageSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()
     reactions = MessageReactionSerializer(many=True, read_only=True)
     reply_to = SimpleMessageSerializer(read_only=True)
+    is_read = serializers.SerializerMethodField()
+    read_by_count = serializers.IntegerField(read_only=True)
+    is_delivered = serializers.SerializerMethodField()
+    delivered_by_count = serializers.IntegerField(read_only=True)
     # Soft-deleted messages expose content as None via model; we surface a flag for the UI
     is_deleted = serializers.BooleanField(read_only=True)
 
@@ -75,6 +79,7 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = [
             "id",
+            "client_id",
             "conversation",
             "sender",
             "sender_username",
@@ -85,7 +90,10 @@ class MessageSerializer(serializers.ModelSerializer):
             "file_type",
             "file_size",
             "created_at",
+            "is_delivered",
+            "delivered_by_count",
             "is_read",
+            "read_by_count",
             "reactions",
             "reply_to",
             "edited_at",
@@ -100,6 +108,56 @@ class MessageSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.file.url)
             return obj.file.url
         return None
+
+    def get_is_read(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not getattr(user, "is_authenticated", False):
+            return bool(getattr(obj, "is_read", False))
+
+        if obj.sender_id == user.id:
+            participants_count = self.context.get("participants_count")
+            try:
+                expected = max(int(participants_count or 0) - 1, 0)
+            except Exception:
+                expected = 0
+            read_by_count = getattr(obj, "read_by_count", None)
+            if read_by_count is not None and expected > 0:
+                return int(read_by_count) >= expected
+            return bool(getattr(obj, "is_read", False))
+
+        read_by_me = getattr(obj, "read_by_me", None)
+        if read_by_me is not None:
+            return bool(read_by_me)
+
+        from .models import MessageRead
+
+        return MessageRead.objects.filter(message_id=obj.id, user_id=user.id).exists()
+
+    def get_is_delivered(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not user or not getattr(user, "is_authenticated", False):
+            return True
+
+        if obj.sender_id == user.id:
+            participants_count = self.context.get("participants_count")
+            try:
+                expected = max(int(participants_count or 0) - 1, 0)
+            except Exception:
+                expected = 0
+            delivered_by_count = getattr(obj, "delivered_by_count", None)
+            if delivered_by_count is not None and expected > 0:
+                return int(delivered_by_count) >= expected
+            return True
+
+        delivered_by_me = getattr(obj, "delivered_by_me", None)
+        if delivered_by_me is not None:
+            return bool(delivered_by_me)
+
+        from .models import MessageDelivery
+
+        return MessageDelivery.objects.filter(message_id=obj.id, user_id=user.id).exists()
 
 
 class ConversationPreferenceSerializer(serializers.ModelSerializer):

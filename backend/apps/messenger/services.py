@@ -96,7 +96,7 @@ class MessengerService:
             return conversation
 
     @staticmethod
-    def send_message(user, company, conversation, content=None, file_obj=None, request=None, reply_to_id=None):
+    def send_message(user, company, conversation, content=None, file_obj=None, request=None, reply_to_id=None, client_id=None):
         """
         Sends a message to a conversation and signals via WebSockets.
         """
@@ -104,7 +104,13 @@ class MessengerService:
             f"[Messenger] Sending message: user={user.username}, conversation={conversation.id}, has_file={bool(file_obj)}"
         )
 
-        message_data = {"company": company, "conversation": conversation, "sender": user, "content": content}
+        message_data = {
+            "company": company,
+            "conversation": conversation,
+            "sender": user,
+            "content": content,
+            "client_id": client_id,
+        }
 
         if file_obj:
             message_data["file"] = file_obj
@@ -174,6 +180,7 @@ class MessengerService:
                 "sender_id": message.sender.id,
                 "sender_username": message.sender.username,
                 "message_id": message.id,
+                "client_id": str(message.client_id) if message.client_id else None,
                 "created_at": message.created_at.isoformat(),
                 "file_url": serialized_message.get("file_url"),
                 "file_name": serialized_message.get("file_name"),

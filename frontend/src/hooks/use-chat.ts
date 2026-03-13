@@ -5,9 +5,10 @@ import { Message } from '@/types/messenger';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-export function useChat(conversationId: number | null) {
+export function useChat(conversationId: number | null, currentUserId?: number | null, expectedReaders?: number) {
   const [typingUsers, setTypingUsers] = useState<Record<number, string | null>>({});
   const queryClient = useQueryClient();
+  const deliveredAckRef = useRef<Set<number>>(new Set())
 
   // Debounce ref for typing status — a single timer, replaced on each keystroke
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,6 +61,7 @@ export function useChat(conversationId: number | null) {
         if (data.type === 'message') {
           const newMessage: Message = {
             id: data.message_id,
+            client_id: data.client_id ?? null,
             content: data.message,
             sender: data.sender_id,
             sender_username: data.sender_username,
@@ -71,9 +73,15 @@ export function useChat(conversationId: number | null) {
             file_size: data.file_size,
             reply_to: data.reply_to ?? null,
             reactions: [],
+            is_delivered: typeof currentUserId === 'number' && data.sender_id === currentUserId ? false : undefined,
+            delivered_by_user_ids: typeof currentUserId === 'number' && data.sender_id === currentUserId ? [] : undefined,
+            delivered_by_count: typeof currentUserId === 'number' && data.sender_id === currentUserId ? 0 : undefined,
             is_read: false,
+            read_by_user_ids: typeof currentUserId === 'number' && data.sender_id === currentUserId ? [] : undefined,
+            read_by_count: typeof currentUserId === 'number' && data.sender_id === currentUserId ? 0 : undefined,
             edited_at: null,
             is_deleted: false,
+            local_status: 'sent',
           };
 
 
@@ -90,12 +98,16 @@ export function useChat(conversationId: number | null) {
               }
               // Pagination newest -> oldest: pages[0] is the newest page.
               // We prepend/append to the FIRST page to ensure it's in the latest results.
-              const pages = [...oldData.pages];
+              let pages = [...oldData.pages];
               const firstPage = pages[0];
-              const alreadyExists = pages.some((p) =>
-                Array.isArray(p.results) && p.results.some((m: Message) => m.id === newMessage.id)
-              );
+              const alreadyExists = pages.some((p) => Array.isArray(p.results) && p.results.some((m) => m.id === newMessage.id));
               if (alreadyExists) return oldData;
+              if (newMessage.client_id) {
+                pages = pages.map((p) => ({
+                  ...p,
+                  results: Array.isArray(p.results) ? p.results.filter((m) => m.client_id !== newMessage.client_id) : p.results,
+                }));
+              }
               pages[0] = {
                 ...firstPage,
                 results: [...(firstPage.results ?? []), newMessage],
@@ -112,6 +124,43 @@ export function useChat(conversationId: number | null) {
             delete next[data.sender_id];
             return next;
           });
+
+          if (
+            typeof currentUserId === 'number' &&
+            data.sender_id !== currentUserId &&
+            readyState === ReadyState.OPEN &&
+            !deliveredAckRef.current.has(data.message_id)
+          ) {
+            deliveredAckRef.current.add(data.message_id)
+            sendMessage(
+              JSON.stringify({
+                type: 'delivered',
+                message_ids: [data.message_id],
+              })
+            )
+          }
+
+          if (
+            typeof currentUserId === 'number' &&
+            data.sender_id !== currentUserId &&
+            typeof document !== 'undefined' &&
+            document.visibilityState === 'visible' &&
+            readyState === ReadyState.OPEN
+          ) {
+            sendMessage(
+              JSON.stringify({
+                type: 'mark_read',
+                message_ids: [data.message_id],
+              })
+            );
+          }
+          return;
+        }
+
+        // ── Read all in conversation ──────────────────────────
+        if (data.type === 'read_all') {
+          queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
           return;
         }
 
@@ -167,25 +216,94 @@ export function useChat(conversationId: number | null) {
 
         // ── Read receipt ──────────────────────────────────────
         if (data.type === 'read_receipt') {
+          if (typeof currentUserId !== 'number') return
+
           type MessagesPage = { results: Message[]; next: string | null };
           type MessagesData = { pages: MessagesPage[]; pageParams?: unknown[] };
-          queryClient.setQueryData<MessagesData | undefined>(
-            ['messages', conversationId],
-            (oldData) => {
-              if (!oldData || !Array.isArray(oldData.pages)) return oldData;
-              return {
-                pages: oldData.pages.map((page) => ({
-                  ...page,
-                  results: Array.isArray(page.results)
-                    ? page.results.map((msg: Message) =>
-                      msg.id === data.message_id ? { ...msg, is_read: true } : msg
-                    )
-                    : page.results,
-                })),
-                pageParams: oldData.pageParams ?? [],
-              };
-            }
-          );
+          const readerId = data.user_id as number
+          const expected = typeof expectedReaders === 'number' ? Math.max(expectedReaders, 1) : 1
+
+          queryClient.setQueryData<MessagesData | undefined>(['messages', conversationId], (oldData) => {
+            if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+            return {
+              pages: oldData.pages.map((page) => ({
+                ...page,
+                results: Array.isArray(page.results)
+                  ? page.results.map((msg: Message) => {
+                    if (msg.id !== data.message_id) return msg
+                    if (msg.sender !== currentUserId) return msg
+                    if (readerId === currentUserId) return msg
+
+                    const existing = Array.isArray(msg.read_by_user_ids) ? msg.read_by_user_ids : []
+                    const nextReaders = existing.includes(readerId) ? existing : [...existing, readerId]
+                    const nextCount = nextReaders.length
+                    const existingDelivered = Array.isArray(msg.delivered_by_user_ids) ? msg.delivered_by_user_ids : []
+                    const nextDelivered = existingDelivered.includes(readerId) ? existingDelivered : [...existingDelivered, readerId]
+                    const nextDeliveredCount = nextDelivered.length
+                    return {
+                      ...msg,
+                      read_by_user_ids: nextReaders,
+                      read_by_count: nextCount,
+                      delivered_by_user_ids: nextDelivered,
+                      delivered_by_count: nextDeliveredCount,
+                      is_delivered: nextDeliveredCount >= expected,
+                      is_read: nextCount >= expected,
+                    }
+                  })
+                  : page.results,
+              })),
+              pageParams: oldData.pageParams ?? [],
+            };
+          })
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          return;
+        }
+
+        if (data.type === 'delivery_receipt') {
+          if (typeof currentUserId !== 'number') return
+
+          type MessagesPage = { results: Message[]; next: string | null };
+          type MessagesData = { pages: MessagesPage[]; pageParams?: unknown[] };
+          const delivererId = data.user_id as number
+          const expected = typeof expectedReaders === 'number' ? Math.max(expectedReaders, 1) : 1
+
+          queryClient.setQueryData<MessagesData | undefined>(['messages', conversationId], (oldData) => {
+            if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+            return {
+              pages: oldData.pages.map((page) => ({
+                ...page,
+                results: Array.isArray(page.results)
+                  ? page.results.map((msg: Message) => {
+                    if (msg.id !== data.message_id) return msg
+                    if (msg.sender !== currentUserId) return msg
+                    if (delivererId === currentUserId) return msg
+
+                    const existing = Array.isArray(msg.delivered_by_user_ids) ? msg.delivered_by_user_ids : []
+                    const nextDeliverers = existing.includes(delivererId) ? existing : [...existing, delivererId]
+                    const nextCount = nextDeliverers.length
+                    return {
+                      ...msg,
+                      delivered_by_user_ids: nextDeliverers,
+                      delivered_by_count: nextCount,
+                      is_delivered: nextCount >= expected,
+                    }
+                  })
+                  : page.results,
+              })),
+              pageParams: oldData.pageParams ?? [],
+            };
+          })
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          return;
+        }
+
+        if (data.type === 'message_read') {
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          return;
+        }
+
+        if (data.type === 'message_delivered') {
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
           return;
         }
 
@@ -247,6 +365,18 @@ export function useChat(conversationId: number | null) {
     }
   });
 
+  const markRead = useCallback((messageIds: number[]) => {
+    if (readyState !== ReadyState.OPEN) return false
+    if (!Array.isArray(messageIds) || messageIds.length === 0) return false
+    sendMessage(
+      JSON.stringify({
+        type: 'mark_read',
+        message_ids: messageIds,
+      })
+    )
+    return true
+  }, [readyState, sendMessage])
+
   const sendTypingStatus = useCallback((isTyping: boolean) => {
     if (readyState === ReadyState.OPEN) {
       sendMessage(JSON.stringify({
@@ -293,6 +423,7 @@ export function useChat(conversationId: number | null) {
     typingUsers,
     handleTyping,
     sendTypingStatus,
+    markRead,
     readyState,
     lastMessage: lastJsonMessage
   };

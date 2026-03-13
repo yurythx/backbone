@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.core.models import Company
-from apps.messenger.models import Conversation, Message
+from apps.messenger.models import Conversation, Message, MessageDelivery, MessageRead
 from apps.module_manager.models import Module, TenantModule
 
 User = get_user_model()
@@ -89,3 +89,21 @@ class MessengerActionsTest(APITestCase):
 
         # Should be 404 because get_queryset filters by participants
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_message_receipts_only_sender(self):
+        conv = Conversation.objects.create(company=self.company)
+        conv.participants.add(self.alice, self.bob)
+
+        msg = Message.objects.create(company=self.company, conversation=conv, sender=self.alice, content="Receipts")
+        MessageDelivery.all_objects.create(company=self.company, message=msg, user=self.bob)
+        MessageRead.all_objects.create(company=self.company, message=msg, user=self.bob)
+
+        res = self.client.get(f"/api/messenger/messages/{msg.id}/receipts/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["message_id"], msg.id)
+        self.assertEqual(res.data["delivered_count"], 1)
+        self.assertEqual(res.data["read_count"], 1)
+
+        self.client.force_authenticate(user=self.bob)
+        res2 = self.client.get(f"/api/messenger/messages/{msg.id}/receipts/")
+        self.assertEqual(res2.status_code, status.HTTP_403_FORBIDDEN)

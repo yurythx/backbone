@@ -169,6 +169,11 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
           status: "offline",
         }
 
+        const effectiveStatus: 'online' | 'busy' | 'offline' =
+          otherContact?.id && userStatuses.has(otherContact.id)
+            ? (userStatuses.get(otherContact.id) ?? 'offline')
+            : ((otherContact?.status as any) ?? 'offline')
+
         return {
           convId: conv.id,
           title: otherUsername,
@@ -179,13 +184,13 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
           lastMessage: conv.last_message ?? null,
           contact: contactForClick,
           avatarUrl: otherContact?.avatar_url,
-          status: (otherContact?.status as any) ?? "offline",
-          isOnline: otherContact ? onlineUsers.has(otherContact.id) : false,
+          status: effectiveStatus,
+          isOnline: otherContact?.id ? effectiveStatus !== 'offline' : false,
           updatedAt: conv.updated_at,
         } as DisplayItem
       })
       .filter((item): item is DisplayItem => item !== null)
-  }, [conversations, contactByUsername, currentUser?.username, onlineUsers])
+  }, [conversations, contactByUsername, currentUser?.username, userStatuses])
 
   // ── Filter + sort ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {

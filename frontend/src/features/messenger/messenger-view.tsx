@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import { ContactList } from "./contact-list"
 import { ChatWindow } from "./chat-window"
-import { Contact, Message } from "@/types/messenger"
+import { Contact } from "@/types"
+import { Message } from "@/types/messenger"
 import { MessageSquareDashed, Loader2, SlidersHorizontal } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
@@ -131,6 +132,7 @@ export function MessengerView() {
           group_names: contactData.group_names ?? [],
           is_staff: contactData.is_staff ?? false,
           last_seen: contactData.last_seen || null,
+          status: contactData.status || 'offline',
           first_name: contactData.first_name || "",
           last_name: contactData.last_name || ""
         })
@@ -162,6 +164,7 @@ export function MessengerView() {
             group_names: [],
             is_staff: false,
             last_seen: null,
+            status: 'online',
             first_name: "",
             last_name: ""
           }
@@ -182,6 +185,7 @@ export function MessengerView() {
               group_names: p?.group_names || [],
               is_staff: !!p?.is_staff,
               last_seen: p?.last_seen || null,
+              status: p?.status || (p?.is_online ? 'online' : 'offline'),
               first_name: p?.first_name || "",
               last_name: p?.last_name || ""
             }

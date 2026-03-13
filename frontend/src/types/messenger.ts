@@ -30,6 +30,7 @@ export interface ReplyMessage {
 
 export interface Message {
     id: number
+    client_id?: string | null
     conversation: number
     sender: number
     sender_username: string
@@ -42,11 +43,17 @@ export interface Message {
     file_type: string | null
     file_size: number | null
     created_at: string
+    is_delivered?: boolean
+    delivered_by_count?: number
+    delivered_by_user_ids?: number[]
     is_read: boolean
+    read_by_count?: number
+    read_by_user_ids?: number[]
     /** Set when the message has been edited. */
     edited_at: string | null
     /** True if the message was soft-deleted. UI should render "[Mensagem apagada]". */
     is_deleted: boolean
+    local_status?: 'sending' | 'sent' | 'failed'
     reactions: MessageReaction[]
     reply_to: ReplyMessage | null
 }
@@ -80,6 +87,7 @@ export interface Contact {
     first_name: string
     last_name: string
     is_online: boolean
+    status?: 'online' | 'busy' | 'offline'
     group_names: string[]
     is_staff: boolean
     avatar_url: string | null
@@ -96,6 +104,7 @@ export interface WsMessagePayload {
     sender_id: number
     sender_username: string
     message_id: number
+    client_id?: string | null
     created_at: string
     file_url: string | null
     file_name: string | null

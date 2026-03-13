@@ -51,13 +51,21 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
             else:
                 qs = User.all_objects.filter(is_active=True).exclude(id=user.id)
         else:
-            # Users see everyone in the same company
             if not company:
-                # Se não há empresa no contexto, usuário normal não deve ver nada
                 logger.warning(f"ContactViewSet: User {user.username} has no company context. Returning empty.")
                 return User.objects.none()
 
-            qs = User.objects.filter(company=company, is_active=True).exclude(id=user.id)
+            if user.is_staff:
+                qs = User.objects.filter(company=company, is_active=True).exclude(id=user.id)
+            else:
+                group_ids = list(user.groups.values_list("id", flat=True))
+                if not group_ids:
+                    return User.objects.none()
+                qs = (
+                    User.objects.filter(company=company, is_active=True, groups__in=group_ids)
+                    .exclude(id=user.id)
+                    .distinct()
+                )
 
         return qs.prefetch_related("groups").order_by("username")
 
@@ -132,7 +140,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return Conversation.all_objects.none()
 
-        from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
+        from django.db.models import Count, OuterRef, Prefetch, Subquery
+        from django.db.models.functions import Coalesce
 
         from .models import ConversationPreference
 
@@ -149,6 +158,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
         last_msg_qs = Message.objects.filter(conversation=OuterRef("pk")).order_by("-created_at")
         pref_qs = ConversationPreference.objects.filter(user=user)
 
+        unread_count_qs = (
+            Message.objects.filter(conversation=OuterRef("pk"), is_deleted=False)
+            .exclude(sender_id=user.id)
+            .exclude(reads__user_id=user.id)
+            .values("conversation")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
+
         qs = (
             manager.filter(participants=user)
             .select_related("company")
@@ -157,10 +175,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 Prefetch("preferences", queryset=pref_qs, to_attr="prefetched_pref"),
             )
             .annotate(
-                unread_count=Count(
-                    "messages",
-                    filter=Q(messages__is_read=False) & ~Q(messages__sender_id=user.id) & Q(messages__is_deleted=False),
-                ),
+                unread_count=Coalesce(Subquery(unread_count_qs[:1]), 0),
                 # Annotate last message details using Subqueries (Performance #26)
                 last_msg_id=Subquery(last_msg_qs.values("id")[:1]),
                 last_msg_content=Subquery(last_msg_qs.values("content")[:1]),
@@ -285,15 +300,27 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return Response({"error": "Auth required"}, status=401)
 
-        unread_messages = conversation.messages.filter(is_read=False).exclude(sender_id=user.id)
+        from .models import MessageRead
 
-        count = unread_messages.count()
-        if count > 0:
-            unread_messages.update(is_read=True)
-            # Broadcast read status
-            MessengerService.broadcast_all_read(request.company, conversation, user.id)
+        unread_qs = (
+            Message.all_objects.filter(conversation=conversation, is_deleted=False)
+            .exclude(sender_id=user.id)
+            .exclude(reads__user_id=user.id)
+        )
+        message_ids = list(unread_qs.values_list("id", flat=True))
+        if not message_ids:
+            return Response({"marked_read": 0})
 
-        return Response({"marked_read": count})
+        MessageRead.objects.bulk_create(
+            [MessageRead(company=conversation.company, message_id=mid, user=user) for mid in message_ids],
+            ignore_conflicts=True,
+        )
+
+        if not conversation.is_group:
+            unread_qs.update(is_read=True)
+
+        MessengerService.broadcast_all_read(request.company, conversation, user.id)
+        return Response({"marked_read": len(message_ids)})
 
     @extend_schema(
         parameters=[OpenApiParameter("q", OpenApiTypes.STR, description="Termo de pesquisa")],
@@ -324,9 +351,18 @@ class ConversationViewSet(viewsets.ModelViewSet):
         content = request.data.get("content")
         file_obj = request.FILES.get("file")
         reply_to_id = request.data.get("reply_to_id")
+        client_id = request.data.get("client_id")
 
         if not content and not file_obj:
             return Response({"error": "Content or file is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if client_id:
+            try:
+                import uuid
+
+                client_id = uuid.UUID(str(client_id))
+            except Exception:
+                client_id = None
 
         message = MessengerService.send_message(
             user=request.user,
@@ -336,6 +372,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             file_obj=file_obj,
             request=request,
             reply_to_id=reply_to_id,
+            client_id=client_id,
         )
 
         serializer = MessageSerializer(message, context={"request": request})
@@ -349,7 +386,17 @@ class ConversationViewSet(viewsets.ModelViewSet):
     def messages(self, request, pk=None):
         conversation = self.get_object()
         # Order by -created_at for pagination (latest first) then reverse for display
-        qs = conversation.messages.all().order_by("-created_at")
+        from django.db.models import Count, Exists, OuterRef
+
+        from .models import MessageDelivery, MessageRead
+
+        qs = Message.all_objects.filter(conversation=conversation).annotate(
+            read_by_me=Exists(MessageRead.objects.filter(message_id=OuterRef("pk"), user_id=request.user.id)),
+            read_by_count=Count("reads", distinct=True),
+            delivered_by_me=Exists(MessageDelivery.objects.filter(message_id=OuterRef("pk"), user_id=request.user.id)),
+            delivered_by_count=Count("deliveries", distinct=True),
+        )
+        qs = qs.order_by("-created_at")
 
         before = request.query_params.get("before")
         if before:
@@ -367,11 +414,19 @@ class ConversationViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(qs)
         if page is not None:
             messages_list = list(reversed(page))
-            serializer = MessageSerializer(messages_list, many=True, context={"request": request})
+            serializer = MessageSerializer(
+                messages_list,
+                many=True,
+                context={"request": request, "participants_count": conversation.participants.count()},
+            )
             return self.get_paginated_response(serializer.data)
 
         messages_list = list(qs.order_by("created_at"))
-        serializer = MessageSerializer(messages_list, many=True, context={"request": request})
+        serializer = MessageSerializer(
+            messages_list,
+            many=True,
+            context={"request": request, "participants_count": conversation.participants.count()},
+        )
         return Response(serializer.data)
 
 
@@ -524,10 +579,53 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
         # Only allow marking as read if requester is participant and not the sender
         if message.sender_id == request.user.id:
             return Response({"error": "Sender cannot mark own message as read"}, status=status.HTTP_400_BAD_REQUEST)
-        message.is_read = True
-        message.save(update_fields=["is_read"])
+        from .models import MessageRead
+
+        MessageRead.objects.get_or_create(
+            company=message.company,
+            message=message,
+            user=request.user,
+        )
+
+        if not message.conversation.is_group:
+            message.is_read = True
+            message.save(update_fields=["is_read"])
 
         # Broadcast to conversation group
         MessengerService.broadcast_read_receipt(request.company, message.conversation, message.id, request.user.id)
 
         return Response({"status": "success", "is_read": True})
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT}, description="Get delivery/read receipts for this message")
+    @action(detail=True, methods=["get"])
+    def receipts(self, request, pk=None):
+        message = self.get_object()
+        if message.sender_id != request.user.id:
+            raise exceptions.PermissionDenied("You can only view receipts for your own messages.")
+
+        from .models import MessageDelivery, MessageRead
+
+        deliveries_qs = (
+            MessageDelivery.all_objects.filter(company=message.company, message=message)
+            .select_related("user")
+            .order_by("delivered_at")
+        )
+        reads_qs = (
+            MessageRead.all_objects.filter(company=message.company, message=message).select_related("user").order_by("read_at")
+        )
+
+        deliveries = [
+            {"user_id": d.user_id, "username": d.user.username, "delivered_at": d.delivered_at.isoformat()} for d in deliveries_qs
+        ]
+        reads = [{"user_id": r.user_id, "username": r.user.username, "read_at": r.read_at.isoformat()} for r in reads_qs]
+
+        return Response(
+            {
+                "message_id": message.id,
+                "conversation_id": message.conversation_id,
+                "delivered": deliveries,
+                "read": reads,
+                "delivered_count": len(deliveries),
+                "read_count": len(reads),
+            }
+        )

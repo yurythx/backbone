@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -7,7 +8,7 @@ from django.core.cache import cache
 
 from shared_kernel.tenant_context import set_current_company
 
-from .models import Conversation, Message
+from .models import Conversation, Message, MessageDelivery, MessageRead
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
+        set_current_company(self.conversation.company)
+
         company_slug = await self.get_company_slug(self.conversation)
         self.company_slug = company_slug
         self.room_group_name = f"chat_{company_slug}_{self.conversation_id}"
@@ -143,6 +146,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
 
         await self.accept()
+        self._rl_window_start = time.monotonic()
+        self._rl_count = 0
 
     async def disconnect(self, close_code):
         if hasattr(self, "room_group_name"):
@@ -166,6 +171,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         message_type = data.get("type")
+
+        now = time.monotonic()
+        window_start = getattr(self, "_rl_window_start", now)
+        count = getattr(self, "_rl_count", 0)
+        if now - window_start >= 1:
+            window_start = now
+            count = 0
+        count += 1
+        self._rl_window_start = window_start
+        self._rl_count = count
+        if count > 15:
+            await self.close(code=4008)
+            return
 
         # ── Atomic Rate limiting: max 10 WS frames/second per user ──────────────
         # Best Practice: Use Redis INCR for atomic counting.
@@ -210,6 +228,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     self.room_group_name,
                     {"type": "read_receipt_update", "message_id": mid, "user_id": self.user.id, "is_read": True},
                 )
+            if updated_ids:
+                await self.send(text_data=json.dumps({"type": "message_read", "message_ids": updated_ids}))
+        elif message_type == "delivered":
+            message_ids = data.get("message_ids") or []
+            if not isinstance(message_ids, list) or not all(isinstance(x, int) for x in message_ids):
+                await self.close(code=4000)
+                return
+
+            updated_ids = await self.mark_messages_delivered(message_ids)
+            for mid in updated_ids:
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {"type": "delivery_receipt_update", "message_id": mid, "user_id": self.user.id, "is_delivered": True},
+                )
+            if updated_ids:
+                await self.send(text_data=json.dumps({"type": "message_delivered", "message_ids": updated_ids}))
         else:
             # Unknown or unsupported type — silently ignore.
             # Messages MUST be sent via the REST API endpoint.
@@ -229,6 +263,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "sender_id": event["sender_id"],
                     "sender_username": event["sender_username"],
                     "message_id": event["message_id"],
+                    "client_id": event.get("client_id"),
                     "created_at": event["created_at"],
                     "file_url": event.get("file_url"),
                     "file_name": event.get("file_name"),
@@ -279,6 +314,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
         )
 
+    async def delivery_receipt_update(self, event):
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "delivery_receipt",
+                    "message_id": event["message_id"],
+                    "user_id": event["user_id"],
+                    "is_delivered": event["is_delivered"],
+                }
+            )
+        )
+
     async def delete_message(self, event):
         await self.send(text_data=json.dumps({"type": "delete_message", "message_id": event["message_id"]}))
 
@@ -290,6 +337,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "message_id": event["message_id"],
                     "content": event["content"],
                     "edited_at": event["edited_at"],
+                }
+            )
+        )
+
+    async def read_all_update(self, event):
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "read_all",
+                    "conversation_id": event.get("conversation_id"),
+                    "user_id": event.get("user_id"),
+                    "read_at": event.get("read_at"),
                 }
             )
         )
@@ -311,9 +370,53 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def mark_messages_read(self, message_ids):
-        qs = Message.objects.filter(
-            company=self.conversation.company, conversation=self.conversation, id__in=message_ids
+        qs = (
+            Message.all_objects.filter(company=self.conversation.company, conversation=self.conversation, id__in=message_ids)
+            .exclude(sender_id=self.user.id)
+            .filter(is_deleted=False)
         )
-        existing_ids = list(qs.values_list("id", flat=True))
-        qs.update(is_read=True)
-        return existing_ids
+        ids = list(qs.values_list("id", flat=True))
+        if not ids:
+            return []
+
+        existing = set(
+            MessageRead.objects.filter(company=self.conversation.company, message_id__in=ids, user_id=self.user.id).values_list(
+                "message_id", flat=True
+            )
+        )
+        new_ids = [mid for mid in ids if mid not in existing]
+        if new_ids:
+            MessageRead.objects.bulk_create(
+                [MessageRead(company=self.conversation.company, message_id=mid, user_id=self.user.id) for mid in new_ids],
+                ignore_conflicts=True,
+            )
+
+        if not self.conversation.is_group and ids:
+            Message.objects.filter(company=self.conversation.company, id__in=ids).update(is_read=True)
+
+        return new_ids
+
+    @database_sync_to_async
+    def mark_messages_delivered(self, message_ids):
+        qs = (
+            Message.all_objects.filter(company=self.conversation.company, conversation=self.conversation, id__in=message_ids)
+            .exclude(sender_id=self.user.id)
+            .filter(is_deleted=False)
+        )
+        ids = list(qs.values_list("id", flat=True))
+        if not ids:
+            return []
+
+        existing = set(
+            MessageDelivery.objects.filter(
+                company=self.conversation.company, message_id__in=ids, user_id=self.user.id
+            ).values_list("message_id", flat=True)
+        )
+        new_ids = [mid for mid in ids if mid not in existing]
+        if new_ids:
+            MessageDelivery.objects.bulk_create(
+                [MessageDelivery(company=self.conversation.company, message_id=mid, user_id=self.user.id) for mid in new_ids],
+                ignore_conflicts=True,
+            )
+
+        return new_ids

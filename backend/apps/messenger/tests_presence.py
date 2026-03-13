@@ -1,3 +1,4 @@
+from asgiref.sync import sync_to_async
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -99,7 +100,7 @@ class PresenceConsumerTest(TransactionTestCase):
 
         # User 2 connects
         user2 = await User.objects.acreate(username="p_user2", email="p2@p.com", password="pwd", company=self.company)
-        token2 = RefreshToken.for_user(user2)
+        token2 = await sync_to_async(RefreshToken.for_user)(user2)
         access_token2 = str(token2.access_token)
 
         comm2 = WebsocketCommunicator(application, f"ws/presence/?token={access_token2}")

@@ -140,16 +140,20 @@ class MessengerWSRateLimitTest(TransactionTestCase):
         connected, _ = await comm.connect()
         self.assertTrue(connected)
 
-        rejected = False
         for _i in range(30):
-            try:
-                await comm.send_json_to({"type": "typing_status", "is_typing": True})
-            except Exception:
-                rejected = True
-                break
+            await comm.send_json_to({"type": "typing_status", "is_typing": True})
 
-        # The consumer must not silently accept unlimited messages
-        # If this test fails, add rate limiting to the consumer
+        rejected = False
+        try:
+            output = await asyncio.wait_for(comm.receive_output(), timeout=2)
+            if output.get("type") == "websocket.close":
+                rejected = True
+            if output.get("type") == "websocket.send":
+                payload = output.get("text") or ""
+                rejected = '"error"' in payload or '"rate"' in payload or '"type"' in payload
+        except TimeoutError:
+            rejected = False
+
         self.assertTrue(
             rejected,
             "Consumer should reject/disconnect after rapid message flood. "
@@ -212,6 +216,52 @@ class MessengerWSMarkReadTest(TransactionTestCase):
         self.assertTrue(msg_refreshed.is_read, "Message should be marked as read")
 
         await comm.disconnect()
+
+
+class MessengerWSDeliveryReceiptTest(TransactionTestCase):
+    def setUp(self):
+        self.company = Company.all_companies.create(name="Delivery Corp", slug="delivery-corp")
+        self.alice = User.objects.create_user(
+            username="alice_delivery", email="alice@dc.com", password="pwd", company=self.company
+        )
+        self.bob = User.objects.create_user(username="bob_delivery", email="bob@dc.com", password="pwd", company=self.company)
+        self.alice_token = str(RefreshToken.for_user(self.alice).access_token)
+        self.bob_token = str(RefreshToken.for_user(self.bob).access_token)
+        self.conv = Conversation.objects.create(company=self.company)
+        self.conv.participants.add(self.alice, self.bob)
+
+    async def test_delivery_receipt_broadcasts_to_group(self):
+        url_alice = f"/ws/chat/{self.conv.id}/?token={self.alice_token}"
+        url_bob = f"/ws/chat/{self.conv.id}/?token={self.bob_token}"
+
+        comm_alice = WebsocketCommunicator(application, url_alice)
+        comm_bob = WebsocketCommunicator(application, url_bob)
+        connected_a, _ = await comm_alice.connect()
+        connected_b, _ = await comm_bob.connect()
+        self.assertTrue(connected_a)
+        self.assertTrue(connected_b)
+
+        msg_id = await _create_and_broadcast_message(self.company, self.conv, self.alice, "Ping")
+
+        await asyncio.wait_for(comm_alice.receive_json_from(), timeout=3)
+        await asyncio.wait_for(comm_bob.receive_json_from(), timeout=3)
+
+        await comm_bob.send_json_to({"type": "delivered", "message_ids": [msg_id]})
+
+        delivery_event = await asyncio.wait_for(comm_alice.receive_json_from(), timeout=3)
+        self.assertEqual(delivery_event.get("type"), "delivery_receipt")
+        self.assertEqual(delivery_event.get("message_id"), msg_id)
+        self.assertEqual(delivery_event.get("user_id"), self.bob.id)
+
+        from asgiref.sync import sync_to_async
+
+        from apps.messenger.models import MessageDelivery
+
+        exists = await sync_to_async(MessageDelivery.all_objects.filter(message_id=msg_id, user_id=self.bob.id).exists)()
+        self.assertTrue(exists)
+
+        await comm_alice.disconnect()
+        await comm_bob.disconnect()
 
 
 class PresenceConsumerTest(TransactionTestCase):

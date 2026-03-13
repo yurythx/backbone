@@ -59,6 +59,7 @@ class Message(BaseTenantModel):
     file_name = models.CharField(max_length=255, blank=True, null=True)
     file_type = models.CharField(max_length=100, blank=True, null=True)
     file_size = models.BigIntegerField(blank=True, null=True)
+    client_id = models.UUIDField(blank=True, null=True, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
@@ -96,6 +97,38 @@ class Message(BaseTenantModel):
         self.file_type = None
         self.file_size = None
         self.save(update_fields=["is_deleted", "content", "file", "file_name", "file_type", "file_size"])
+
+
+class MessageRead(BaseTenantModel):
+    message = models.ForeignKey(Message, related_name="reads", on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="message_reads", on_delete=models.CASCADE)
+    read_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("message", "user")
+        indexes = [
+            models.Index(fields=["message", "user"]),
+            models.Index(fields=["user", "read_at"]),
+        ]
+
+    def __str__(self):
+        return f"MessageRead user={self.user_id} message={self.message_id}"
+
+
+class MessageDelivery(BaseTenantModel):
+    message = models.ForeignKey(Message, related_name="deliveries", on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="message_deliveries", on_delete=models.CASCADE)
+    delivered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("message", "user")
+        indexes = [
+            models.Index(fields=["message", "user"]),
+            models.Index(fields=["user", "delivered_at"]),
+        ]
+
+    def __str__(self):
+        return f"MessageDelivery user={self.user_id} message={self.message_id}"
 
 
 class MessageReaction(BaseTenantModel):

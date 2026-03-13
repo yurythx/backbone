@@ -23,7 +23,13 @@ if not SECRET_KEY:
     )
 
 DEBUG = env("DEBUG")
-TESTING = "test" in sys.argv or "test_coverage" in sys.argv or "--test" in sys.argv
+TESTING = (
+    "test" in sys.argv
+    or "test_coverage" in sys.argv
+    or "--test" in sys.argv
+    or "pytest" in sys.modules
+    or os.environ.get("PYTEST_CURRENT_TEST") is not None
+)
 
 INSTALLED_APPS = [
     "daphne",
