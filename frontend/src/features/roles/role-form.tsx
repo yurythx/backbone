@@ -100,7 +100,6 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
             queryClient.invalidateQueries({ queryKey: ['roles'] })
             queryClient.invalidateQueries({ queryKey: ['users'] })
             queryClient.invalidateQueries({ queryKey: ['auth', 'user'] })
-            queryClient.invalidateQueries({ queryKey: ['me'] })
             onSuccess()
         },
         onError: (error) => {

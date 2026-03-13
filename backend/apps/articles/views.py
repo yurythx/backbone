@@ -543,7 +543,12 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         company = getattr(request, "company", None)
 
         # Rate limit simples: 5 comentários/10min por IP por empresa
-        ip = request.META.get("REMOTE_ADDR", "unknown")
+        forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        ip = (
+            forwarded_for.split(",")[0].strip()
+            if forwarded_for and isinstance(forwarded_for, str)
+            else request.META.get("REMOTE_ADDR", "unknown")
+        )
         company_key = company.slug if company else "public"
         key = f"rate:pub_comment:{company_key}:{ip}"
         count = cache.get(key, 0)

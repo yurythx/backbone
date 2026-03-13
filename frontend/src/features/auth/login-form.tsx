@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { api, resetAuthState } from "@/lib/axios"
+import { setHasSessionCookie } from "@/lib/session"
 import { AuthResponse } from "@/types"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
@@ -133,9 +134,7 @@ export function LoginForm({ onCompanyChange }: LoginFormProps) {
       localStorage.setItem('refreshToken', response.data.refresh)
 
       // 3b. Set session cookie readable by the Next.js middleware
-      // SameSite=Lax is sufficient; it doesn't need to be httpOnly since
-      // it's just a presence signal (the real token stays in localStorage).
-      document.cookie = `hasSession=true; path=/; SameSite=Lax; max-age=${60 * 60 * 24 * 7}` // 7 days
+      setHasSessionCookie()
 
       // 4. Reset auth state (allows future 401 redirects after this session)
       resetAuthState()

@@ -1,20 +1,24 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/axios'
 import { TenantModule } from '@/types'
+import { ensureHasSessionCookie } from '@/lib/session'
 
 export function useModules() {
     const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
     const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
     const effectiveCompany = companySlug || envCompany || 'unknown'
+  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
 
     const { data: rawData, isLoading, error } = useQuery<TenantModule[] | { results: TenantModule[] }>({
         queryKey: ['my-modules', effectiveCompany],
         queryFn: async () => {
+      ensureHasSessionCookie()
             const res = await api.get<TenantModule[] | { results: TenantModule[] }>('/api/modules/my-modules/')
             return res.data
         },
         staleTime: 30_000, // Reduzido de 5min para 30s para atualizar mais rápido em interações
-        retry: 1
+    retry: 1,
+    enabled: !!token,
     })
 
     // Extract modules array safely

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { showApiError } from '@/lib/toast-helpers';
 import { toast } from 'sonner';
+import axios from 'axios';
 
 interface Comment {
     id: number;
@@ -30,6 +31,26 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
     const [email, setEmail] = React.useState('');
     const [content, setContent] = React.useState('');
     const [submitted, setSubmitted] = React.useState(false);
+    const [emailError, setEmailError] = React.useState<string | null>(null);
+    const maxLength = 1500;
+
+    const normalizedEmail = React.useMemo(() => email.trim(), [email]);
+    const isEmailValid = React.useMemo(() => {
+        if (!normalizedEmail) return true;
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    }, [normalizedEmail]);
+
+    React.useEffect(() => {
+        if (!normalizedEmail) {
+            setEmailError(null);
+            return;
+        }
+        setEmailError(isEmailValid ? null : 'Informe um email válido.');
+    }, [isEmailValid, normalizedEmail]);
+
+    React.useEffect(() => {
+        if (submitted) setSubmitted(false);
+    }, [name, email, content, submitted]);
 
     const { data, isLoading } = useQuery({
         queryKey: ['public-article-comments', articleId, companySlug],
@@ -52,6 +73,8 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
         mutationFn: async () => {
             const trimmed = content.trim();
             if (!trimmed) throw new Error('Conteúdo do comentário é obrigatório.');
+            if (!isEmailValid) throw new Error('Informe um email válido.');
+            if (trimmed.length > maxLength) throw new Error(`O comentário deve ter no máximo ${maxLength} caracteres.`);
 
             const payload: Record<string, unknown> = {
                 content: trimmed,
@@ -59,7 +82,7 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
             if (articleSlug) payload.article_slug = articleSlug;
             else payload.article = articleId;
             if (name.trim()) payload.name = name.trim();
-            if (email.trim()) payload.email = email.trim();
+            if (normalizedEmail) payload.email = normalizedEmail;
 
             const res = await api.post('/api/articles/public/comments/', payload, {
                 headers: companySlug ? { 'X-Company-Slug': companySlug } : {},
@@ -73,6 +96,16 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
             queryClient.invalidateQueries({ queryKey: ['public-article-comments', articleId, companySlug] });
         },
         onError: (err) => {
+            if (axios.isAxiosError(err) && err.response?.status === 429) {
+                const detail =
+                    typeof err.response.data === 'object' && err.response.data && 'detail' in err.response.data
+                        ? String((err.response.data as { detail?: unknown }).detail || '')
+                        : ''
+                toast.error('Limite atingido', {
+                    description: detail || 'Você enviou muitos comentários. Tente novamente mais tarde.',
+                })
+                return
+            }
             showApiError(err, 'Erro ao enviar comentário.');
         },
     });
@@ -104,6 +137,9 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
                                 placeholder="seu@email.com"
                                 inputMode="email"
                             />
+                            {emailError && (
+                                <div className="text-xs text-destructive">{emailError}</div>
+                            )}
                         </div>
                     </div>
 
@@ -114,7 +150,11 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
                             onChange={(e) => setContent(e.target.value)}
                             placeholder="Escreva seu comentário..."
                             className="min-h-[120px]"
+                            maxLength={maxLength}
                         />
+                        <div className="text-[11px] text-muted-foreground text-right">
+                            {content.length}/{maxLength}
+                        </div>
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
@@ -123,10 +163,10 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
                         </div>
                         <Button
                             onClick={() => createMutation.mutate()}
-                            disabled={createMutation.isPending || !content.trim()}
+                            disabled={createMutation.isPending || !content.trim() || !isEmailValid}
                             className="rounded-xl"
                         >
-                            Enviar
+                            {createMutation.isPending ? 'Enviando...' : 'Enviar'}
                         </Button>
                     </div>
                 </div>

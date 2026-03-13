@@ -13,6 +13,7 @@ import { useTheme } from "@/components/theme-provider"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermission } from "@/hooks/use-permission"
 import { api } from "@/lib/axios"
+import { clearClientSession, ensureHasSessionCookie } from "@/lib/session"
 import Image from "next/image"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { useMobileNavStore } from "@/hooks/use-mobile-nav-store"
@@ -48,6 +49,10 @@ export function MobileNav() {
     const { user } = useAuth()
     const { hasPermission } = usePermission()
 
+    React.useEffect(() => {
+        ensureHasSessionCookie()
+    }, [])
+
     const handleLogout = async () => {
         setIsLoggingOut(true)
         setIsOpen(false)
@@ -60,9 +65,7 @@ export function MobileNav() {
         } catch {
             // Logout is best-effort — proceed even if server call fails
         } finally {
-            localStorage.removeItem('accessToken')
-            localStorage.removeItem('refreshToken')
-            localStorage.removeItem('companySlug')
+            clearClientSession()
             toast.success("Você saiu da conta. Até logo!")
             router.push('/login')
         }

@@ -3,8 +3,8 @@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Building, Settings2, Mail } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { useState, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useEffect, useState, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Protected } from "@/components/auth/protected"
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -57,8 +57,22 @@ const SmtpSettings = dynamic(
 
 function SettingsContent() {
   const searchParams = useSearchParams()
-  const initialTab = searchParams.get("tab") || "company"
-  const [activeTab, setActiveTab] = useState(initialTab)
+  const router = useRouter()
+  const tabParam = searchParams.get("tab")
+  const allowedTabs = new Set(["company", "branding", "email"])
+  const [activeTab, setActiveTab] = useState("company")
+
+  useEffect(() => {
+    if (tabParam === "profile") {
+      router.replace("/perfil")
+      return
+    }
+    if (tabParam && allowedTabs.has(tabParam)) {
+      setActiveTab(tabParam)
+      return
+    }
+    setActiveTab("company")
+  }, [router, tabParam])
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-20">
@@ -67,7 +81,14 @@ function SettingsContent() {
         description="Gerencie as configurações da organização e preferências globais."
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value)
+          router.replace(`/settings?tab=${encodeURIComponent(value)}`)
+        }}
+        className="space-y-8"
+      >
         <div className="glass rounded-2xl p-2 border shadow-sm">
           <TabsList className="bg-transparent p-0 w-full flex flex-col md:flex-row h-auto gap-2" aria-label="Seções de configurações">
             <TabsTrigger

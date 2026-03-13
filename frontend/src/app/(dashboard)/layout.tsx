@@ -3,6 +3,8 @@
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { PresenceHeartbeat } from "@/components/layout/presence-heartbeat"
 import { PresenceProvider } from "@/hooks/use-presence"
+import * as React from "react"
+import { ensureHasSessionCookie } from "@/lib/session"
 
 /**
  * DashboardLayout — proteção primária feita via middleware.ts (server-side).
@@ -14,6 +16,10 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+  React.useEffect(() => {
+    ensureHasSessionCookie()
+  }, [])
+
   return (
     <PresenceProvider>
       <DashboardShell>

@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { User as UserType } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AvatarUpload } from "@/components/avatar-upload"
 import { usePresence } from "@/hooks/use-presence"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/use-auth"
 
 const profileSchema = z.object({
   username: z.string().min(2, "O nome de usuário deve ter pelo menos 2 caracteres."),
@@ -38,13 +39,7 @@ export function ProfileForm() {
   const queryClient = useQueryClient()
   const { userStatuses, updateStatus } = usePresence()
 
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['me'],
-    queryFn: async ({ signal }) => {
-      const res = await api.get<UserType>('/api/accounts/users/me/', { signal })
-      return res.data
-    }
-  })
+  const { user, isLoading } = useAuth()
 
   // Schema now accepts File or string for avatar
   const extendedSchema = profileSchema.extend({
@@ -94,7 +89,6 @@ export function ProfileForm() {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['me'] })
       queryClient.invalidateQueries({ queryKey: ['auth', 'user'] }) // Update global auth context
       toast.success("Perfil atualizado com sucesso!")
     },

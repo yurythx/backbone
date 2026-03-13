@@ -6,8 +6,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useModules } from "@/hooks/use-modules"
 import { useTheme } from "@/components/theme-provider"
-import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/axios"
+import { useAuth } from "@/hooks/use-auth"
 import {
   LayoutDashboard,
   MessageSquare,
@@ -143,7 +142,7 @@ export function Sidebar() {
   const { isModuleActive } = useModules()
   const { isSidebarCollapsed, toggleSidebar } = useUIStore()
   const { logo, companyName } = useTheme()
-  const { data: me } = useQuery({ queryKey: ['me'], queryFn: async () => (await api.get('/api/accounts/users/me/')).data })
+  const { user: me } = useAuth()
 
   const userPermissions = me?.role_details?.permissions || []
   const isSuperuser = me?.is_superuser

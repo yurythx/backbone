@@ -14,7 +14,8 @@ interface ApiError {
  */
 export function showApiError(err: unknown, fallbackMessage = 'Ocorreu um erro') {
     if (err instanceof AxiosError) {
-        const apiErr = err.response?.data as ApiError | undefined
+        const data = err.response?.data
+        const apiErr = data as ApiError | undefined
 
         // Priority: detail > message > errors > non_field_errors > fallback
         if (apiErr?.detail) {
@@ -38,6 +39,29 @@ export function showApiError(err: unknown, fallbackMessage = 'Ocorreu um erro') 
                 description: firstError || fallbackMessage,
                 variant: 'destructive',
             })
+        } else if (data && typeof data === 'object' && !Array.isArray(data)) {
+            const entries = Object.entries(data as Record<string, unknown>)
+            const firstFieldError = entries.find(([, v]) => Array.isArray(v) && typeof v[0] === 'string')
+            if (firstFieldError) {
+                const [field, msgs] = firstFieldError as [string, string[]]
+                toast({
+                    title: 'Erro de validação',
+                    description: msgs[0] || `${field}: ${fallbackMessage}`,
+                    variant: 'destructive',
+                })
+            } else if (err.message) {
+                toast({
+                    title: 'Erro de conexão',
+                    description: err.message,
+                    variant: 'destructive',
+                })
+            } else {
+                toast({
+                    title: 'Erro',
+                    description: fallbackMessage,
+                    variant: 'destructive',
+                })
+            }
         } else if (apiErr?.non_field_errors) {
             toast({
                 title: 'Erro',

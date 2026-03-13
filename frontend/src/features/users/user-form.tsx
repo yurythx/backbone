@@ -33,6 +33,7 @@ import {
 import { notify } from "@/lib/notifications"
 import { User, Shield, Key, Building2 } from "lucide-react"
 import type { User as UserType, Role as RoleType, Company as CompanyType } from "@/types"
+import { useAuth } from "@/hooks/use-auth"
 
 const formSchema = z.object({
     username: z.string().min(3, "Username deve ter pelo menos 3 caracteres."),
@@ -56,7 +57,7 @@ interface UserFormProps {
 }
 
 export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormProps) {
-    const { data: me } = useQuery({ queryKey: ['me'], queryFn: async () => (await api.get('/api/accounts/users/me/')).data })
+    const { user: me } = useAuth()
     const isSuperuser = me?.is_superuser
 
     // A6: Proteção extra no form - se o usuário alvo é superadmin e quem edita não é, bloqueia
@@ -128,7 +129,6 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
             queryClient.invalidateQueries({ queryKey: ['users'] })
             queryClient.invalidateQueries({ queryKey: ['roles'] })
             queryClient.invalidateQueries({ queryKey: ['auth', 'user'] })
-            queryClient.invalidateQueries({ queryKey: ['me'] })
             onSuccess()
         },
         onError: (error: unknown) => {

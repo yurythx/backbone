@@ -1,5 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { isJwtExpired } from './jwt';
+import { clearClientSession } from './session';
 
 const isServer = typeof window === 'undefined';
 const API_URL = isServer
@@ -81,11 +82,15 @@ api.interceptors.request.use(
           isRefreshing = false;
         }
       }
-    } else if (token) {
+    } else if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    if (effectiveCompany) {
+    const existingCompanyHeader =
+      (config.headers['X-Company-Slug'] as string | undefined) ||
+      (config.headers['x-company-slug'] as string | undefined);
+
+    if (!existingCompanyHeader && effectiveCompany) {
       config.headers['X-Company-Slug'] = effectiveCompany;
     }
 
@@ -142,9 +147,7 @@ api.interceptors.response.use(
       if (!refreshToken) {
         // No refresh token — clear storage and redirect once
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          document.cookie = 'hasSession=; path=/; SameSite=Lax; max-age=0';
+          clearClientSession();
           isRefreshing = false;
           if (!isRedirectingToLogin && !isPublicRoute(window.location.pathname)) {
             isRedirectingToLogin = true;
@@ -190,9 +193,7 @@ api.interceptors.response.use(
           const isAuthError = axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403);
 
           if (isAuthError) {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            document.cookie = 'hasSession=; path=/; SameSite=Lax; max-age=0';
+            clearClientSession();
             // Only redirect once and never from public routes
             if (!isRedirectingToLogin && !isPublicRoute(window.location.pathname)) {
               isRedirectingToLogin = true;

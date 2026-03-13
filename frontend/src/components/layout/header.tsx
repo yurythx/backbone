@@ -18,6 +18,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { usePresence } from "@/hooks/use-presence"
 import { useModules } from "@/hooks/use-modules"
 import { useAuth } from "@/hooks/use-auth"
+import { clearClientSession, ensureHasSessionCookie } from "@/lib/session"
 import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
 import { useUIStore } from "@/hooks/use-ui-store"
@@ -60,6 +61,7 @@ export function Header() {
 
   React.useEffect(() => {
     setIsClient(true)
+    ensureHasSessionCookie()
   }, [])
 
   const { user: me } = useAuth()
@@ -67,11 +69,7 @@ export function Header() {
   // Removed unused companies query
 
   const onLogout = () => {
-    localStorage.removeItem("accessToken")
-    localStorage.removeItem("refreshToken")
-    localStorage.removeItem("companySlug")
-    // Clear middleware session cookie
-    document.cookie = 'hasSession=; path=/; SameSite=Lax; max-age=0'
+    clearClientSession()
     // Force redirect to root landing page
     window.location.href = "/"
   }
@@ -257,7 +255,7 @@ export function Header() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 mt-2 bg-popover shadow-xl border p-1">
               <DropdownMenuLabel className="font-normal px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm group">
-                <Link href="/settings?tab=profile" className="flex flex-col space-y-1">
+                <Link href="/perfil" className="flex flex-col space-y-1">
                   <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{me?.first_name || me?.username || 'Usuário'}</span>
                   <span className="text-xs leading-none text-muted-foreground">{me?.email || ''}</span>
                 </Link>
@@ -304,7 +302,7 @@ export function Header() {
               <DropdownMenuSeparator className="bg-muted/50 mx-1" />
 
               <DropdownMenuItem asChild className="cursor-pointer rounded-md focus:bg-primary/5 focus:text-primary transition-colors">
-                <Link href="/settings?tab=profile" className="flex items-center gap-2 w-full">
+                <Link href="/perfil" className="flex items-center gap-2 w-full">
                   <Settings className="h-4 w-4" aria-hidden="true" />
                   Configurações do Perfil
                 </Link>

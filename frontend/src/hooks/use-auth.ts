@@ -1,15 +1,16 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/axios'
+import { ensureHasSessionCookie } from '@/lib/session'
 import { User } from '@/types'
 
 export function useAuth() {
     const queryClient = useQueryClient()
 
-    const effectiveCompany = useMemo(() => {
-        if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_COMPANY_SLUG || 'unknown'
-        return localStorage.getItem('companySlug') || process.env.NEXT_PUBLIC_COMPANY_SLUG || 'unknown'
-    }, [])
+    const effectiveCompany =
+        typeof window === 'undefined'
+            ? process.env.NEXT_PUBLIC_COMPANY_SLUG || 'unknown'
+            : localStorage.getItem('companySlug') || process.env.NEXT_PUBLIC_COMPANY_SLUG || 'unknown'
 
     const { data: user, isLoading, error } = useQuery<User | null>({
         queryKey: ['auth', 'user', effectiveCompany],
@@ -17,6 +18,7 @@ export function useAuth() {
             if (typeof window === 'undefined') return null
             const token = localStorage.getItem('accessToken')
             if (!token) return null
+            ensureHasSessionCookie()
 
             try {
                 const res = await api.get<User>('/api/accounts/users/me/')

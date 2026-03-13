@@ -14,6 +14,7 @@ import { fixImageUrl } from "@/lib/utils"
 import { AboutAuthor } from "@/components/articles/about-author"
 import { PublicArticleComments } from "@/components/articles/public-article-comments"
 import type { AuthorInfo } from "@/components/articles/about-author"
+import { useAuth } from "@/hooks/use-auth"
 
 type ArticlePreview = {
   id: number
@@ -45,18 +46,7 @@ export default function ArticlePreviewPage() {
     },
     enabled: Boolean(slug),
   })
-  const { data: me } = useQuery({
-    queryKey: ["me"],
-    queryFn: async () => {
-      try {
-        const res = await api.get('/api/accounts/users/me/')
-        return res.data
-      } catch {
-        return null
-      }
-    },
-    staleTime: 60_000,
-  })
+  const { user: me } = useAuth()
 
   const imageUrl = useMemo(() => fixImageUrl(data?.cover_image || data?.image || null), [data])
 
