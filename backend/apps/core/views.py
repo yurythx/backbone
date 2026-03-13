@@ -282,7 +282,7 @@ class DashboardStatsView(generics.GenericAPIView):
 
             views_series = []
             for item in views_by_date_qs:
-                views_series.append({"name": item["date"].strftime("%d/%m"), "value": item["count"]})
+                views_series.append({"date": item["date"].isoformat(), "count": item["count"]})
 
             # 4. Distribuição por Categorias
             categories_data = (

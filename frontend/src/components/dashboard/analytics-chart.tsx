@@ -18,8 +18,13 @@ interface ChartData {
     count: number
 }
 
+interface LegacyChartData {
+    name: string
+    value: number
+}
+
 interface AnalyticsChartProps {
-    data: ChartData[]
+    data: Array<ChartData | LegacyChartData>
     title: string
     isLoading?: boolean
 }
@@ -34,8 +39,38 @@ export function AnalyticsChart({ data, title, isLoading }: AnalyticsChartProps) 
         )
     }
 
+    const normalizedData: ChartData[] = data
+        .map((d) => {
+            if ("date" in d && "count" in d) return { date: d.date, count: d.count }
+            if ("name" in d && "value" in d) return { date: d.name, count: d.value }
+            return null
+        })
+        .filter((d): d is ChartData => Boolean(d && d.date))
+
+    if (normalizedData.length === 0) {
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-morphism p-6 rounded-3xl border shadow-sm h-full flex flex-col"
+            >
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h3 className="text-lg font-bold tracking-tight text-foreground">{title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                            Visualizações totais nos últimos 30 dias
+                        </p>
+                    </div>
+                </div>
+                <div className="flex-1 min-h-[300px] w-full flex items-center justify-center text-sm text-muted-foreground">
+                    Sem dados para exibir.
+                </div>
+            </motion.div>
+        )
+    }
+
     // Sort data by date
-    const sortedData = [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const sortedData = [...normalizedData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
     return (
         <motion.div
@@ -72,7 +107,10 @@ export function AnalyticsChart({ data, title, isLoading }: AnalyticsChartProps) 
                             dataKey="date"
                             axisLine={false}
                             tickLine={false}
-                            tickFormatter={(str) => format(new Date(str), "dd MMM", { locale: ptBR })}
+                            tickFormatter={(str) => {
+                                const dt = new Date(str)
+                                return Number.isNaN(dt.getTime()) ? String(str) : format(dt, "dd MMM", { locale: ptBR })
+                            }}
                             tick={{ fontSize: 10, fontWeight: 600, fill: "hsl(var(--muted-foreground))" }}
                             dy={10}
                         />
@@ -92,7 +130,12 @@ export function AnalyticsChart({ data, title, isLoading }: AnalyticsChartProps) 
                             }}
                             labelStyle={{ color: "hsl(var(--foreground))", fontWeight: "bold", marginBottom: "4px" }}
                             itemStyle={{ color: "var(--color-primary)", fontSize: "12px", fontWeight: "600" }}
-                            labelFormatter={(label) => format(new Date(label), "dd 'de' MMMM", { locale: ptBR })}
+                            labelFormatter={(label) => {
+                                const dt = new Date(label)
+                                return Number.isNaN(dt.getTime())
+                                    ? String(label)
+                                    : format(dt, "dd 'de' MMMM", { locale: ptBR })
+                            }}
                         />
                         <Area
                             type="monotone"

@@ -24,6 +24,16 @@ import { Search, Filter, X } from "lucide-react"
 import Link from "next/link"
 import { VisibilityBadge } from "@/components/articles/visibility-badge"
 import { notify } from "@/lib/notifications"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface ArticleListProps {
   onEdit: (article: Article) => void
@@ -32,6 +42,7 @@ interface ArticleListProps {
 
 export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
   const queryClient = useQueryClient()
+  const [articleToDelete, setArticleToDelete] = React.useState<Article | null>(null)
 
   const [search, setSearch] = React.useState("")
   const debouncedSearch = useDebounce(search, 500)
@@ -207,7 +218,7 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
                     size="icon"
                     variant="destructive"
                     className="rounded-full h-10 w-10 shadow-lg hover:scale-110 transition-transform"
-                    onClick={() => { if (confirm('Tem certeza?')) deleteMutation.mutate(article.id) }}
+                    onClick={() => setArticleToDelete(article)}
                     title="Excluir"
                     aria-label="Excluir artigo"
                   >
@@ -282,6 +293,31 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
           ))
         )}
       </div>
+
+      <AlertDialog open={!!articleToDelete} onOpenChange={(open) => { if (!open) setArticleToDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir artigo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O artigo será removido permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (!articleToDelete) return
+                deleteMutation.mutate(articleToDelete.id)
+                setArticleToDelete(null)
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

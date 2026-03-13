@@ -2,10 +2,12 @@
 // Force recompile: 2026-01-30
 
 import { H2, P } from "@/components/ui/typography"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRouter, useSearchParams } from "next/navigation"
+import { notify } from "@/lib/notifications"
 
 const LoginForm = dynamic(
   () => import("@/features/auth/login-form").then((m) => m.LoginForm),
@@ -23,6 +25,15 @@ const LoginForm = dynamic(
 
 export default function LoginPage() {
   const [previewCompany, setPreviewCompany] = useState<{ name: string, logo?: string | null } | null>(null)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  useEffect(() => {
+    const loggedOut = searchParams.get("logged_out") === "1"
+    if (!loggedOut) return
+    notify.success("Logout realizado", "Você saiu da sua conta com segurança.")
+    router.replace("/login")
+  }, [router, searchParams])
 
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row bg-background" role="main" aria-labelledby="login-title">

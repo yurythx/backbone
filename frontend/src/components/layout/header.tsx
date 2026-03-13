@@ -70,8 +70,7 @@ export function Header() {
 
   const onLogout = () => {
     clearClientSession()
-    // Force redirect to root landing page
-    window.location.href = "/"
+    window.location.href = "/login?logged_out=1"
   }
 
 
@@ -210,7 +209,7 @@ export function Header() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
-                <Link href="/admin?action=create" className="flex items-center gap-3">
+                <Link href="/admin/users?create=1" className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                     <UserPlus className="h-4 w-4 text-emerald-500" aria-hidden="true" />
                   </div>

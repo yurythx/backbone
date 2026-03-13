@@ -66,8 +66,7 @@ export function MobileNav() {
             // Logout is best-effort — proceed even if server call fails
         } finally {
             clearClientSession()
-            toast.success("Você saiu da conta. Até logo!")
-            router.push('/login')
+            router.push('/login?logged_out=1')
         }
     }
 

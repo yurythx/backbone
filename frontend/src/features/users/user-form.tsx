@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import {
@@ -57,6 +57,7 @@ interface UserFormProps {
 }
 
 export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormProps) {
+    const queryClient = useQueryClient()
     const { user: me } = useAuth()
     const isSuperuser = me?.is_superuser
 
@@ -91,8 +92,8 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
         email: string
         first_name: string
         last_name: string
-        role: number | null
-        company?: number
+        role: string | null
+        company?: string
         password?: string
     }
 
@@ -109,8 +110,8 @@ export function UserForm({ initialData, roles, onSuccess, onCancel }: UserFormPr
 
             const payload: UserPayload = {
                 ...values,
-                role: values.role ? parseInt(values.role) : null,
-                company: values.company ? parseInt(values.company) : undefined,
+                role: values.role || null,
+                company: values.company || undefined,
             }
 
             // Remove password validation/field if empty (for edits)

@@ -16,6 +16,17 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Skeleton, TableSkeleton } from "@/components/ui/skeleton"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { notify } from "@/lib/notifications"
 
 const DataTable = dynamic(
     () => import("@/components/ui/data-table").then((m) => m.DataTable),
@@ -37,6 +48,7 @@ interface PageListProps {
 
 export function PageList({ onEdit, onCreate }: PageListProps) {
     const queryClient = useQueryClient()
+    const [pageToDelete, setPageToDelete] = React.useState<Page | null>(null)
 
     const { data: pages, isLoading } = useQuery<Page[] | { results: Page[] }>({
         queryKey: ['pages'],
@@ -52,6 +64,10 @@ export function PageList({ onEdit, onCreate }: PageListProps) {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['pages'] })
+            notify.success("Página excluída", "A página foi removida com sucesso.")
+        },
+        onError: (error: unknown) => {
+            notify.error("Erro ao excluir página", error)
         }
     })
 
@@ -96,7 +112,7 @@ export function PageList({ onEdit, onCreate }: PageListProps) {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={() => {
-                                    if (confirm('Tem certeza?')) deleteMutation.mutate(page.id)
+                                    setPageToDelete(page)
                                 }}
                                 className="text-destructive"
                             >
@@ -124,6 +140,31 @@ export function PageList({ onEdit, onCreate }: PageListProps) {
                 isLoading={isLoading}
                 searchKey="title"
             />
+
+            <AlertDialog open={!!pageToDelete} onOpenChange={(open) => { if (!open) setPageToDelete(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir página</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. A página será removida permanentemente.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => {
+                                if (!pageToDelete) return
+                                deleteMutation.mutate(pageToDelete.id)
+                                setPageToDelete(null)
+                            }}
+                        >
+                            Excluir
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

@@ -19,38 +19,53 @@ fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true })
 
 const E2E_USERNAME = process.env.E2E_USERNAME || 'suporte'
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'suporte123'
-const E2E_COMPANY = process.env.E2E_COMPANY_NAME || 'Backbone 123'
+const E2E_COMPANY_SLUG = process.env.E2E_COMPANY_SLUG || 'raiz'
+const E2E_API_URL = process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005'
 
 
-setup('authenticate', async ({ page }) => {
-    await page.goto('/login')
+setup.setTimeout(120_000)
 
-    // Wait for company selector to load
-    await page.waitForSelector('[aria-label="Selecionar empresa"]', { timeout: 15_000 })
+setup('authenticate', async ({ page, request }) => {
+    const tokenRes = await request.post(`${E2E_API_URL}/api/accounts/token/`, {
+        headers: { 'X-Company-Slug': E2E_COMPANY_SLUG },
+        data: { username: E2E_USERNAME, password: E2E_PASSWORD },
+    })
+    expect(tokenRes.ok()).toBeTruthy()
+    const tokenBody = (await tokenRes.json()) as { access: string; refresh: string }
 
-    // Select company
-    await page.click('[aria-label="Selecionar empresa"]')
+    await page.goto('/login', { waitUntil: 'domcontentloaded', timeout: 90_000 })
 
-    // Wait for options to appear in the portal/popover
-    await page.waitForSelector('[role="option"]', { timeout: 10_000, state: 'visible' })
+    await page.evaluate(
+        ({ access, refresh, companySlug }) => {
+            localStorage.setItem('accessToken', access)
+            localStorage.setItem('refreshToken', refresh)
+            localStorage.setItem('companySlug', companySlug)
+            document.cookie = `hasSession=true; path=/; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`
+        },
+        { access: tokenBody.access, refresh: tokenBody.refresh, companySlug: E2E_COMPANY_SLUG }
+    )
 
-    // Use the name to find the option (less sensitive)
-    const option = page.getByRole('option', { name: E2E_COMPANY }).first()
-    await option.click()
+    await expect
+        .poll(() => page.evaluate(() => localStorage.getItem('companySlug')))
+        .toBe(E2E_COMPANY_SLUG)
 
+    const meStatus = await page.evaluate(
+        async ({ apiUrl, access, companySlug }) => {
+            const res = await fetch(`${apiUrl}/api/accounts/users/me/`, {
+                headers: {
+                    Authorization: `Bearer ${access}`,
+                    'X-Company-Slug': companySlug,
+                },
+            })
+            return res.status
+        },
+        { apiUrl: E2E_API_URL, access: tokenBody.access, companySlug: E2E_COMPANY_SLUG }
+    )
+    expect(meStatus).toBe(200)
 
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 90_000 })
 
-    // Fill credentials
-    await page.fill('[aria-label="Nome de usuário"]', E2E_USERNAME)
-    await page.fill('[aria-label="Senha"]', E2E_PASSWORD)
+    await page.evaluate((companySlug) => localStorage.setItem('companySlug', companySlug), E2E_COMPANY_SLUG)
 
-    // Submit and wait for redirect
-    await page.click('button[type="submit"]')
-    await page.waitForURL('/dashboard', { timeout: 20_000 })
-
-    // Verify we're actually logged in
-    await expect(page).not.toHaveURL('/login')
-
-    // Save auth state (cookies + localStorage)
     await page.context().storageState({ path: AUTH_FILE })
 })

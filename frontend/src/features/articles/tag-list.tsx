@@ -10,6 +10,16 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Trash2, Hash, FolderTree, Loader2, Pencil } from "lucide-react"
 import { notify } from "@/lib/notifications"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export function TagList() {
     const queryClient = useQueryClient()
@@ -87,6 +97,8 @@ export function TagList() {
     }, [newCategoryName])
     const [editingTag, setEditingTag] = React.useState<{ slug: string; name: string } | null>(null)
     const [editingCategory, setEditingCategory] = React.useState<{ id: number; name: string } | null>(null)
+    const [tagToDelete, setTagToDelete] = React.useState<Tag | null>(null)
+    const [categoryToDelete, setCategoryToDelete] = React.useState<Category | null>(null)
     const editTagDuplicate = React.useMemo(() => {
         if (!editingTag) return false
         const trimmed = editingTag.name.trim()
@@ -180,10 +192,11 @@ export function TagList() {
             queryClient.invalidateQueries({ queryKey: ['tags'] })
             notify.success("Tag removida")
         },
-        onError: (_err, _vars, ctx) => {
+        onError: (err: unknown, _vars, ctx) => {
             if (ctx?.previous) {
                 queryClient.setQueryData<Tag[]>(['tags'], ctx.previous)
             }
+            notify.error("Erro ao remover tag", getErrorMessage(err, "Falha ao remover tag"))
         }
     })
     const updateTagMutation = useMutation({
@@ -269,10 +282,11 @@ export function TagList() {
             queryClient.invalidateQueries({ queryKey: ['categories'] })
             notify.success("Categoria removida")
         },
-        onError: (_err, _vars, ctx) => {
+        onError: (err: unknown, _vars, ctx) => {
             if (ctx?.previous) {
                 queryClient.setQueryData<Category[]>(['categories'], ctx.previous)
             }
+            notify.error("Erro ao remover categoria", getErrorMessage(err, "Falha ao remover categoria"))
         }
     })
     const updateCategoryMutation = useMutation({
@@ -427,9 +441,7 @@ export function TagList() {
                                             </button>
                                             <button
                                                 onClick={() => {
-                                                    if (confirm("Tem certeza que deseja remover esta tag?")) {
-                                                        deleteTagMutation.mutate(tag.slug)
-                                                    }
+                                                    setTagToDelete(tag)
                                                 }}
                                                 className="ml-1 p-0.5 rounded-full hover:bg-destructive hover:text-destructive-foreground transition-colors"
                                                 aria-label={`Remover tag ${tag.name}`}
@@ -567,9 +579,7 @@ export function TagList() {
                                                     size="icon"
                                                     className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                                                     onClick={() => {
-                                                        if (confirm("Tem certeza que deseja remover esta categoria?")) {
-                                                            deleteCategoryMutation.mutate(cat.id)
-                                                        }
+                                                        setCategoryToDelete(cat)
                                                     }}
                                                     aria-label={`Remover categoria ${cat.name}`}
                                                     disabled={deleteCategoryMutation.isPending}
@@ -585,6 +595,56 @@ export function TagList() {
                     </div>
                 </CardContent>
             </Card>
+
+            <AlertDialog open={!!tagToDelete} onOpenChange={(open) => { if (!open) setTagToDelete(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remover tag</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. A tag será removida e não poderá ser usada em novos artigos.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteTagMutation.isPending}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={deleteTagMutation.isPending}
+                            onClick={() => {
+                                if (!tagToDelete) return
+                                deleteTagMutation.mutate(tagToDelete.slug)
+                                setTagToDelete(null)
+                            }}
+                        >
+                            Remover
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={!!categoryToDelete} onOpenChange={(open) => { if (!open) setCategoryToDelete(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remover categoria</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. A categoria será removida permanentemente.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteCategoryMutation.isPending}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={deleteCategoryMutation.isPending}
+                            onClick={() => {
+                                if (!categoryToDelete) return
+                                deleteCategoryMutation.mutate(categoryToDelete.id)
+                                setCategoryToDelete(null)
+                            }}
+                        >
+                            Remover
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

@@ -12,14 +12,15 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './e2e',
-  outputDir: './e2e/results',
+  outputDir: './playwright-results',
+  testIgnore: ['**/e2e/results/**', '**/e2e/report/**'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   // Retry failed tests once on CI to reduce flakiness
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: [
-    ['html', { outputFolder: 'e2e/report', open: 'never' }],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
     ['list'],
   ],
 
@@ -59,10 +60,23 @@ export default defineConfig({
   ],
 
   // Start the dev server automatically if not already running
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3005',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command:
+        'powershell -NoProfile -Command "python manage.py migrate; python manage.py seed_system; python manage.py runserver 8005"',
+      cwd: '../backend',
+      url: 'http://localhost:8005/api/core/companies/public_list/',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:3005/api/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: {
+        NEXT_PUBLIC_API_URL: 'http://localhost:8005',
+      },
+    },
+  ],
 })

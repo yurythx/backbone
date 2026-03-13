@@ -9,13 +9,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Trash2, Plus, X, Save } from "lucide-react"
-import { toast } from "sonner"
+import { notify } from "@/lib/notifications"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export function CategoryManager() {
   const queryClient = useQueryClient()
   const [isCreating, setIsCreating] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
   const [newCategorySlug, setNewCategorySlug] = useState("")
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null)
 
   const { data: categories, isLoading } = useQuery({
     queryKey: ['categories'],
@@ -37,9 +48,9 @@ export function CategoryManager() {
       setIsCreating(false)
       setNewCategoryName("")
       setNewCategorySlug("")
-      toast.success("Category created")
+      notify.success("Categoria criada", "A categoria já pode ser usada em artigos.")
     },
-    onError: () => toast.error("Failed to create category")
+    onError: (error: unknown) => notify.error("Falha ao criar categoria", error)
   })
 
   const deleteMutation = useMutation({
@@ -48,27 +59,27 @@ export function CategoryManager() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] })
-      toast.success("Category deleted")
+      notify.success("Categoria removida")
     },
-    onError: () => toast.error("Failed to delete category")
+    onError: (error: unknown) => notify.error("Falha ao remover categoria", error)
   })
 
-  if (isLoading) return <div role="status" aria-live="polite" aria-label="Carregando categorias">Loading categories...</div>
+  if (isLoading) return <div role="status" aria-live="polite" aria-label="Carregando categorias">Carregando categorias...</div>
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">Categories</h3>
+        <h3 className="text-lg font-medium">Categorias</h3>
         <Button size="sm" onClick={() => setIsCreating(!isCreating)} variant={isCreating ? "outline" : "default"}>
           {isCreating ? <X className="h-4 w-4 mr-2" aria-hidden="true" /> : <Plus className="h-4 w-4 mr-2" aria-hidden="true" />}
-          {isCreating ? "Cancel" : "Add Category"}
+          {isCreating ? "Cancelar" : "Adicionar categoria"}
         </Button>
       </div>
 
       {isCreating && (
         <div className="flex gap-2 items-end border p-4 rounded-md bg-muted/50">
           <div className="grid gap-2 flex-1">
-            <Label>Name</Label>
+            <Label>Nome</Label>
             <Input 
               value={newCategoryName} 
               onChange={(e) => {
@@ -76,7 +87,7 @@ export function CategoryManager() {
                   // Auto-slug
                   setNewCategorySlug(e.target.value.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, ''))
               }} 
-              placeholder="News" 
+              placeholder="Notícias" 
             />
           </div>
           <div className="grid gap-2 flex-1">
@@ -84,10 +95,14 @@ export function CategoryManager() {
             <Input 
               value={newCategorySlug} 
               onChange={(e) => setNewCategorySlug(e.target.value)} 
-              placeholder="news" 
+              placeholder="noticias" 
             />
           </div>
-          <Button onClick={() => createMutation.mutate()} disabled={!newCategoryName || !newCategorySlug} aria-label="Salvar categoria">
+          <Button
+            onClick={() => createMutation.mutate()}
+            disabled={!newCategoryName || !newCategorySlug || createMutation.isPending}
+            aria-label="Salvar categoria"
+          >
             <Save className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
@@ -97,9 +112,9 @@ export function CategoryManager() {
         <Table aria-label="Tabela de categorias">
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
+              <TableHead>Nome</TableHead>
               <TableHead>Slug</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -113,7 +128,7 @@ export function CategoryManager() {
                     size="icon" 
                     className="text-destructive"
                     onClick={() => {
-                        if(confirm("Delete category?")) deleteMutation.mutate(cat.slug)
+                        setCategoryToDelete(cat)
                     }}
                     aria-label={`Excluir categoria ${cat.name}`}
                   >
@@ -125,6 +140,31 @@ export function CategoryManager() {
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={!!categoryToDelete} onOpenChange={(open) => { if (!open) setCategoryToDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir categoria</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A categoria será removida permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (!categoryToDelete) return
+                deleteMutation.mutate(categoryToDelete.slug)
+                setCategoryToDelete(null)
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

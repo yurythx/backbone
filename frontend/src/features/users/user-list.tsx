@@ -12,7 +12,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Plus, Edit, User as UserIcon, MoreVertical, Shield, ShieldCheck, Mail, Trash2, Building2 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { UserForm } from "./user-form"
 import { InviteForm } from "./invite-form"
 import { notify } from "@/lib/notifications"
@@ -24,18 +24,31 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import type { User as UserType, Role as RoleType } from "@/types"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermission } from "@/hooks/use-permission"
 
 interface UserListProps {
     onEdit?: (user: UserType) => void
+    initialDialog?: 'create' | 'invite' | null
 }
 
-export function UserList({ onEdit }: UserListProps) {
+export function UserList({ onEdit, initialDialog }: UserListProps) {
     const [isUserFormOpen, setIsUserFormOpen] = useState(false)
     const [isInviteFormOpen, setIsInviteFormOpen] = useState(false)
     const [editingUser, setEditingUser] = useState<UserType | null>(null)
+    const [userToDelete, setUserToDelete] = useState<UserType | null>(null)
+    const [inviteToCancel, setInviteToCancel] = useState<Invite | null>(null)
     const queryClient = useQueryClient()
     // A8: obter usuário atual via hook (não localStorage)
     const { user: currentUser } = useAuth()
@@ -56,7 +69,8 @@ export function UserList({ onEdit }: UserListProps) {
             const res = await api.get<UserType[] | { results: UserType[] }>('/api/accounts/users/')
             const data = Array.isArray(res.data) ? res.data : (res.data.results || [])
             return Array.isArray(data) ? data : []
-        }
+        },
+        enabled: canManageUsers,
     })
 
     const { data: invites } = useQuery<Invite[]>({
@@ -65,7 +79,8 @@ export function UserList({ onEdit }: UserListProps) {
             const res = await api.get<Invite[] | { results: Invite[] }>('/api/accounts/invitations/')
             const data = Array.isArray(res.data) ? res.data : (res.data.results || [])
             return Array.isArray(data) ? data : []
-        }
+        },
+        enabled: canManageUsers,
     })
 
     const { data: roles } = useQuery<RoleType[]>({
@@ -74,7 +89,8 @@ export function UserList({ onEdit }: UserListProps) {
             const res = await api.get<RoleType[] | { results: RoleType[] }>('/api/accounts/roles/')
             const data = Array.isArray(res.data) ? res.data : (res.data.results || [])
             return Array.isArray(data) ? data : []
-        }
+        },
+        enabled: canManageUsers,
     })
 
     const safeUsers = Array.isArray(users) ? users : []
@@ -105,6 +121,25 @@ export function UserList({ onEdit }: UserListProps) {
     })
 
     const currentUserFormatted = currentUser
+
+    useEffect(() => {
+        if (!canManageUsers) return
+        if (initialDialog === 'create') {
+            setEditingUser(null)
+            setIsUserFormOpen(true)
+        }
+        if (initialDialog === 'invite') {
+            setIsInviteFormOpen(true)
+        }
+    }, [canManageUsers, initialDialog])
+
+    if (!canManageUsers) {
+        return (
+            <div className="rounded-2xl border bg-card shadow-sm p-10 text-center text-muted-foreground">
+                Você não tem permissão para gerenciar usuários.
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-6">
@@ -313,9 +348,7 @@ export function UserList({ onEdit }: UserListProps) {
                                                     {canManageUsers && user.id !== currentUserFormatted?.id && (!user.is_superuser || currentUserFormatted?.is_superuser) && (
                                                         <DropdownMenuItem
                                                             onClick={() => {
-                                                                if (confirm("Tem certeza que deseja remover este usuário? Esta ação não pode ser desfeita.")) {
-                                                                    deleteUserMutation.mutate(user.id)
-                                                                }
+                                                                setUserToDelete(user)
                                                             }}
                                                             className="text-destructive focus:text-destructive cursor-pointer"
                                                         >
@@ -368,7 +401,7 @@ export function UserList({ onEdit }: UserListProps) {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-44 rounded-xl">
-                                                <DropdownMenuItem onClick={() => cancelInviteMutation.mutate(invite.id)} className="text-destructive focus:text-destructive cursor-pointer">
+                                                <DropdownMenuItem onClick={() => setInviteToCancel(invite)} className="text-destructive focus:text-destructive cursor-pointer">
                                                     <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Cancelar Convite
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
@@ -414,7 +447,7 @@ export function UserList({ onEdit }: UserListProps) {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                                                    <DropdownMenuItem onClick={() => cancelInviteMutation.mutate(invite.id)} className="text-destructive focus:text-destructive cursor-pointer">
+                                                    <DropdownMenuItem onClick={() => setInviteToCancel(invite)} className="text-destructive focus:text-destructive cursor-pointer">
                                                         <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Cancelar Convite
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -458,6 +491,56 @@ export function UserList({ onEdit }: UserListProps) {
                     onCancel={() => setIsInviteFormOpen(false)}
                 />
             )}
+
+            <AlertDialog open={!!userToDelete} onOpenChange={(open) => { if (!open) setUserToDelete(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remover usuário</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. O usuário será removido permanentemente.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteUserMutation.isPending}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={deleteUserMutation.isPending}
+                            onClick={() => {
+                                if (!userToDelete) return
+                                deleteUserMutation.mutate(userToDelete.id)
+                                setUserToDelete(null)
+                            }}
+                        >
+                            Remover
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={!!inviteToCancel} onOpenChange={(open) => { if (!open) setInviteToCancel(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancelar convite</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            O convidado não conseguirá mais aceitar este convite.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={cancelInviteMutation.isPending}>Voltar</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={cancelInviteMutation.isPending}
+                            onClick={() => {
+                                if (!inviteToCancel) return
+                                cancelInviteMutation.mutate(inviteToCancel.id)
+                                setInviteToCancel(null)
+                            }}
+                        >
+                            Cancelar convite
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

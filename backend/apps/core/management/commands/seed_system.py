@@ -230,7 +230,7 @@ class Command(BaseCommand):
 
     def verify_seed_health(self):
         """Verifica se o seed foi executado com sucesso"""
-        self.stdout.write(self.style.WARNING("\n🔍 Running health check..."))
+        self.stdout.write(self.style.WARNING("\nRunning health check..."))
 
         issues = []
         warnings = []
@@ -240,14 +240,14 @@ class Command(BaseCommand):
         if feature_count == 0:
             issues.append("No features created")
         else:
-            self.stdout.write(self.style.SUCCESS(f"  ✓ Features: {feature_count} found"))
+            self.stdout.write(self.style.SUCCESS(f"  OK Features: {feature_count} found"))
 
         # 2. Verificar Planos
         plan_count = Plan.objects.count()
         if plan_count == 0:
             issues.append("No plans created")
         else:
-            self.stdout.write(self.style.SUCCESS(f"  ✓ Plans: {plan_count} found"))
+            self.stdout.write(self.style.SUCCESS(f"  OK Plans: {plan_count} found"))
 
         # 3. Verificar Empresa Padrão
         try:
@@ -255,14 +255,14 @@ class Command(BaseCommand):
                 slug="projetoravenna"
             )
             self.stdout.write(
-                self.style.SUCCESS(f"  ✓ Root Company: {support_company.name} (ID: {support_company.id})")
+                self.style.SUCCESS(f"  OK Root Company: {support_company.name} (ID: {support_company.id})")
             )
 
             # 3.1 Verificar Branding
             if not hasattr(support_company, "theme_branding"):
                 warnings.append("Root company has no branding configured")
             else:
-                self.stdout.write(self.style.SUCCESS("  ✓ Branding configured"))
+                self.stdout.write(self.style.SUCCESS("  OK Branding configured"))
         except (Company.DoesNotExist, AttributeError):
             issues.append("Root company not found (slug: raiz or projetoravenna)")
 
@@ -272,7 +272,7 @@ class Command(BaseCommand):
             if license and not license.is_active:
                 warnings.append("Root company license is inactive")
             elif license:
-                self.stdout.write(self.style.SUCCESS(f"  ✓ License: {license.plan.name} (Active: {license.is_active})"))
+                self.stdout.write(self.style.SUCCESS(f"  OK License: {license.plan.name} (Active: {license.is_active})"))
             else:
                 issues.append("No license for root company")
         except Exception:
@@ -283,14 +283,14 @@ class Command(BaseCommand):
         if superuser_count == 0:
             issues.append("No superuser found")
         else:
-            self.stdout.write(self.style.SUCCESS(f"  ✓ Superusers: {superuser_count} found"))
+            self.stdout.write(self.style.SUCCESS(f"  OK Superusers: {superuser_count} found"))
 
         # 6. Verificar Roles
         admin_role_count = Role.objects.filter(name="Admin").count()
         if admin_role_count == 0:
             warnings.append("No Admin role found")
         else:
-            self.stdout.write(self.style.SUCCESS(f"  ✓ Admin roles: {admin_role_count} found"))
+            self.stdout.write(self.style.SUCCESS(f"  OK Admin roles: {admin_role_count} found"))
 
         # Resultado
         self.stdout.write("")
@@ -305,4 +305,4 @@ class Command(BaseCommand):
             for warning in warnings:
                 self.stdout.write(self.style.WARNING(f"   • {warning}"))
         else:
-            self.stdout.write(self.style.SUCCESS("✅ Health check passed - All systems nominal!"))
+            self.stdout.write(self.style.SUCCESS("Health check passed - All systems nominal!"))

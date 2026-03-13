@@ -23,6 +23,16 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Role } from "@/types"
 import { usePermission } from "@/hooks/use-permission"
 
@@ -31,6 +41,7 @@ type RolesResponse = Role[] | { results?: Role[] }
 export function RoleList() {
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [editingRole, setEditingRole] = useState<Role | null>(null)
+    const [roleToDelete, setRoleToDelete] = useState<Role | null>(null)
     const queryClient = useQueryClient()
     // I-A4: apenas quem tem permissão pode gerenciar roles
     const { hasPermission } = usePermission()
@@ -127,9 +138,7 @@ export function RoleList() {
                                                     {!role.is_system_role && (
                                                         <DropdownMenuItem
                                                             onClick={() => {
-                                                                if (window.confirm("Tem certeza que deseja excluir este papel?")) {
-                                                                    deleteMutation.mutate(role.id)
-                                                                }
+                                                                setRoleToDelete(role)
                                                             }}
                                                             className="text-destructive focus:text-destructive cursor-pointer"
                                                         >
@@ -214,9 +223,7 @@ export function RoleList() {
                                                     {!role.is_system_role && (
                                                         <DropdownMenuItem
                                                             onClick={() => {
-                                                                if (window.confirm("Tem certeza que deseja excluir este papel?")) {
-                                                                    deleteMutation.mutate(role.id)
-                                                                }
+                                                                setRoleToDelete(role)
                                                             }}
                                                             className="text-destructive focus:text-destructive cursor-pointer"
                                                         >
@@ -252,6 +259,31 @@ export function RoleList() {
                     />
                 </DialogContent>
             </Dialog>
+
+            <AlertDialog open={!!roleToDelete} onOpenChange={(open) => { if (!open) setRoleToDelete(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir papel</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. Os usuários vinculados permanecerão sem este papel.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => {
+                                if (!roleToDelete) return
+                                deleteMutation.mutate(roleToDelete.id)
+                                setRoleToDelete(null)
+                            }}
+                        >
+                            Excluir
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

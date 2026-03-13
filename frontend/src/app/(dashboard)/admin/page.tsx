@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { User } from "@/types"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatsCard } from "@/components/ui/stats-card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -39,33 +38,23 @@ const UserList = dynamic(
   }
 )
 
-const UserForm = dynamic(
-  () => import("@/features/users/user-form").then((m) => m.UserForm),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando formulário de usuário">
-        <Skeleton className="h-8 w-60 rounded-xl" />
-        <Skeleton className="h-10 w-full rounded-xl" />
-        <Skeleton className="h-10 w-full rounded-xl" />
-        <Skeleton className="h-10 w-full rounded-xl" />
-        <Skeleton className="h-10 w-40 rounded-xl" />
-      </div>
-    ),
-  }
-)
-
 function AdminPageContent() {
   const searchParams = useSearchParams()
-  const initialView = searchParams.get('action') === 'create' ? 'create' : 'list'
-  const [view, setView] = useState<'list' | 'create' | 'edit'>(initialView)
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<'management' | 'analytics'>('management')
 
-  // Estado inicial já deriva de searchParams; sem sincronização via effect
+  const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
+  const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
+  const effectiveCompany = companySlug || envCompany || 'unknown'
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      router.replace('/admin/users?create=1')
+    }
+  }, [router, searchParams])
 
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
+    queryKey: ['dashboard-stats', effectiveCompany],
     queryFn: async () => {
       const res = await api.get('/api/core/dashboard/stats/')
       return res.data
@@ -73,37 +62,15 @@ function AdminPageContent() {
     refetchInterval: 30000 // Refresh every 30s
   })
 
-  const handleCreate = () => {
-    setSelectedUser(null)
-    setView('create')
-  }
-
-  const handleEdit = (user: User) => {
-    setSelectedUser(user)
-    setView('edit')
-  }
-
-  const handleSuccess = () => {
-    setView('list')
-    setSelectedUser(null)
-  }
-
-  const handleCancel = () => {
-    setView('list')
-    setSelectedUser(null)
-  }
-
   return (
     <div className="space-y-8 pb-10">
       <PageHeader
         title="Command Center"
         description="Monitoramento centralizado e inteligência administrativa."
       >
-        {view === 'list' && (
-          <Button onClick={handleCreate} className="shadow-lg shadow-primary/20">
+        <Button onClick={() => router.push('/admin/users?create=1')} className="shadow-lg shadow-primary/20">
             <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" /> Novo Usuário
           </Button>
-        )}
       </PageHeader>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -120,7 +87,7 @@ function AdminPageContent() {
         />
         <StatsCard
           title="Artigos Publicados"
-          value={stats?.counters?.articles?.published ?? 0}
+          value={stats?.counters?.articles?.total ?? 0}
           icon={FileText}
           isLoading={statsLoading}
           description={`${stats?.counters?.articles?.total ?? 0} artigos no total`}
@@ -156,15 +123,7 @@ function AdminPageContent() {
 
             <TabsContent value="management" className="mt-0">
               <div className="glass rounded-3xl p-6 border shadow-sm">
-                {view === 'list' ? (
-                  <UserList onEdit={handleEdit} />
-                ) : (
-                  <UserForm
-                    initialData={selectedUser}
-                    onSuccess={handleSuccess}
-                    onCancel={handleCancel}
-                  />
-                )}
+                <UserList />
               </div>
             </TabsContent>
 

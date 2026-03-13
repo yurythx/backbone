@@ -3,6 +3,8 @@
 import { Protected } from "@/components/auth/protected"
 import dynamic from "next/dynamic"
 import { Skeleton, TableSkeleton } from "@/components/ui/skeleton"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
 
 const UserList = dynamic(
     () => import("@/features/users/user-list").then((m) => m.UserList),
@@ -20,10 +22,21 @@ const UserList = dynamic(
 )
 
 export default function UsersPage() {
+    const searchParams = useSearchParams()
+    const router = useRouter()
+    const create = searchParams.get("create") === "1"
+    const invite = searchParams.get("invite") === "1"
+    const [initialDialog] = useState<'create' | 'invite' | null>(() => (create ? "create" : invite ? "invite" : null))
+
+    useEffect(() => {
+        if (!initialDialog) return
+        router.replace("/admin/users")
+    }, [initialDialog, router])
+
     return (
         <Protected requiredPermissions={['admin.user_manage']}>
             <div className="max-w-5xl mx-auto py-8">
-                <UserList />
+                <UserList initialDialog={initialDialog} />
             </div>
         </Protected>
     )

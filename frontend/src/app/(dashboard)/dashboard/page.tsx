@@ -58,8 +58,12 @@ const OnboardingWizard = dynamic(
 )
 
 export default function DashboardPage() {
+  const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
+  const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
+  const effectiveCompany = companySlug || envCompany || 'unknown'
+
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
+    queryKey: ['dashboard-stats', effectiveCompany],
     queryFn: async () => {
       const res = await api.get('/api/core/dashboard/stats/')
       return res.data
@@ -67,7 +71,7 @@ export default function DashboardPage() {
   })
 
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: ['current-company'],
+    queryKey: ['current-company', effectiveCompany],
     queryFn: async () => {
       const res = await api.get<Company>('/api/core/companies/current/')
       return res.data
@@ -136,7 +140,7 @@ export default function DashboardPage() {
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: "0.12s" }}>
             <StatItem
               title="Conteúdo Publicado"
-              value={stats?.counters?.articles?.published || 0}
+              value={stats?.counters?.articles?.total || 0}
               growth={stats?.counters?.articles?.growth}
               icon={FileText}
             />
