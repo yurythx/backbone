@@ -160,10 +160,30 @@ class MessageSerializer(serializers.ModelSerializer):
         return MessageDelivery.objects.filter(message_id=obj.id, user_id=user.id).exists()
 
 
+class MessageSearchSerializer(MessageSerializer):
+    conversation_title = serializers.CharField(source="conversation.title", read_only=True, allow_null=True)
+    conversation_is_group = serializers.BooleanField(source="conversation.is_group", read_only=True)
+    conversation_participants_list = serializers.SerializerMethodField()
+
+    class Meta(MessageSerializer.Meta):
+        fields = [
+            *MessageSerializer.Meta.fields,
+            "conversation_title",
+            "conversation_is_group",
+            "conversation_participants_list",
+        ]
+
+    def get_conversation_participants_list(self, obj):
+        participants = getattr(obj.conversation, "participants", None)
+        if participants is None:
+            return []
+        return [u.username for u in participants.all()]
+
+
 class ConversationPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConversationPreference
-        fields = ["is_muted", "is_pinned"]
+        fields = ["is_muted", "is_pinned", "is_deleted", "deleted_at", "cleared_at", "is_archived", "archived_at"]
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -191,15 +211,33 @@ class ConversationSerializer(serializers.ModelSerializer):
         read_only_fields = ["participants"]
 
     def get_last_message(self, obj):
+        request = self.context.get("request")
+        cleared_at = None
+        if request:
+            prefetched = getattr(obj, "prefetched_pref", None)
+            if prefetched is not None:
+                pref = prefetched[0] if prefetched else None
+            else:
+                pref = None
+            if pref is None:
+                try:
+                    pref = ConversationPreference.objects.get(user=request.user, conversation=obj)
+                except ConversationPreference.DoesNotExist:
+                    pref = None
+            cleared_at = getattr(pref, "cleared_at", None) if pref else None
+
         # 1. Try to use annotated fields from Subqueries (optimized path #26)
         last_id = getattr(obj, "last_msg_id", None)
         if last_id:
+            last_created_at = getattr(obj, "last_msg_created_at", None)
+            if cleared_at and last_created_at and last_created_at <= cleared_at:
+                return None
             return {
                 "id": last_id,
                 "content": getattr(obj, "last_msg_content", ""),
                 "sender": getattr(obj, "last_msg_sender_id", None),
                 "sender_username": getattr(obj, "last_msg_sender_username", ""),
-                "created_at": getattr(obj, "last_msg_created_at", None),
+                "created_at": last_created_at,
                 "file_name": getattr(obj, "last_msg_file_name", None),
                 "file_type": getattr(obj, "last_msg_file_type", None),
             }
@@ -212,7 +250,10 @@ class ConversationSerializer(serializers.ModelSerializer):
                 return SimpleMessageSerializer(last_msg).data
 
         # 3. Last fallback: Direct query (worst case)
-        last_msg = obj.messages.order_by("-created_at").first()
+        msg_qs = obj.messages
+        if cleared_at:
+            msg_qs = msg_qs.filter(created_at__gt=cleared_at)
+        last_msg = msg_qs.order_by("-created_at").first()
         if last_msg:
             return SimpleMessageSerializer(last_msg).data
         return None

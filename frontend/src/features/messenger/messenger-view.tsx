@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { ContactList } from "./contact-list"
 import { ChatWindow } from "./chat-window"
 import { Contact } from "@/types"
 import { Message } from "@/types/messenger"
 import { MessageSquareDashed, Loader2, SlidersHorizontal } from "lucide-react"
-import { useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { useSearchParams, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -55,16 +55,64 @@ export function MessengerView() {
     } catch { }
   }, [messageIdParam, createdAtParam])
 
-  const searchQuery = useQuery<Message[]>({
-    queryKey: ['global-message-search', debounced, filter],
-    queryFn: async () => {
-      const res = await api.get<Message[]>(`/api/messenger/conversations/search/?q=${encodeURIComponent(debounced)}`)
-      return res.data
+  type SearchResponse = Message[] | { results?: Message[]; next?: string | null }
+  const parseSearchResponse = (data: SearchResponse) => {
+    if (Array.isArray(data)) return { results: data, next: null as string | null }
+    return { results: Array.isArray(data?.results) ? data.results : [], next: data?.next ?? null }
+  }
+  const getNextPageNumber = (nextUrl: string | null) => {
+    if (!nextUrl) return undefined
+    try {
+      const url = new URL(nextUrl, "http://localhost")
+      const p = url.searchParams.get("page")
+      const n = p ? Number(p) : NaN
+      return Number.isFinite(n) && n > 0 ? n : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  const searchQuery = useInfiniteQuery<{ results: Message[]; next: string | null }>({
+    queryKey: ['global-message-search', debounced],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam, signal }) => {
+      const res = await api.get<SearchResponse>(
+        `/api/messenger/conversations/search/?q=${encodeURIComponent(debounced)}&page=${pageParam}&page_size=20`,
+        { signal },
+      )
+      return parseSearchResponse(res.data)
     },
-    enabled: !!currentUser && debounced.length >= 3
+    getNextPageParam: (lastPage) => getNextPageNumber(lastPage.next),
+    enabled: !!currentUser && debounced.length >= 3,
   })
 
-  const filteredResults = (Array.isArray(searchQuery.data) ? searchQuery.data : []).filter((m) => {
+  const searchResults = useMemo(() => {
+    const pages = searchQuery.data?.pages ?? []
+    return pages.flatMap((p) => p.results)
+  }, [searchQuery.data])
+
+  const contactsQuery = useQuery<Contact[] | { results: Contact[] }>({
+    queryKey: ["contacts"],
+    queryFn: async () => {
+      const res = await api.get<Contact[] | { results: Contact[] }>("/api/messenger/contacts/")
+      return res.data
+    },
+    staleTime: 60_000,
+    enabled: !!currentUser,
+  })
+
+  const contacts = useMemo(
+    () => (Array.isArray(contactsQuery.data) ? contactsQuery.data : contactsQuery.data?.results ?? []),
+    [contactsQuery.data],
+  )
+
+  const contactByUsername = useMemo(() => {
+    const map = new Map<string, Contact>()
+    for (const c of contacts) map.set(c.username, c)
+    return map
+  }, [contacts])
+
+  const filteredResults = (Array.isArray(searchResults) ? searchResults : []).filter((m) => {
     if (filter === "media") return !!m.file_url && !!m.file_type && m.file_type.startsWith("image/")
     if (filter === "files") return !!m.file_url && (!m.file_type || !m.file_type.startsWith("image/"))
     if (hasAttachments) return !!m.file_url
@@ -103,45 +151,86 @@ export function MessengerView() {
     return byKind && byUser && byFrom && byTo && byUnread && byReactions
   })
 
+  const bumpCreatedAtForBeforeParam = (createdAt: string) => {
+    const ts = new Date(createdAt).getTime()
+    if (!Number.isFinite(ts)) return createdAt
+    return new Date(ts + 1).toISOString()
+  }
+
+  const highlight = (text: string, query: string) => {
+    const q = query.trim()
+    if (q.length < 3) return text
+    const idx = text.toLowerCase().indexOf(q.toLowerCase())
+    if (idx < 0) return text
+    const before = text.slice(0, idx)
+    const match = text.slice(idx, idx + q.length)
+    const after = text.slice(idx + q.length)
+    return (
+      <span>
+        {before}
+        <mark className="rounded-sm bg-primary/15 px-0.5">{match}</mark>
+        {after}
+      </span>
+    )
+  }
+
+  const getConversationLabel = (m: Message) => {
+    if (m.conversation_is_group) return m.conversation_title || "Grupo"
+    const list = Array.isArray(m.conversation_participants_list) ? m.conversation_participants_list : []
+    const other = list.find((u) => u !== currentUser?.username)
+    return other || `#${m.conversation}`
+  }
+
   const openMessage = async (msg: Message) => {
     try {
+      if (!currentUser) return
+
+      const focusCreatedAt = bumpCreatedAtForBeforeParam(msg.created_at)
+      const focusMessageId = String(msg.id)
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('focusMessageId', focusMessageId)
+          localStorage.setItem('focusMessageCreatedAt', focusCreatedAt)
+        } catch { }
+      }
+
+      router.push(
+        `/messenger?conversation=${msg.conversation}&message_id=${encodeURIComponent(focusMessageId)}&created_at=${encodeURIComponent(focusCreatedAt)}`
+      )
+
+      if (msg.conversation_is_group) {
+        setSelectedContact({
+          id: -(msg.conversation),
+          username: msg.conversation_title || "Grupo",
+          email: "",
+          avatar_url: null,
+          is_online: true,
+          group_names: [],
+          is_staff: false,
+          last_seen: null,
+          status: 'online',
+        })
+        return
+      }
+
+      const list = Array.isArray(msg.conversation_participants_list) ? msg.conversation_participants_list : []
+      const otherUsername = list.find((u) => u !== currentUser.username)
+      const targetContact = otherUsername ? contactByUsername.get(otherUsername) : undefined
+      if (targetContact) {
+        setSelectedContact(targetContact)
+        return
+      }
+
       const res = await api.get(`/api/messenger/conversations/${msg.conversation}/`)
       const conv = res.data
 
-      if (!currentUser) return
-
       const participantIds: number[] = Array.isArray(conv.participants) ? conv.participants : []
       const otherId = participantIds.find((id: number) => id !== currentUser.id)
+      const targetId = otherId ?? currentUser.id
 
-      if (otherId !== undefined) {
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('focusMessageId', String(msg.id))
-            localStorage.setItem('focusMessageCreatedAt', msg.created_at)
-          } catch { }
-        }
-
-        const contactRes = await api.get(`/api/messenger/contacts/${otherId}/`)
-        const contactData = contactRes.data
-        setSelectedContact({
-          id: contactData.id,
-          username: contactData.username,
-          email: contactData.email,
-          avatar_url: contactData.avatar_url,
-          is_online: contactData.is_online ?? false,
-          group_names: contactData.group_names ?? [],
-          is_staff: contactData.is_staff ?? false,
-          last_seen: contactData.last_seen || null,
-          status: contactData.status || 'offline',
-          first_name: contactData.first_name || "",
-          last_name: contactData.last_name || ""
-        })
-
-        setTimeout(() => {
-          const el = document.getElementById(`msg-${msg.id}`)
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }, 600)
-      }
+      const contactRes = await api.get(`/api/messenger/contacts/${targetId}/`)
+      setSelectedContact(contactRes.data)
     } catch { }
   }
 
@@ -345,16 +434,30 @@ export function MessengerView() {
             {!searchQuery.isLoading && advancedFilteredResults.length === 0 && (
               <div className="p-4 text-sm text-muted-foreground">Sem resultados</div>
             )}
-            {advancedFilteredResults.slice(0, 20).map((m) => (
+            {advancedFilteredResults.map((m) => (
               <div key={`${m.conversation}-${m.id}`} className="p-3 border-b last:border-b-0 flex items-center gap-3 hover:bg-muted/50 cursor-pointer transition-colors" role="button" onClick={() => openMessage(m)}>
-                <Badge variant="outline" className="text-[10px] px-2 truncate">#{m.conversation}</Badge>
+                <Badge variant="outline" className="text-[10px] px-2 truncate">{getConversationLabel(m)}</Badge>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate font-medium">{m.content || m.file_name || 'Mensagem'}</p>
+                  <p className="text-sm truncate font-medium">
+                    {highlight(m.content || m.file_name || 'Mensagem', debounced)}
+                  </p>
                   <p className="text-[10px] text-muted-foreground">{new Date(m.created_at).toLocaleString()}</p>
                 </div>
                 <Button size="sm" variant="outline">Abrir</Button>
               </div>
             ))}
+            {searchQuery.hasNextPage && (
+              <div className="p-2 flex items-center justify-center">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={searchQuery.isFetchingNextPage}
+                  onClick={() => searchQuery.fetchNextPage()}
+                >
+                  {searchQuery.isFetchingNextPage ? "Carregando..." : "Carregar mais"}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

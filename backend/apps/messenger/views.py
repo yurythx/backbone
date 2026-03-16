@@ -15,7 +15,13 @@ from apps.module_manager.permissions import HasModuleAccess
 from shared_kernel.sanitization import sanitize_url
 
 from .models import ContactBlock, Conversation, Message
-from .serializers import ContactBlockSerializer, ContactSerializer, ConversationSerializer, MessageSerializer
+from .serializers import (
+    ContactBlockSerializer,
+    ContactSerializer,
+    ConversationSerializer,
+    MessageSearchSerializer,
+    MessageSerializer,
+)
 from .services import MessengerService
 
 logger = logging.getLogger(__name__)
@@ -140,7 +146,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return Conversation.all_objects.none()
 
-        from django.db.models import Count, OuterRef, Prefetch, Subquery
+        from datetime import UTC, datetime
+
+        from django.db.models import Count, DateTimeField, OuterRef, Prefetch, Subquery, Value
         from django.db.models.functions import Coalesce
 
         from .models import ConversationPreference
@@ -154,7 +162,67 @@ class ConversationViewSet(viewsets.ModelViewSet):
         else:
             manager = Conversation.objects
 
-        # Subquery to get the last message per conversation
+        pref_qs = ConversationPreference.objects.filter(user=user)
+        cleared_at_qs = pref_qs.filter(conversation=OuterRef("pk")).values("cleared_at")[:1]
+        qs_min_dt = Value(datetime(1970, 1, 1, tzinfo=UTC), output_field=DateTimeField())
+
+        last_msg_qs = Message.objects.filter(conversation=OuterRef("pk")).order_by("-created_at")
+        unread_count_qs = (
+            Message.objects.filter(conversation=OuterRef("pk"), is_deleted=False)
+            .exclude(sender_id=user.id)
+            .exclude(reads__user_id=user.id)
+            .filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt))
+            .values("conversation")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
+
+        qs = (
+            manager.filter(participants=user)
+            .select_related("company")
+            .prefetch_related(
+                "participants",
+                Prefetch("preferences", queryset=pref_qs, to_attr="prefetched_pref"),
+            )
+            .annotate(cleared_at=Subquery(cleared_at_qs))
+            .annotate(
+                unread_count=Coalesce(Subquery(unread_count_qs[:1]), 0),
+                # Annotate last message details using Subqueries (Performance #26)
+                last_msg_id=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("id")[:1]),
+                last_msg_content=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("content")[:1]),
+                last_msg_sender_id=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("sender_id")[:1]),
+                last_msg_sender_username=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("sender__username")[:1]),
+                last_msg_created_at=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("created_at")[:1]),
+                last_msg_file_name=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("file_name")[:1]),
+                last_msg_file_type=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("file_type")[:1]),
+            )
+            .order_by("-updated_at")
+        )
+        if self.action == "list":
+            qs = qs.exclude(preferences__user=user, preferences__is_deleted=True).exclude(
+                preferences__user=user, preferences__is_archived=True
+            )
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response(
+                {"error": "Use delete_for_me to remove a conversation from your view."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=["get"])
+    def archived(self, request):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return Response([])
+
+        from django.db.models import Count, OuterRef, Prefetch, Subquery
+        from django.db.models.functions import Coalesce
+
+        from .models import ConversationPreference
+
         last_msg_qs = Message.objects.filter(conversation=OuterRef("pk")).order_by("-created_at")
         pref_qs = ConversationPreference.objects.filter(user=user)
 
@@ -168,7 +236,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
         )
 
         qs = (
-            manager.filter(participants=user)
+            Conversation.objects.filter(participants=user, company=request.company)
+            .filter(preferences__user=user, preferences__is_archived=True)
+            .exclude(preferences__user=user, preferences__is_deleted=True)
             .select_related("company")
             .prefetch_related(
                 "participants",
@@ -176,7 +246,6 @@ class ConversationViewSet(viewsets.ModelViewSet):
             )
             .annotate(
                 unread_count=Coalesce(Subquery(unread_count_qs[:1]), 0),
-                # Annotate last message details using Subqueries (Performance #26)
                 last_msg_id=Subquery(last_msg_qs.values("id")[:1]),
                 last_msg_content=Subquery(last_msg_qs.values("content")[:1]),
                 last_msg_sender_id=Subquery(last_msg_qs.values("sender_id")[:1]),
@@ -187,7 +256,66 @@ class ConversationViewSet(viewsets.ModelViewSet):
             )
             .order_by("-updated_at")
         )
-        return qs
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["get"])
+    def deleted(self, request):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return Response([])
+
+        from django.db.models import Count, OuterRef, Prefetch, Subquery
+        from django.db.models.functions import Coalesce
+
+        from .models import ConversationPreference
+
+        last_msg_qs = Message.objects.filter(conversation=OuterRef("pk")).order_by("-created_at")
+        pref_qs = ConversationPreference.objects.filter(user=user)
+
+        unread_count_qs = (
+            Message.objects.filter(conversation=OuterRef("pk"), is_deleted=False)
+            .exclude(sender_id=user.id)
+            .exclude(reads__user_id=user.id)
+            .values("conversation")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
+
+        qs = (
+            Conversation.objects.filter(participants=user, company=request.company)
+            .filter(preferences__user=user, preferences__is_deleted=True)
+            .select_related("company")
+            .prefetch_related(
+                "participants",
+                Prefetch("preferences", queryset=pref_qs, to_attr="prefetched_pref"),
+            )
+            .annotate(
+                unread_count=Coalesce(Subquery(unread_count_qs[:1]), 0),
+                last_msg_id=Subquery(last_msg_qs.values("id")[:1]),
+                last_msg_content=Subquery(last_msg_qs.values("content")[:1]),
+                last_msg_sender_id=Subquery(last_msg_qs.values("sender_id")[:1]),
+                last_msg_sender_username=Subquery(last_msg_qs.values("sender__username")[:1]),
+                last_msg_created_at=Subquery(last_msg_qs.values("created_at")[:1]),
+                last_msg_file_name=Subquery(last_msg_qs.values("file_name")[:1]),
+                last_msg_file_type=Subquery(last_msg_qs.values("file_type")[:1]),
+            )
+            .order_by("-updated_at")
+        )
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=["get"])
     def find_by_participant(self, request):
@@ -322,9 +450,69 @@ class ConversationViewSet(viewsets.ModelViewSet):
         MessengerService.broadcast_all_read(request.company, conversation, user.id)
         return Response({"marked_read": len(message_ids)})
 
+    @action(detail=True, methods=["post"])
+    def delete_for_me(self, request, pk=None):
+        conversation = self.get_object()
+        pref = self._get_or_create_preference(request, conversation)
+        pref.is_deleted = True
+        pref.deleted_at = timezone.now()
+        pref.save(update_fields=["is_deleted", "deleted_at"])
+        return Response({"is_deleted": True})
+
+    @action(detail=True, methods=["post"])
+    def restore_for_me(self, request, pk=None):
+        conversation = (
+            Conversation.objects.filter(participants=request.user, id=pk, company=request.company).select_related("company").first()
+        )
+        if not conversation:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        pref = self._get_or_create_preference(request, conversation)
+        pref.is_deleted = False
+        pref.deleted_at = None
+        pref.save(update_fields=["is_deleted", "deleted_at"])
+        return Response({"is_deleted": False})
+
+    @action(detail=True, methods=["post"])
+    def archive_for_me(self, request, pk=None):
+        conversation = self.get_object()
+        pref = self._get_or_create_preference(request, conversation)
+        pref.is_archived = True
+        pref.archived_at = timezone.now()
+        pref.save(update_fields=["is_archived", "archived_at"])
+        return Response({"is_archived": True})
+
+    @action(detail=True, methods=["post"])
+    def unarchive_for_me(self, request, pk=None):
+        conversation = (
+            Conversation.objects.filter(participants=request.user, id=pk, company=request.company).select_related("company").first()
+        )
+        if not conversation:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        pref = self._get_or_create_preference(request, conversation)
+        pref.is_archived = False
+        pref.archived_at = None
+        pref.save(update_fields=["is_archived", "archived_at"])
+        return Response({"is_archived": False})
+
+    @action(detail=True, methods=["post"])
+    def clear_for_me(self, request, pk=None):
+        conversation = self.get_object()
+        pref = self._get_or_create_preference(request, conversation)
+        pref.cleared_at = timezone.now()
+        pref.save(update_fields=["cleared_at"])
+        return Response({"cleared_at": pref.cleared_at.isoformat() if pref.cleared_at else None})
+
+    @action(detail=True, methods=["post"])
+    def unclear_for_me(self, request, pk=None):
+        conversation = self.get_object()
+        pref = self._get_or_create_preference(request, conversation)
+        pref.cleared_at = None
+        pref.save(update_fields=["cleared_at"])
+        return Response({"cleared_at": None})
+
     @extend_schema(
         parameters=[OpenApiParameter("q", OpenApiTypes.STR, description="Termo de pesquisa")],
-        responses={200: MessageSerializer(many=True)},
+        responses={200: MessageSearchSerializer(many=True)},
         description="Global search in message history",
     )
     @action(detail=False, methods=["get"])
@@ -333,11 +521,22 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if not query:
             return Response({"error": "Query parameter 'q' is required"}, status=400)
 
-        messages = Message.objects.filter(conversation__participants=request.user, content__icontains=query).order_by(
-            "-created_at"
+        from django.db.models import Q
+
+        messages = (
+            Message.objects.filter(conversation__participants=request.user)
+            .filter(Q(content__icontains=query) | Q(file_name__icontains=query))
+            .select_related("conversation")
+            .prefetch_related("conversation__participants")
+            .order_by("-created_at")
         )
 
-        serializer = MessageSerializer(messages, many=True, context={"request": request})
+        page = self.paginate_queryset(messages)
+        if page is not None:
+            serializer = MessageSearchSerializer(page, many=True, context={"request": request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = MessageSearchSerializer(messages, many=True, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(
@@ -388,7 +587,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         # Order by -created_at for pagination (latest first) then reverse for display
         from django.db.models import Count, Exists, OuterRef
 
-        from .models import MessageDelivery, MessageRead
+        from .models import ConversationPreference, MessageDelivery, MessageRead
 
         qs = Message.all_objects.filter(conversation=conversation).annotate(
             read_by_me=Exists(MessageRead.objects.filter(message_id=OuterRef("pk"), user_id=request.user.id)),
@@ -396,7 +595,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
             delivered_by_me=Exists(MessageDelivery.objects.filter(message_id=OuterRef("pk"), user_id=request.user.id)),
             delivered_by_count=Count("deliveries", distinct=True),
         )
-        qs = qs.order_by("-created_at")
+        qs = qs.order_by("-created_at", "-id")
+
+        cleared_at = (
+            ConversationPreference.all_objects.filter(company=request.company, conversation=conversation, user=request.user)
+            .values_list("cleared_at", flat=True)
+            .first()
+        )
+        if cleared_at:
+            qs = qs.filter(created_at__gt=cleared_at)
 
         before = request.query_params.get("before")
         if before:
@@ -421,7 +628,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             )
             return self.get_paginated_response(serializer.data)
 
-        messages_list = list(qs.order_by("created_at"))
+        messages_list = list(qs.order_by("created_at", "id"))
         serializer = MessageSerializer(
             messages_list,
             many=True,
@@ -467,6 +674,14 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
         if instance.sender != self.request.user:
             raise exceptions.PermissionDenied("You can only delete your own messages.")
 
+        from datetime import timedelta
+
+        from django.conf import settings
+
+        window_seconds = int(getattr(settings, "MESSENGER_DELETE_FOR_ALL_WINDOW_SECONDS", 600))
+        if instance.created_at < timezone.now() - timedelta(seconds=window_seconds):
+            raise exceptions.PermissionDenied("Delete for everyone window has expired.")
+
         company = self.request.company
         conversation = instance.conversation
         message_id = instance.id
@@ -475,6 +690,17 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
         instance.soft_delete()
 
         MessengerService.broadcast_delete(company, conversation, message_id)
+
+        from shared_kernel.audit import log_action
+
+        log_action(
+            self.request.user,
+            action="delete",
+            resource="Message",
+            resource_id=message_id,
+            details={"conversation_id": conversation.id, "scope": "everyone"},
+            request=self.request,
+        )
 
     def perform_update(self, serializer):
         instance = serializer.instance
@@ -619,6 +845,37 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
         ]
         reads = [{"user_id": r.user_id, "username": r.user.username, "read_at": r.read_at.isoformat()} for r in reads_qs]
 
+        deliveries_map = {d["user_id"]: d["delivered_at"] for d in deliveries}
+        reads_map = {r["user_id"]: r["read_at"] for r in reads}
+
+        participants = (
+            message.conversation.participants.exclude(id=message.sender_id)
+            .values("id", "username")
+            .order_by("username")
+        )
+        recipients = []
+        pending_delivered = []
+        pending_read = []
+        for p in participants:
+            user_id = p["id"]
+            username = p["username"]
+            delivered_at = deliveries_map.get(user_id)
+            read_at = reads_map.get(user_id)
+            recipients.append(
+                {
+                    "user_id": user_id,
+                    "username": username,
+                    "delivered_at": delivered_at,
+                    "read_at": read_at,
+                    "is_delivered": delivered_at is not None,
+                    "is_read": read_at is not None,
+                }
+            )
+            if delivered_at is None:
+                pending_delivered.append({"user_id": user_id, "username": username})
+            if read_at is None:
+                pending_read.append({"user_id": user_id, "username": username})
+
         return Response(
             {
                 "message_id": message.id,
@@ -627,5 +884,8 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
                 "read": reads,
                 "delivered_count": len(deliveries),
                 "read_count": len(reads),
+                "recipients": recipients,
+                "pending_delivered": pending_delivered,
+                "pending_read": pending_read,
             }
         )

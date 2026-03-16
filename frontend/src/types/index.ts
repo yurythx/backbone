@@ -27,6 +27,8 @@ export interface Contact {
   id: number;
   username: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
   is_online: boolean;
   group_names: string[];
   is_staff: boolean;
@@ -71,6 +73,11 @@ export interface Message {
 export interface ConversationPreference {
   is_muted: boolean
   is_pinned: boolean
+  is_deleted?: boolean
+  deleted_at?: string | null
+  cleared_at?: string | null
+  is_archived?: boolean
+  archived_at?: string | null
 }
 
 export interface Conversation {

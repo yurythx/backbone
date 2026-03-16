@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react"
-import { Contact, User, Conversation } from "@/types"
-import { Search, Plus, Loader2, Pin, BellOff, Users } from "lucide-react"
+import { Contact, User } from "@/types"
+import { Conversation } from "@/types/messenger"
+import { Search, Plus, Loader2, Pin, BellOff, Users, Trash2, RotateCcw, Archive } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -9,6 +10,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { usePresence } from "@/hooks/use-presence"
 import { cn } from "@/lib/utils"
+import {
+  fetchAndUpsertConversation,
+  removeConversation,
+  updateArchivedCache,
+  updateConversation,
+  updateConversationsCache,
+  updateDeletedCache,
+  upsertConversation,
+} from "./cache/conversations"
 import {
   Dialog,
   DialogContent,
@@ -47,6 +57,8 @@ interface DisplayItem {
 export function ContactList({ onSelectContact, selectedContactId, currentUser }: ContactListProps) {
   const [search, setSearch] = useState("")
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false)
+  const [isDeletedDialogOpen, setIsDeletedDialogOpen] = useState(false)
+  const [isArchivedDialogOpen, setIsArchivedDialogOpen] = useState(false)
   const [groupName, setGroupName] = useState("")
   const [selectedContactsForGroup, setSelectedContactsForGroup] = useState<number[]>([])
 
@@ -58,8 +70,13 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
     mutationFn: async ({ convId, action }: { convId: number, action: 'pin' | 'unpin' }) => {
       await api.post(`/api/messenger/conversations/${convId}/${action}/`)
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] })
+    onSuccess: (_data, variables) => {
+      updateConversationsCache(queryClient, (list) =>
+        updateConversation(list, variables.convId, (c) => ({
+          ...c,
+          preference: { ...(c.preference ?? { is_muted: false, is_pinned: false }), is_pinned: variables.action === 'pin' },
+        })),
+      )
     },
     onError: () => {
       toast.error("Erro ao atualizar preferência de fixação")
@@ -70,8 +87,13 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
     mutationFn: async ({ convId, action }: { convId: number, action: 'mute' | 'unmute' }) => {
       await api.post(`/api/messenger/conversations/${convId}/${action}/`)
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] })
+    onSuccess: (_data, variables) => {
+      updateConversationsCache(queryClient, (list) =>
+        updateConversation(list, variables.convId, (c) => ({
+          ...c,
+          preference: { ...(c.preference ?? { is_muted: false, is_pinned: false }), is_muted: variables.action === 'mute' },
+        })),
+      )
     },
     onError: () => {
       toast.error("Erro ao atualizar preferência de silenciamento")
@@ -88,6 +110,24 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
     staleTime: 30_000,
     refetchInterval: 60_000,
     enabled: !!currentUser,
+  })
+
+  const { data: deletedConversationsRaw, isLoading: deletedLoading } = useQuery<Conversation[]>({
+    queryKey: ["conversations-deleted"],
+    queryFn: async () => {
+      const res = await api.get<{ results: Conversation[] } | Conversation[]>("/api/messenger/conversations/deleted/")
+      return Array.isArray(res.data) ? res.data : (res.data as { results: Conversation[] }).results ?? []
+    },
+    enabled: !!currentUser && isDeletedDialogOpen,
+  })
+
+  const { data: archivedConversationsRaw, isLoading: archivedLoading } = useQuery<Conversation[]>({
+    queryKey: ["conversations-archived"],
+    queryFn: async () => {
+      const res = await api.get<{ results: Conversation[] } | Conversation[]>("/api/messenger/conversations/archived/")
+      return Array.isArray(res.data) ? res.data : (res.data as { results: Conversation[] }).results ?? []
+    },
+    enabled: !!currentUser && isArchivedDialogOpen,
   })
 
   // ── Contacts (for group dialog + participant lookup) ────────────────────────
@@ -248,6 +288,144 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
     )
   }
 
+  const getContactForConversation = (conv: Conversation): Contact => {
+    if (conv.is_group) {
+      return {
+        id: -(conv.id),
+        username: conv.title || "Grupo",
+        email: "",
+        avatar_url: null,
+        is_online: false,
+        group_names: [],
+        is_staff: false,
+        status: "offline",
+      }
+    }
+
+    const participantUsernames = conv.participants_list ?? []
+    const otherUsername = participantUsernames.find((u) => u !== currentUser?.username)
+    if (!otherUsername) {
+      return {
+        id: 0,
+        username: "Conversa",
+        email: "",
+        avatar_url: null,
+        is_online: false,
+        group_names: [],
+        is_staff: false,
+        status: "offline",
+      }
+    }
+
+    const otherContact = contactByUsername.get(otherUsername)
+    return (
+      otherContact ?? {
+        id: 0,
+        username: otherUsername,
+        email: "",
+        avatar_url: null,
+        is_online: false,
+        group_names: [],
+        is_staff: false,
+        status: "offline",
+      }
+    )
+  }
+
+  const openConversation = (conv: Conversation) => {
+    const contact = getContactForConversation(conv)
+    onSelectContact(contact, conv.id)
+  }
+
+  const restoreConversation = async (convId: number) => {
+    await api.post(`/api/messenger/conversations/${convId}/restore_for_me/`)
+    updateDeletedCache(queryClient, (list) => removeConversation(list, convId))
+    try {
+      await fetchAndUpsertConversation(queryClient, convId)
+    } catch { }
+    toast.success("Conversa restaurada")
+  }
+
+  const archiveConversationFromDeleted = async (conv: Conversation) => {
+    const convId = conv.id
+    await api.post(`/api/messenger/conversations/${convId}/restore_for_me/`)
+    await api.post(`/api/messenger/conversations/${convId}/archive_for_me/`)
+
+    updateDeletedCache(queryClient, (list) => removeConversation(list, convId))
+    updateConversationsCache(queryClient, (list) => removeConversation(list, convId))
+    updateArchivedCache(queryClient, (list) =>
+      upsertConversation(list, {
+        ...conv,
+        preference: {
+          ...(conv.preference ?? { is_muted: false, is_pinned: false }),
+          is_deleted: false,
+          deleted_at: null,
+          is_archived: true,
+          archived_at: new Date().toISOString(),
+        },
+      }),
+    )
+
+    toast.success("Conversa arquivada")
+  }
+
+  const unarchiveConversation = async (convId: number) => {
+    await api.post(`/api/messenger/conversations/${convId}/unarchive_for_me/`)
+    updateArchivedCache(queryClient, (list) => removeConversation(list, convId))
+    try {
+      await fetchAndUpsertConversation(queryClient, convId)
+    } catch { }
+    toast.success("Conversa desarquivada")
+  }
+
+  const deleteConversationForMeFromArchived = async (conv: Conversation) => {
+    const convId = conv.id
+    await api.post(`/api/messenger/conversations/${convId}/delete_for_me/`)
+
+    updateArchivedCache(queryClient, (list) => removeConversation(list, convId))
+    updateConversationsCache(queryClient, (list) => removeConversation(list, convId))
+    updateDeletedCache(queryClient, (list) =>
+      upsertConversation(list, {
+        ...conv,
+        preference: {
+          ...(conv.preference ?? { is_muted: false, is_pinned: false }),
+          is_deleted: true,
+          deleted_at: new Date().toISOString(),
+        },
+      }),
+    )
+
+    toast.success("Conversa removida", {
+      action: {
+        label: "Desfazer",
+        onClick: async () => {
+          try {
+            await api.post(`/api/messenger/conversations/${convId}/restore_for_me/`)
+            await api.post(`/api/messenger/conversations/${convId}/archive_for_me/`)
+            updateDeletedCache(queryClient, (list) => removeConversation(list, convId))
+            updateConversationsCache(queryClient, (list) => removeConversation(list, convId))
+            updateArchivedCache(queryClient, (list) =>
+              upsertConversation(list, {
+                ...conv,
+                preference: {
+                  ...(conv.preference ?? { is_muted: false, is_pinned: false }),
+                  is_deleted: false,
+                  deleted_at: null,
+                  is_archived: true,
+                  archived_at: new Date().toISOString(),
+                },
+              }),
+            )
+            toast.success("Conversa restaurada para arquivadas")
+          } catch {
+            toast.error("Erro ao desfazer remoção")
+          }
+        },
+      },
+      duration: 6000,
+    })
+  }
+
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -277,61 +455,232 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
       <div className="p-4 border-b border-border/50 space-y-4 bg-background/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-lg tracking-tight">Mensagens</h2>
-          <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Criar novo grupo">
-                <Plus className="h-5 w-5" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Criar Novo Grupo</DialogTitle>
-                <DialogDescription>Dê um nome ao grupo e selecione os participantes.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <label htmlFor="group-name" className="text-sm font-medium">Nome do Grupo</label>
-                  <Input
-                    id="group-name"
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    placeholder="Ex: Projeto Backbone"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium">Participantes</label>
-                  <ScrollArea className="h-[200px] border rounded-md p-2">
-                    {contactList.map((contact) => (
-                      <div key={contact.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
-                        <Checkbox
-                          id={`g-contact-${contact.id}`}
-                          checked={selectedContactsForGroup.includes(contact.id)}
-                          onCheckedChange={() => toggleContactSelection(contact.id)}
-                        />
-                        <label
-                          htmlFor={`g-contact-${contact.id}`}
-                          className="text-sm font-medium flex items-center gap-2 cursor-pointer w-full"
-                        >
-                          <Avatar className="h-6 w-6">
-                            <AvatarImage src={contact.avatar_url || undefined} alt={contact.username} />
-                            <AvatarFallback>{contact.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          {contact.username}
-                        </label>
-                      </div>
-                    ))}
-                  </ScrollArea>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsGroupDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={() => createGroupMutation.mutate()} disabled={createGroupMutation.isPending}>
-                  {createGroupMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Criar Grupo
+          <div className="flex items-center gap-1">
+            <Dialog open={isArchivedDialogOpen} onOpenChange={setIsArchivedDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Conversas arquivadas">
+                  <Archive className="h-5 w-5" />
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[480px]">
+                <DialogHeader>
+                  <DialogTitle>Conversas arquivadas</DialogTitle>
+                  <DialogDescription>Restaure conversas arquivadas para a lista principal.</DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="h-[320px] border rounded-md p-2">
+                  {archivedLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    </div>
+                  ) : (archivedConversationsRaw?.length ? (
+                    <div className="grid gap-1">
+                      {archivedConversationsRaw.map((conv) => {
+                        const title = conv.is_group
+                          ? (conv.title || "Grupo sem nome")
+                          : (conv.participants_list?.find((u) => u !== currentUser?.username) || "Conversa")
+                        return (
+                          <div key={conv.id} className="flex items-center justify-between gap-2 rounded-md px-3 py-2 hover:bg-muted/50">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold truncate">{title}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {conv.last_message?.content || (conv.last_message?.file_name ? "📎 Arquivo" : "")}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setIsArchivedDialogOpen(false)
+                                  openConversation(conv)
+                                }}
+                              >
+                                Abrir
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-destructive"
+                                onClick={async () => {
+                                  try {
+                                    await deleteConversationForMeFromArchived(conv)
+                                  } catch {
+                                    toast.error("Erro ao remover conversa")
+                                  }
+                                }}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Remover
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  try {
+                                    await unarchiveConversation(conv.id)
+                                    setIsArchivedDialogOpen(false)
+                                    openConversation(conv)
+                                  } catch {
+                                    toast.error("Erro ao desarquivar conversa")
+                                  }
+                                }}
+                              >
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Desarquivar
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                      Nenhuma conversa arquivada.
+                    </div>
+                  ))}
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isDeletedDialogOpen} onOpenChange={setIsDeletedDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Conversas removidas">
+                  <Trash2 className="h-5 w-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[480px]">
+                <DialogHeader>
+                  <DialogTitle>Conversas removidas</DialogTitle>
+                  <DialogDescription>Restaure conversas removidas da sua lista.</DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="h-[320px] border rounded-md p-2">
+                  {deletedLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    </div>
+                  ) : (deletedConversationsRaw?.length ? (
+                    <div className="grid gap-1">
+                      {deletedConversationsRaw.map((conv) => {
+                        const title = conv.is_group
+                          ? (conv.title || "Grupo sem nome")
+                          : (conv.participants_list?.find((u) => u !== currentUser?.username) || "Conversa")
+                        return (
+                          <div key={conv.id} className="flex items-center justify-between gap-2 rounded-md px-3 py-2 hover:bg-muted/50">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold truncate">{title}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {conv.last_message?.content || (conv.last_message?.file_name ? "📎 Arquivo" : "")}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setIsDeletedDialogOpen(false)
+                                  openConversation(conv)
+                                }}
+                              >
+                                Abrir
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  try {
+                                    await archiveConversationFromDeleted(conv)
+                                  } catch {
+                                    toast.error("Erro ao arquivar conversa")
+                                  }
+                                }}
+                              >
+                                <Archive className="mr-2 h-4 w-4" />
+                                Arquivar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  try {
+                                    await restoreConversation(conv.id)
+                                    setIsDeletedDialogOpen(false)
+                                    openConversation(conv)
+                                  } catch {
+                                    toast.error("Erro ao restaurar conversa")
+                                  }
+                                }}
+                              >
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Restaurar
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                      Nenhuma conversa removida.
+                    </div>
+                  ))}
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Criar novo grupo">
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Criar Novo Grupo</DialogTitle>
+                  <DialogDescription>Dê um nome ao grupo e selecione os participantes.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <label htmlFor="group-name" className="text-sm font-medium">Nome do Grupo</label>
+                    <Input
+                      id="group-name"
+                      value={groupName}
+                      onChange={(e) => setGroupName(e.target.value)}
+                      placeholder="Ex: Projeto Backbone"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Participantes</label>
+                    <ScrollArea className="h-[200px] border rounded-md p-2">
+                      {contactList.map((contact) => (
+                        <div key={contact.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
+                          <Checkbox
+                            id={`g-contact-${contact.id}`}
+                            checked={selectedContactsForGroup.includes(contact.id)}
+                            onCheckedChange={() => toggleContactSelection(contact.id)}
+                          />
+                          <label
+                            htmlFor={`g-contact-${contact.id}`}
+                            className="text-sm font-medium flex items-center gap-2 cursor-pointer w-full"
+                          >
+                            <Avatar className="h-6 w-6">
+                              <AvatarImage src={contact.avatar_url || undefined} alt={contact.username} />
+                              <AvatarFallback>{contact.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            {contact.username}
+                          </label>
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsGroupDialogOpen(false)}>Cancelar</Button>
+                  <Button onClick={() => createGroupMutation.mutate()} disabled={createGroupMutation.isPending}>
+                    {createGroupMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Criar Grupo
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

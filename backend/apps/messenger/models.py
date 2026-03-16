@@ -165,12 +165,19 @@ class ConversationPreference(BaseTenantModel):
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="preferences")
     is_muted = models.BooleanField(default=False)
     is_pinned = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    cleared_at = models.DateTimeField(null=True, blank=True)
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ("user", "conversation")
         indexes = [
             models.Index(fields=["user", "is_pinned"]),
             models.Index(fields=["user", "is_muted"]),
+            models.Index(fields=["user", "is_deleted"]),
+            models.Index(fields=["user", "is_archived"]),
         ]
 
     def __str__(self):

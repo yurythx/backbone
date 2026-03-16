@@ -53,6 +53,9 @@ export interface Message {
     edited_at: string | null
     /** True if the message was soft-deleted. UI should render "[Mensagem apagada]". */
     is_deleted: boolean
+    conversation_title?: string | null
+    conversation_is_group?: boolean
+    conversation_participants_list?: string[]
     local_status?: 'sending' | 'sent' | 'failed'
     reactions: MessageReaction[]
     reply_to: ReplyMessage | null
@@ -62,6 +65,11 @@ export interface Message {
 export interface ConversationPreference {
     is_muted: boolean
     is_pinned: boolean
+    is_deleted?: boolean
+    deleted_at?: string | null
+    cleared_at?: string | null
+    is_archived?: boolean
+    archived_at?: string | null
 }
 
 export interface Conversation {
@@ -78,21 +86,6 @@ export interface Conversation {
     unread_count: number
     /** User-specific mute/pin settings, backed by ConversationPreference. */
     preference: ConversationPreference
-}
-
-export interface Contact {
-    id: number
-    username: string
-    email: string
-    first_name: string
-    last_name: string
-    is_online: boolean
-    status?: 'online' | 'busy' | 'offline'
-    group_names: string[]
-    is_staff: boolean
-    avatar_url: string | null
-    /** ISO datetime of when the user was last seen online. null if never connected. */
-    last_seen: string | null
 }
 
 // ─── WebSocket Payloads ───────────────────────────────────────────────────────

@@ -123,6 +123,10 @@ REST_FRAMEWORK = {
     },
 }
 
+# Messenger
+# Window to allow "delete for everyone" on messages (in seconds).
+MESSENGER_DELETE_FOR_ALL_WINDOW_SECONDS = env.int("MESSENGER_DELETE_FOR_ALL_WINDOW_SECONDS", default=600)
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),  # Mais curto por segurança
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),  # Longo para evitar deslogar no mobile frequentemente

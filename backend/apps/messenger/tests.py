@@ -10,11 +10,14 @@ Covers:
   - Mute / unmute / pin / unpin preferences
 """
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.core.models import Company
+from apps.core.models import AuditLog, Company
 from apps.messenger.models import Conversation, ConversationPreference, Message
 from apps.module_manager.models import Module, TenantModule
 
@@ -98,6 +101,39 @@ class MessengerMessagingTest(MessengerBaseTest):
             "Message must be persisted in the DB after send_message",
         )
 
+    def test_global_search_includes_conversation_metadata(self):
+        self.auth(self.user_a1, "company-a")
+
+        group_conv = Conversation.objects.create(company=self.company_a, is_group=True, title="Equipe")
+        group_conv.participants.add(self.user_a1, self.user_a2)
+
+        m1 = Message.objects.create(company=self.company_a, conversation=self.conv_a, sender=self.user_a1, content="FindMe")
+        m2 = Message.objects.create(company=self.company_a, conversation=group_conv, sender=self.user_a2, content="FindMe too")
+
+        res = self.client.get("/api/messenger/conversations/search/?q=FindMe")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        data = res.data["results"] if isinstance(res.data, dict) and "results" in res.data else res.data
+        self.assertIsInstance(data, list)
+
+        by_id = {m["id"]: m for m in data}
+        self.assertIn(m1.id, by_id)
+        self.assertIn(m2.id, by_id)
+
+        one_to_one = by_id[m1.id]
+        self.assertIn("conversation_title", one_to_one)
+        self.assertIn("conversation_is_group", one_to_one)
+        self.assertIn("conversation_participants_list", one_to_one)
+        self.assertEqual(one_to_one["conversation_is_group"], False)
+        self.assertIsNone(one_to_one["conversation_title"])
+        self.assertIn("u_a1", one_to_one["conversation_participants_list"])
+        self.assertIn("u_a2", one_to_one["conversation_participants_list"])
+
+        grp = by_id[m2.id]
+        self.assertEqual(grp["conversation_is_group"], True)
+        self.assertEqual(grp["conversation_title"], "Equipe")
+        self.assertIn("u_a1", grp["conversation_participants_list"])
+        self.assertIn("u_a2", grp["conversation_participants_list"])
+
     def test_edit_message_saves_content(self):
         """
         Regression: perform_update must call serializer.save() so the new
@@ -138,6 +174,28 @@ class MessengerMessagingTest(MessengerBaseTest):
         self.assertFalse(
             Message.objects.filter(pk=msg.pk).exists(), "Soft-deleted messages must be hidden by the default manager"
         )
+
+        log_exists = AuditLog.objects.filter(
+            company=self.company_a,
+            action="delete",
+            resource="Message",
+            resource_id=str(msg.id),
+            details__conversation_id=self.conv_a.id,
+            details__scope="everyone",
+        ).exists()
+        self.assertTrue(log_exists)
+
+    def test_soft_delete_message_outside_window_denied(self):
+        msg = Message.objects.create(
+            company=self.company_a, conversation=self.conv_a, sender=self.user_a1, content="Too old"
+        )
+        Message.all_objects.filter(pk=msg.pk).update(created_at=timezone.now() - timedelta(hours=1))
+
+        self.auth(self.user_a1, "company-a")
+        url = f"/api/messenger/messages/{msg.id}/"
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_cannot_edit_other_users_message(self):
         msg = Message.objects.create(

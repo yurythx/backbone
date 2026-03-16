@@ -9,6 +9,11 @@ export function useChat(conversationId: number | null, currentUserId?: number | 
   const [typingUsers, setTypingUsers] = useState<Record<number, string | null>>({});
   const queryClient = useQueryClient();
   const deliveredAckRef = useRef<Set<number>>(new Set())
+  const readAckRef = useRef<Set<number>>(new Set())
+  const pendingDeliveredRef = useRef<Set<number>>(new Set())
+  const pendingReadRef = useRef<Set<number>>(new Set())
+  const ackFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const readyStateRef = useRef<ReadyState>(ReadyState.CLOSED)
 
   // Debounce ref for typing status — a single timer, replaced on each keystroke
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,34 +130,37 @@ export function useChat(conversationId: number | null, currentUserId?: number | 
             return next;
           });
 
-          if (
-            typeof currentUserId === 'number' &&
-            data.sender_id !== currentUserId &&
-            readyState === ReadyState.OPEN &&
-            !deliveredAckRef.current.has(data.message_id)
-          ) {
-            deliveredAckRef.current.add(data.message_id)
-            sendMessage(
-              JSON.stringify({
-                type: 'delivered',
-                message_ids: [data.message_id],
-              })
-            )
-          }
+          if (typeof currentUserId === 'number' && data.sender_id !== currentUserId) {
+            if (!deliveredAckRef.current.has(data.message_id)) {
+              deliveredAckRef.current.add(data.message_id)
+              pendingDeliveredRef.current.add(data.message_id)
+            }
 
-          if (
-            typeof currentUserId === 'number' &&
-            data.sender_id !== currentUserId &&
-            typeof document !== 'undefined' &&
-            document.visibilityState === 'visible' &&
-            readyState === ReadyState.OPEN
-          ) {
-            sendMessage(
-              JSON.stringify({
-                type: 'mark_read',
-                message_ids: [data.message_id],
-              })
-            );
+            if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+              if (!readAckRef.current.has(data.message_id)) {
+                readAckRef.current.add(data.message_id)
+                pendingReadRef.current.add(data.message_id)
+              }
+            }
+
+            if (!ackFlushTimerRef.current) {
+              ackFlushTimerRef.current = setTimeout(() => {
+                ackFlushTimerRef.current = null
+                if (readyStateRef.current !== ReadyState.OPEN) return
+
+                const deliveredIds = Array.from(pendingDeliveredRef.current)
+                const readIds = Array.from(pendingReadRef.current)
+                pendingDeliveredRef.current.clear()
+                pendingReadRef.current.clear()
+
+                if (deliveredIds.length) {
+                  sendMessage(JSON.stringify({ type: 'delivered', message_ids: deliveredIds }))
+                }
+                if (readIds.length) {
+                  sendMessage(JSON.stringify({ type: 'mark_read', message_ids: readIds }))
+                }
+              }, 150)
+            }
           }
           return;
         }
@@ -365,15 +373,62 @@ export function useChat(conversationId: number | null, currentUserId?: number | 
     }
   });
 
+  useEffect(() => {
+    readyStateRef.current = readyState
+  }, [readyState])
+
+  useEffect(() => {
+    if (readyState !== ReadyState.OPEN) return
+
+    const deliveredIds = Array.from(pendingDeliveredRef.current)
+    const readIds = Array.from(pendingReadRef.current)
+    pendingDeliveredRef.current.clear()
+    pendingReadRef.current.clear()
+
+    if (deliveredIds.length) {
+      sendMessage(JSON.stringify({ type: 'delivered', message_ids: deliveredIds }))
+    }
+    if (readIds.length) {
+      sendMessage(JSON.stringify({ type: 'mark_read', message_ids: readIds }))
+    }
+  }, [readyState, sendMessage])
+
+  useEffect(() => {
+    return () => {
+      if (ackFlushTimerRef.current) {
+        clearTimeout(ackFlushTimerRef.current)
+        ackFlushTimerRef.current = null
+      }
+    }
+  }, [])
+
   const markRead = useCallback((messageIds: number[]) => {
     if (readyState !== ReadyState.OPEN) return false
     if (!Array.isArray(messageIds) || messageIds.length === 0) return false
-    sendMessage(
-      JSON.stringify({
-        type: 'mark_read',
-        message_ids: messageIds,
-      })
-    )
+    for (const id of messageIds) {
+      if (!readAckRef.current.has(id)) {
+        readAckRef.current.add(id)
+        pendingReadRef.current.add(id)
+      }
+    }
+    if (!ackFlushTimerRef.current) {
+      ackFlushTimerRef.current = setTimeout(() => {
+        ackFlushTimerRef.current = null
+        if (readyStateRef.current !== ReadyState.OPEN) return
+
+        const deliveredIds = Array.from(pendingDeliveredRef.current)
+        const readIds = Array.from(pendingReadRef.current)
+        pendingDeliveredRef.current.clear()
+        pendingReadRef.current.clear()
+
+        if (deliveredIds.length) {
+          sendMessage(JSON.stringify({ type: 'delivered', message_ids: deliveredIds }))
+        }
+        if (readIds.length) {
+          sendMessage(JSON.stringify({ type: 'mark_read', message_ids: readIds }))
+        }
+      }, 150)
+    }
     return true
   }, [readyState, sendMessage])
 

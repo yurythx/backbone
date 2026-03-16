@@ -1,9 +1,18 @@
 import * as React from "react"
 import { useInfiniteQuery, useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
-import { Send, Loader2, Paperclip, FileIcon, Download, X, ImageIcon, Check, CheckCheck, SmilePlus, Reply, ArrowLeft, MoreVertical, Trash2, Copy, Pencil, Bell, BellOff, Ban, Mail, Phone, Pin } from "lucide-react"
+import { Send, Loader2, Paperclip, FileIcon, Download, X, ImageIcon, Check, CheckCheck, SmilePlus, Reply, ArrowLeft, MoreVertical, Trash2, Copy, Pencil, Bell, BellOff, Ban, Mail, Phone, Pin, Archive } from "lucide-react"
 import { api } from "@/lib/axios"
 import { Contact, User } from "@/types"
 import { Conversation, Message, MessageReaction } from "@/types/messenger"
+import {
+  fetchAndUpsertConversation,
+  removeConversation,
+  updateArchivedCache,
+  updateConversation,
+  updateConversationsCache,
+  updateDeletedCache,
+  upsertConversation,
+} from "./cache/conversations"
 import { useChat } from "@/hooks/use-chat"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { usePresence } from "@/hooks/use-presence"
@@ -83,6 +92,9 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   const [editingMessage, setEditingMessage] = React.useState<Message | null>(null)
   const [messageToDelete, setMessageToDelete] = React.useState<Message | null>(null)
   const [messageToInspect, setMessageToInspect] = React.useState<Message | null>(null)
+  const [isConversationDeleteOpen, setIsConversationDeleteOpen] = React.useState(false)
+  const [isConversationClearOpen, setIsConversationClearOpen] = React.useState(false)
+  const [isConversationArchiveOpen, setIsConversationArchiveOpen] = React.useState(false)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   const [lightboxOpen, setLightboxOpen] = React.useState(false)
@@ -94,6 +106,13 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   const [seekingTarget, setSeekingTarget] = React.useState(false)
   const [highlightedMsgId, setHighlightedMsgId] = React.useState<number | null>(null)
   const { onlineUsers, userStatuses } = usePresence()
+
+  const DELETE_FOR_ALL_WINDOW_MS = (() => {
+    const raw = process.env.NEXT_PUBLIC_MESSENGER_DELETE_FOR_ALL_WINDOW_SECONDS
+    const parsed = raw ? Number(raw) : 600
+    const seconds = Number.isFinite(parsed) && parsed > 0 ? parsed : 600
+    return seconds * 1000
+  })()
   // Track which message IDs have already been marked as read to prevent duplicate API calls
   const markReadRef = React.useRef<Set<number>>(new Set())
   const { data: profile, isLoading: isLoadingProfile } = useQuery<User>({
@@ -151,7 +170,12 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     setIsMuted(next) // optimistic
     try {
       await api.post(`/api/messenger/conversations/${conversation.id}/${next ? 'mute' : 'unmute'}/`)
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      updateConversationsCache(queryClient, (list) =>
+        updateConversation(list, conversation.id, (c) => ({
+          ...c,
+          preference: { ...(c.preference ?? { is_muted: false, is_pinned: false }), is_muted: next },
+        })),
+      )
       toast.success(next ? "Conversa silenciada" : "Som ativado nesta conversa")
     } catch {
       setIsMuted(!next) // rollback
@@ -165,7 +189,12 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     setIsPinned(next) // optimistic
     try {
       await api.post(`/api/messenger/conversations/${conversation.id}/${next ? 'pin' : 'unpin'}/`)
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      updateConversationsCache(queryClient, (list) =>
+        updateConversation(list, conversation.id, (c) => ({
+          ...c,
+          preference: { ...(c.preference ?? { is_muted: false, is_pinned: false }), is_pinned: next },
+        })),
+      )
       toast.success(next ? "Contato fixado" : "Contato desafixado")
     } catch {
       setIsPinned(!next) // rollback
@@ -173,15 +202,142 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     }
   }
 
+  const deleteConversationForMe = async () => {
+    if (!conversation?.id) return
+    const convId = conversation.id
+    try {
+      await api.post(`/api/messenger/conversations/${convId}/delete_for_me/`)
+      updateConversationsCache(queryClient, (list) => removeConversation(list, convId))
+      updateDeletedCache(queryClient, (list) =>
+        upsertConversation(list, {
+          ...conversation,
+          preference: {
+            ...(conversation.preference ?? { is_muted: false, is_pinned: false }),
+            is_deleted: true,
+            deleted_at: new Date().toISOString(),
+          },
+        }),
+      )
+      queryClient.invalidateQueries({ queryKey: ['messages', convId] })
+      toast.success("Conversa removida", {
+        action: {
+          label: "Desfazer",
+          onClick: async () => {
+            try {
+              await api.post(`/api/messenger/conversations/${convId}/restore_for_me/`)
+              updateDeletedCache(queryClient, (list) => removeConversation(list, convId))
+              await fetchAndUpsertConversation(queryClient, convId)
+              queryClient.invalidateQueries({ queryKey: ['messages', convId] })
+              toast.success("Conversa restaurada")
+            } catch {
+              toast.error("Erro ao restaurar conversa")
+            }
+          },
+        },
+        duration: 6000,
+      })
+      setIsConversationDeleteOpen(false)
+      onBack?.()
+    } catch {
+      toast.error("Erro ao remover conversa")
+    }
+  }
+
   const markAllRead = async () => {
     if (!conversation?.id) return
     try {
       await api.post(`/api/messenger/conversations/${conversation.id}/mark_all_read/`)
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      updateConversationsCache(queryClient, (list) =>
+        updateConversation(list, conversation.id, (c) => ({ ...c, unread_count: 0 })),
+      )
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] })
       toast.success("Mensagens marcadas como lidas")
     } catch {
       toast.error("Erro ao marcar mensagens como lidas")
+    }
+  }
+
+  const clearConversationForMe = async () => {
+    if (!conversation?.id) return
+    const convId = conversation.id
+    try {
+      const res = await api.post<{ cleared_at: string | null }>(`/api/messenger/conversations/${convId}/clear_for_me/`)
+      updateConversationsCache(queryClient, (list) =>
+        updateConversation(list, convId, (c) => ({
+          ...c,
+          last_message: null,
+          unread_count: 0,
+          preference: {
+            ...(c.preference ?? { is_muted: false, is_pinned: false }),
+            cleared_at: res.data?.cleared_at ?? new Date().toISOString(),
+          },
+        })),
+      )
+      queryClient.invalidateQueries({ queryKey: ['messages', convId] })
+      toast.success("Conversa limpa", {
+        action: {
+          label: "Desfazer",
+          onClick: async () => {
+            try {
+              await api.post(`/api/messenger/conversations/${convId}/unclear_for_me/`)
+              updateConversationsCache(queryClient, (list) =>
+                updateConversation(list, convId, (c) => ({
+                  ...c,
+                  preference: { ...(c.preference ?? { is_muted: false, is_pinned: false }), cleared_at: null },
+                })),
+              )
+              await fetchAndUpsertConversation(queryClient, convId)
+              queryClient.invalidateQueries({ queryKey: ['messages', convId] })
+              toast.success("Histórico restaurado")
+            } catch {
+              toast.error("Erro ao restaurar histórico")
+            }
+          },
+        },
+        duration: 6000,
+      })
+      setIsConversationClearOpen(false)
+    } catch {
+      toast.error("Erro ao limpar conversa")
+    }
+  }
+
+  const archiveConversationForMe = async () => {
+    if (!conversation?.id) return
+    const convId = conversation.id
+    try {
+      await api.post(`/api/messenger/conversations/${convId}/archive_for_me/`)
+      updateConversationsCache(queryClient, (list) => removeConversation(list, convId))
+      updateArchivedCache(queryClient, (list) =>
+        upsertConversation(list, {
+          ...conversation,
+          preference: {
+            ...(conversation.preference ?? { is_muted: false, is_pinned: false }),
+            is_archived: true,
+            archived_at: new Date().toISOString(),
+          },
+        }),
+      )
+      toast.success("Conversa arquivada", {
+        action: {
+          label: "Desfazer",
+          onClick: async () => {
+            try {
+              await api.post(`/api/messenger/conversations/${convId}/unarchive_for_me/`)
+              updateArchivedCache(queryClient, (list) => removeConversation(list, convId))
+              await fetchAndUpsertConversation(queryClient, convId)
+              toast.success("Conversa desarquivada")
+            } catch {
+              toast.error("Erro ao desarquivar conversa")
+            }
+          },
+        },
+        duration: 6000,
+      })
+      setIsConversationArchiveOpen(false)
+      onBack?.()
+    } catch {
+      toast.error("Erro ao arquivar conversa")
     }
   }
 
@@ -217,6 +373,9 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     read: { user_id: number; username: string; read_at: string }[]
     delivered_count: number
     read_count: number
+    recipients: { user_id: number; username: string; delivered_at: string | null; read_at: string | null; is_delivered: boolean; is_read: boolean }[]
+    pending_delivered: { user_id: number; username: string }[]
+    pending_read: { user_id: number; username: string }[]
   }
 
   const { data: receipts, isLoading: isLoadingReceipts } = useQuery<MessageReceipts>({
@@ -408,7 +567,16 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
         pagesWithStatus[0] = { ...first, results: [...(first.results ?? []), { ...serverMessage, local_status: 'sent' }] }
         return { pages: pagesWithStatus, pageParams: old.pageParams ?? [] }
       })
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      if (conversation?.id) {
+        updateConversationsCache(queryClient, (list) =>
+          updateConversation(list, conversation.id, (c) => ({
+            ...c,
+            last_message: serverMessage,
+            unread_count: 0,
+            updated_at: serverMessage.created_at,
+          })),
+        )
+      }
       // Clear focus anchors after sending a new message to ensure it's not excluded from refetch
       try {
         localStorage.removeItem('focusMessageId')
@@ -505,11 +673,15 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   // Scroll to bottom when messages change (new message arrived via WS → cache updated)
   const prevMessageCountRef = React.useRef(0)
   React.useEffect(() => {
+    if (seekingTarget) {
+      prevMessageCountRef.current = messages.length
+      return
+    }
     if (messages.length > prevMessageCountRef.current && scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' })
     }
     prevMessageCountRef.current = messages.length
-  }, [messages.length])
+  }, [messages.length, seekingTarget])
 
   // Initial scroll to bottom
   React.useEffect(() => {
@@ -691,9 +863,9 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     try {
       await api.delete(`/api/messenger/messages/${messageId}/`)
       // Optimistic update handled by WebSocket listener in useChat
-      toast.success("Mensagem excluída")
+      toast.success("Mensagem excluída para todos")
     } catch {
-      toast.error("Erro ao excluir mensagem")
+      toast.error("Erro ao excluir mensagem. A janela pode ter expirado.")
     }
   }
 
@@ -1001,6 +1173,18 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                 <Pin className="mr-2 h-4 w-4" />
                 {isPinned ? "Desafixar contato" : "Fixar contato"}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsConversationArchiveOpen(true)}>
+                <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
+                Arquivar conversa
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsConversationClearOpen(true)}>
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                Limpar conversa
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsConversationDeleteOpen(true)} className="text-destructive focus:text-destructive">
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                Excluir conversa
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={toggleBlock} className="text-destructive focus:text-destructive">
                 <Ban className="mr-2 h-4 w-4" />
                 {isBlocked ? "Desbloquear contato" : "Bloquear contato"}
@@ -1299,17 +1483,39 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                                   Editar
                                 </DropdownMenuItem>
                               )}
-                              {isMe && msg.id > 0 && (
+                              {isMe && msg.id > 0 && !msg.is_deleted && (Date.now() - new Date(msg.created_at).getTime()) <= DELETE_FOR_ALL_WINDOW_MS && (
                                 <DropdownMenuItem onClick={() => setMessageToDelete(msg)} className="text-destructive focus:text-destructive">
                                   <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                                  Excluir
+                                  Excluir para todos
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
 
                           {isMe && (
-                            <div className="flex items-center -mr-1 scale-90">
+                            <div
+                              className={cn(
+                                "flex items-center -mr-1 scale-90",
+                                msg.id > 0 && msg.local_status !== 'sending' && msg.local_status !== 'failed' && "cursor-pointer"
+                              )}
+                              role={msg.id > 0 && msg.local_status !== 'sending' && msg.local_status !== 'failed' ? "button" : undefined}
+                              tabIndex={msg.id > 0 && msg.local_status !== 'sending' && msg.local_status !== 'failed' ? 0 : undefined}
+                              onClick={() => {
+                                if (msg.id > 0 && msg.local_status !== 'sending' && msg.local_status !== 'failed') setMessageToInspect(msg)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key !== 'Enter' && e.key !== ' ') return
+                                if (msg.id > 0 && msg.local_status !== 'sending' && msg.local_status !== 'failed') setMessageToInspect(msg)
+                              }}
+                              title={(() => {
+                                if (msg.local_status === 'sending') return 'Enviando...'
+                                if (msg.local_status === 'failed') return 'Falha ao enviar'
+                                const expected = expectedReaders
+                                const deliveredCount = typeof msg.delivered_by_count === 'number' ? msg.delivered_by_count : 0
+                                const readCount = typeof msg.read_by_count === 'number' ? msg.read_by_count : 0
+                                return `Entregue: ${deliveredCount}/${expected} • Lida: ${readCount}/${expected}`
+                              })()}
+                            >
                               {msg.local_status === 'sending' ? (
                                 <Loader2 className="h-3 w-3 animate-spin text-primary-foreground/60" />
                               ) : msg.local_status === 'failed' ? (
@@ -1320,6 +1526,11 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                                 <CheckCheck className="h-3 w-3 text-primary-foreground/70" strokeWidth={2.5} />
                               ) : (
                                 <Check className="h-3 w-3 text-primary-foreground/50" />
+                              )}
+                              {expectedReaders > 1 && msg.local_status !== 'sending' && msg.local_status !== 'failed' && (
+                                <span className="ml-1 text-[10px] text-primary-foreground/70 tabular-nums">
+                                  {(typeof msg.read_by_count === 'number' ? msg.read_by_count : (typeof msg.delivered_by_count === 'number' ? msg.delivered_by_count : 0))}/{expectedReaders}
+                                </span>
                               )}
                             </div>
                           )}
@@ -1576,7 +1787,7 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
       <AlertDialog open={!!messageToDelete} onOpenChange={(open) => { if (!open) setMessageToDelete(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir mensagem</AlertDialogTitle>
+            <AlertDialogTitle>Excluir para todos</AlertDialogTitle>
             <AlertDialogDescription>
               Esta ação não pode ser desfeita. A mensagem será removida para todos.
             </AlertDialogDescription>
@@ -1592,6 +1803,54 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
               }}
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={isConversationDeleteOpen} onOpenChange={setIsConversationDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conversa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isto remove a conversa apenas para você. As outras pessoas continuam vendo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={deleteConversationForMe}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={isConversationClearOpen} onOpenChange={setIsConversationClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar conversa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso remove o histórico desta conversa apenas para você.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={clearConversationForMe}>
+              Limpar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={isConversationArchiveOpen} onOpenChange={setIsConversationArchiveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Arquivar conversa</AlertDialogTitle>
+            <AlertDialogDescription>
+              A conversa será movida para Arquivadas e removida da lista principal.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={archiveConversationForMe}>
+              Arquivar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1632,6 +1891,20 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                 </ScrollArea>
               </div>
               <div className="grid gap-2">
+                <div className="text-sm font-semibold">Não entregue ({receipts?.pending_delivered?.length ?? 0})</div>
+                <ScrollArea className="h-28 rounded-md border p-2">
+                  <div className="grid gap-2">
+                    {receipts?.pending_delivered?.length ? receipts.pending_delivered.map((u) => (
+                      <div key={u.user_id} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-medium">{u.username}</span>
+                      </div>
+                    )) : (
+                      <div className="text-sm text-muted-foreground">Entregue para todos.</div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+              <div className="grid gap-2">
                 <div className="text-sm font-semibold">Lido ({receipts?.read_count ?? 0})</div>
                 <ScrollArea className="h-36 rounded-md border p-2">
                   <div className="grid gap-2">
@@ -1644,6 +1917,20 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                       </div>
                     )) : (
                       <div className="text-sm text-muted-foreground">Ainda não lida.</div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+              <div className="grid gap-2">
+                <div className="text-sm font-semibold">Não lida ({receipts?.pending_read?.length ?? 0})</div>
+                <ScrollArea className="h-28 rounded-md border p-2">
+                  <div className="grid gap-2">
+                    {receipts?.pending_read?.length ? receipts.pending_read.map((u) => (
+                      <div key={u.user_id} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-medium">{u.username}</span>
+                      </div>
+                    )) : (
+                      <div className="text-sm text-muted-foreground">Lida por todos.</div>
                     )}
                   </div>
                 </ScrollArea>
