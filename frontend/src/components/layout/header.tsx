@@ -70,7 +70,7 @@ export function Header() {
 
   const onLogout = () => {
     clearClientSession()
-    window.location.href = "/login?logged_out=1"
+    window.location.href = "/?logged_out=1"
   }
 
 

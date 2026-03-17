@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils"
 import { useModules } from "@/hooks/use-modules"
 import { useTheme } from "@/components/theme-provider"
 import { useAuth } from "@/hooks/use-auth"
+import { useQuery } from "@tanstack/react-query"
+import { api } from "@/lib/axios"
 import {
   LayoutDashboard,
   MessageSquare,
@@ -93,6 +95,12 @@ const sidebarSections: SidebarSection[] = [
         icon: FileText,
         module: "articles",
       },
+      {
+        title: "Comentários",
+        href: "/artigos/comentarios",
+        icon: MessageSquare,
+        module: "articles",
+      },
     ]
   },
   {
@@ -152,6 +160,22 @@ export function Sidebar() {
     return userPermissions.includes(permission)
   }
 
+  const canModerateComments = hasPermission("articles.article_manage") && isModuleActive("articles")
+  const pendingCountQuery = useQuery({
+    queryKey: ["articles-comments-pending-count"],
+    queryFn: async ({ signal }) => {
+      const res = await api.get<{ count?: number }>("/api/articles/comments/", {
+        params: { is_approved: false, page_size: 1 },
+        signal,
+      })
+      const count = typeof res.data?.count === "number" ? res.data.count : 0
+      return count
+    },
+    enabled: !!me && !!canModerateComments,
+    refetchInterval: 30000,
+  })
+  const pendingCount = pendingCountQuery.data ?? 0
+
   // Filter sections based on permissions
   const filteredSections = sidebarSections.map(section => {
     const filteredItems = section.items.filter(item => {
@@ -173,6 +197,8 @@ export function Sidebar() {
         // Fallback for general admin access
         return hasPermission('admin.view_dashboard')
       }
+
+      if (item.href === '/artigos/comentarios' && !hasPermission('articles.article_manage')) return false
 
       return true
     })
@@ -284,6 +310,18 @@ export function Sidebar() {
 
                           {!isSidebarCollapsed && (
                             <span className="relative z-10 transition-all duration-300">{item.title}</span>
+                          )}
+
+                          {item.href === "/artigos/comentarios" && pendingCount > 0 && (
+                            <span
+                              className={cn(
+                                "ml-auto text-[10px] font-bold tabular-nums rounded-full px-2 py-0.5",
+                                isActive ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                              )}
+                              aria-label={`${pendingCount} comentários pendentes`}
+                            >
+                              {pendingCount}
+                            </span>
                           )}
 
                           {isActive && (

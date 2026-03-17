@@ -32,7 +32,7 @@ export default function LoginPage() {
     const loggedOut = searchParams.get("logged_out") === "1"
     if (!loggedOut) return
     notify.success("Logout realizado", "Você saiu da sua conta com segurança.")
-    router.replace("/login")
+    router.replace("/")
   }, [router, searchParams])
 
   return (

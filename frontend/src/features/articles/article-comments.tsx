@@ -8,6 +8,16 @@ import { ptBR } from "date-fns/locale"
 import { MessageSquare, Trash2, Send, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
     Sheet,
     SheetContent,
     SheetDescription,
@@ -38,6 +48,7 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
     const queryClient = useQueryClient()
     const [isOpen, setIsOpen] = React.useState(false)
     const [content, setContent] = React.useState("")
+    const [commentToDelete, setCommentToDelete] = React.useState<Comment | null>(null)
     const { user } = useAuth()
 
     // Bug 10: verifica permissão antes de exibir o formulário de criação
@@ -151,7 +162,7 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                                    onClick={() => deleteMutation.mutate(comment.id)}
+                                                    onClick={() => setCommentToDelete(comment)}
                                                     aria-label="Excluir comentário"
                                                 >
                                                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -166,6 +177,30 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
                     </ScrollArea>
                 </div>
             </SheetContent>
+            <AlertDialog open={!!commentToDelete} onOpenChange={(open) => { if (!open) setCommentToDelete(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remover comentário</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. O comentário será removido permanentemente.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => {
+                                if (!commentToDelete) return
+                                deleteMutation.mutate(commentToDelete.id)
+                                setCommentToDelete(null)
+                            }}
+                        >
+                            Remover
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Sheet>
     )
 }

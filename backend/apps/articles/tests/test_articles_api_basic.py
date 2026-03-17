@@ -32,12 +32,12 @@ class ArticleAPITest(APITestCase):
         self.role1 = Role.objects.create(
             company=self.company1,
             name="Admin",
-            permissions=["articles.article_manage"],
+            permissions=["articles.article_manage", "articles.article_view"],
         )
         self.role2 = Role.objects.create(
             company=self.company2,
             name="Admin",
-            permissions=["articles.article_manage"],
+            permissions=["articles.article_manage", "articles.article_view"],
         )
 
         self.user1 = User.objects.create_user(

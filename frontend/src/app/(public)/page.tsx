@@ -6,6 +6,7 @@ import { ExternalLink, Play, Music, FileVideo, Cloud, Database, MessageCircle, S
 import Link from "next/link"
 
 import { PublicHeader } from "@/components/layout/public-header"
+import { LoggedOutNotice } from "@/components/auth/logged-out-notice"
 
 export const metadata: Metadata = {
   title: "Backbone Services - Central de Serviços",
@@ -191,6 +192,7 @@ const categories = ["Todos", "Conhecimento", "Entretenimento", "Produtividade", 
 export default function ServicesLandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <LoggedOutNotice />
       {/* Header */}
       <PublicHeader />
 

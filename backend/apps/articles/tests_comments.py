@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import Role
-from apps.articles.models import Article, Category
+from apps.articles.models import Article, Category, Comment
 from apps.core.models import Company
 from apps.module_manager.models import Module, TenantModule
 
@@ -68,3 +68,71 @@ class ArticleCommentsAPITest(APITestCase):
         res_approved = self.client.get("/api/articles/comments/?is_approved=true")
         self.assertEqual(res_approved.status_code, status.HTTP_200_OK)
         self.assertTrue(all(c["is_approved"] is True for c in res_approved.data["results"]))
+
+    def test_approve_and_disapprove_comment(self):
+        role, _ = Role.all_objects.get_or_create(
+            company=self.company, name="Editor", defaults={"permissions": ["articles.article_manage"]}
+        )
+        if role.permissions != ["articles.article_manage"]:
+            role.permissions = ["articles.article_manage"]
+            role.save(update_fields=["permissions"])
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        comment = Comment.objects.create(
+            company=self.company, article=self.article, author=self.user, content="Pendente", is_approved=False
+        )
+
+        res_approve = self.client.post(f"/api/articles/comments/{comment.id}/approve/", {}, format="json")
+        self.assertEqual(res_approve.status_code, status.HTTP_200_OK)
+        comment.refresh_from_db()
+        self.assertTrue(comment.is_approved)
+
+        res_disapprove = self.client.post(f"/api/articles/comments/{comment.id}/disapprove/", {}, format="json")
+        self.assertEqual(res_disapprove.status_code, status.HTTP_200_OK)
+        comment.refresh_from_db()
+        self.assertFalse(comment.is_approved)
+
+    def test_bulk_actions_and_date_filters(self):
+        role, _ = Role.all_objects.get_or_create(
+            company=self.company, name="Editor", defaults={"permissions": ["articles.article_manage"]}
+        )
+        if role.permissions != ["articles.article_manage"]:
+            role.permissions = ["articles.article_manage"]
+            role.save(update_fields=["permissions"])
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        c1 = Comment.objects.create(
+            company=self.company, article=self.article, author=self.user, content="C1", is_approved=False
+        )
+        c2 = Comment.objects.create(
+            company=self.company, article=self.article, author=self.user, content="C2", is_approved=False
+        )
+
+        res_bulk_approve = self.client.post(
+            "/api/articles/comments/bulk_approve/", {"ids": [c1.id, c2.id]}, format="json"
+        )
+        self.assertEqual(res_bulk_approve.status_code, status.HTTP_200_OK)
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        self.assertTrue(c1.is_approved)
+        self.assertTrue(c2.is_approved)
+
+        res_bulk_disapprove = self.client.post(
+            "/api/articles/comments/bulk_disapprove/", {"ids": [c1.id]}, format="json"
+        )
+        self.assertEqual(res_bulk_disapprove.status_code, status.HTTP_200_OK)
+        c1.refresh_from_db()
+        self.assertFalse(c1.is_approved)
+
+        gte = c1.created_at.isoformat()
+        res_filter = self.client.get("/api/articles/comments/", {"created_at__gte": gte})
+        self.assertEqual(res_filter.status_code, status.HTTP_200_OK)
+        ids = [c["id"] for c in res_filter.data.get("results", [])]
+        self.assertIn(c1.id, ids)
+        self.assertIn(c2.id, ids)
+
+        res_bulk_delete = self.client.post("/api/articles/comments/bulk_delete/", {"ids": [c2.id]}, format="json")
+        self.assertEqual(res_bulk_delete.status_code, status.HTTP_200_OK)
+        self.assertFalse(Comment.objects.filter(id=c2.id).exists())

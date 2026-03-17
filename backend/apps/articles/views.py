@@ -1,4 +1,6 @@
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, mixins, permissions, serializers, status, viewsets
@@ -7,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
 from apps.accounts.permissions import ActionRolePermission, HasRolePermission
+from apps.module_manager.models import TenantModule
 from apps.module_manager.permissions import HasModuleAccess
 from shared_kernel.audit import log_create, log_delete, log_update
 
@@ -463,8 +466,9 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
     required_permission = "articles.article_manage"
     module_code = "articles"
-    filterset_fields = ["article", "is_approved"]
+    filterset_fields = {"article": ["exact"], "is_approved": ["exact"], "created_at": ["gte", "lte"]}
     ordering_fields = ["created_at"]
+    search_fields = ["content", "name", "email", "author__username", "article__title", "article__slug"]
 
     def get_queryset(self):
         return (
@@ -486,6 +490,40 @@ class CommentViewSet(viewsets.ModelViewSet):
         comment.save(update_fields=["is_approved"])
         return Response({"status": "approved"})
 
+    @action(detail=True, methods=["post"])
+    def disapprove(self, request, pk=None):
+        comment = self.get_object()
+        comment.is_approved = False
+        comment.save(update_fields=["is_approved"])
+        return Response({"status": "disapproved"})
+
+    class BulkIdsSerializer(serializers.Serializer):
+        ids = serializers.ListField(child=serializers.IntegerField(min_value=1), allow_empty=False)
+
+    @action(detail=False, methods=["post"])
+    def bulk_approve(self, request):
+        ser = self.BulkIdsSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = ser.validated_data["ids"]
+        updated = self.get_queryset().filter(id__in=ids).update(is_approved=True)
+        return Response({"updated": updated})
+
+    @action(detail=False, methods=["post"])
+    def bulk_disapprove(self, request):
+        ser = self.BulkIdsSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = ser.validated_data["ids"]
+        updated = self.get_queryset().filter(id__in=ids).update(is_approved=False)
+        return Response({"updated": updated})
+
+    @action(detail=False, methods=["post"])
+    def bulk_delete(self, request):
+        ser = self.BulkIdsSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = ser.validated_data["ids"]
+        deleted, _ = self.get_queryset().filter(id__in=ids).delete()
+        return Response({"deleted": deleted})
+
 
 @extend_schema_view(
     list=extend_schema(tags=["Public Articles"], description="Lista comentários aprovados de um artigo público"),
@@ -501,6 +539,64 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
     filterset_fields = ["article"]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
+
+    def _notify_moderators(self, comment: Comment, article: Article):
+        if not TenantModule.objects.filter(company=article.company, module__code="articles", is_active=True).exists():
+            return
+
+        from apps.notifications.models import Notification
+        from apps.notifications.tasks import send_websocket_notification
+
+        User = get_user_model()
+        perm = "articles.article_manage"
+        candidates = (
+            User.all_objects.filter(company=article.company, is_active=True)
+            .select_related("role")
+            .filter(Q(is_superuser=True) | Q(is_staff=True) | Q(role__isnull=False))
+        )
+        recipients = []
+        for u in candidates:
+            if u.is_superuser or u.is_staff:
+                recipients.append(u)
+                continue
+            role = getattr(u, "role", None)
+            perms = getattr(role, "permissions", None) if role else None
+            if isinstance(perms, list) and perm in perms:
+                recipients.append(u)
+        if getattr(comment, "author_id", None):
+            recipients = [u for u in recipients if u.id != comment.author_id]
+
+        link = f"/artigos/comentarios?status=pending&article={article.id}"
+        title = "Novo comentário pendente"
+        msg_content = (comment.content or "").strip()
+        message = (
+            f"{article.title}: {msg_content[:120]}" if msg_content else f"Novo comentário pendente em {article.title}."
+        )
+
+        for u in recipients:
+            notification = Notification.objects.create(
+                company=article.company,
+                recipient=u,
+                notification_type=Notification.TYPE_APPROVAL,
+                title=title,
+                message=message,
+                link=link,
+            )
+            try:
+                send_websocket_notification.delay(
+                    f"notifications_user_{u.id}",
+                    {
+                        "type": "notification_message",
+                        "notification_id": str(notification.id),
+                        "notification_type": notification.notification_type,
+                        "title": notification.title,
+                        "message": notification.message,
+                        "link": notification.link,
+                        "created_at": notification.created_at.isoformat(),
+                    },
+                )
+            except Exception:
+                pass
 
     def get_queryset(self):
         from .models import Article
@@ -586,5 +682,6 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         )
         serializer.is_valid(raise_exception=True)
         obj = serializer.save(company=article.company, author=None, is_approved=False)
+        self._notify_moderators(obj, article)
         headers = self.get_success_headers(serializer.data)
         return Response(self.get_serializer(obj).data, status=status.HTTP_201_CREATED, headers=headers)

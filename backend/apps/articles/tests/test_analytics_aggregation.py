@@ -4,11 +4,14 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.articles.models import Article, ArticleView
 from apps.core.models import Company
+from apps.module_manager.models import Module, TenantModule
 
 
 class ArticleAnalyticsAggregationTest(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Analytics Corp", slug="analytics")
+        mod = Module.objects.create(code="articles", name="Articles")
+        TenantModule.objects.create(company=self.company, module=mod, is_active=True)
         self.user = User.objects.create_user(
             username="analyst",
             password="password",
@@ -35,7 +38,7 @@ class ArticleAnalyticsAggregationTest(TestCase):
         # Mesma IP -> não deve contar como única dependendo da lógica (aqui mockamos 2 IPs)
 
         response = self.client.get(
-            f"/api/articles/articles/{self.article.id}/analytics_detail/", HTTP_X_COMPANY_SLUG="analytics"
+            f"/api/articles/articles/{self.article.slug}/analytics_detail/", HTTP_X_COMPANY_SLUG="analytics"
         )
 
         self.assertEqual(response.status_code, 200)

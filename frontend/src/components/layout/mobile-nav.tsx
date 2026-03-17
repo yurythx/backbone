@@ -66,7 +66,7 @@ export function MobileNav() {
             // Logout is best-effort — proceed even if server call fails
         } finally {
             clearClientSession()
-            router.push('/login?logged_out=1')
+            router.push('/?logged_out=1')
         }
     }
 

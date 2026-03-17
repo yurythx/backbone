@@ -106,6 +106,20 @@ class PublicArticlesAPITest(APITestCase):
         self.company_a = Company.objects.create(name="Alpha", slug="alpha")
         self.company_b = Company.objects.create(name="Beta", slug="beta")
 
+        mod = Module.objects.create(code="articles", name="Articles")
+        TenantModule.objects.create(company=self.company_a, module=mod, is_active=True)
+        TenantModule.objects.create(company=self.company_b, module=mod, is_active=True)
+
+        role_a, _ = Role.all_objects.get_or_create(
+            company=self.company_a, name="Moderator", defaults={"permissions": ["articles.article_manage"]}
+        )
+        if role_a.permissions != ["articles.article_manage"]:
+            role_a.permissions = ["articles.article_manage"]
+            role_a.save(update_fields=["permissions"])
+        self.moderator_a = User.all_objects.create_user(
+            username="moda", email="moda@alpha.com", password="pass", company=self.company_a, role=role_a
+        )
+
         # Categories
         self.cat_a = Category.objects.create(name="Tech", slug="tech", company=self.company_a)
         self.cat_b = Category.objects.create(name="News", slug="news", company=self.company_b)
@@ -203,6 +217,11 @@ class PublicArticlesAPITest(APITestCase):
         comment = Comment.objects.get(id=created_id)
         self.assertFalse(comment.is_approved)
         self.assertEqual(comment.company, self.company_a)
+        from apps.notifications.models import Notification
+
+        self.assertTrue(
+            Notification.objects.filter(company=self.company_a, recipient=self.moderator_a, is_read=False).exists()
+        )
 
         # After creation, list remains empty until approved
         res_list_after = self.public_client.get(
