@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Count, Prefetch, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, mixins, permissions, serializers, status, viewsets
@@ -22,6 +22,10 @@ from .serializers import (
     CategorySerializer,
     CommentSerializer,
     GlobalArticlesAnalyticsSerializer,
+    ModerationCommentSerializer,
+    ModerationReplySerializer,
+    PublicCommentSerializer,
+    PublicReplySerializer,
     TagSerializer,
 )
 from .services import ArticleService
@@ -76,7 +80,12 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
             if company_slug:
                 qs = qs.filter(company__slug=company_slug)
 
-        return qs.select_related("category", "author", "company").prefetch_related("tags").order_by("-published_at")
+        return (
+            qs.select_related("category", "author", "company")
+            .prefetch_related("tags")
+            .annotate(comment_count=Count("comments", filter=Q(comments__is_public=True, comments__is_approved=True)))
+            .order_by("-published_at")
+        )
 
     def retrieve(self, request, *args, **kwargs):
         slug = kwargs.get("slug")
@@ -229,6 +238,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 Article.objects.filter(company=user_company)
                 .select_related("category", "author", "company")
                 .prefetch_related("tags")
+                .annotate(comment_count=Count("comments", filter=Q(comments__is_public=True, comments__is_approved=True)))
                 .order_by("-created_at")
             )
 
@@ -237,6 +247,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
             Article.objects.filter(is_public=True, status=Article.STATUS_PUBLISHED, published_at__isnull=False)
             .select_related("category", "author", "company")
             .prefetch_related("tags")
+            .annotate(comment_count=Count("comments", filter=Q(comments__is_public=True, comments__is_approved=True)))
             .order_by("-published_at")
         )
 
@@ -459,26 +470,103 @@ class ArticleViewSet(viewsets.ModelViewSet):
 class CommentViewSet(viewsets.ModelViewSet):
     """
     Gerencia comentários dos artigos (painel interno).
-    Requer permissão articles.article_manage.
+    Requer permissão articles.comment_moderate.
     """
 
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = "articles.article_manage"
+    required_permission = "articles.comment_moderate"
     module_code = "articles"
-    filterset_fields = {"article": ["exact"], "is_approved": ["exact"], "created_at": ["gte", "lte"]}
+    filterset_fields = {
+        "article": ["exact"],
+        "is_approved": ["exact"],
+        "is_public": ["exact"],
+        "parent": ["exact", "isnull"],
+        "created_at": ["gte", "lte"],
+    }
     ordering_fields = ["created_at"]
     search_fields = ["content", "name", "email", "author__username", "article__title", "article__slug"]
+
+    class BulkFilterSerializer(serializers.Serializer):
+        article = serializers.IntegerField(required=False, min_value=1)
+        is_approved = serializers.BooleanField(required=False)
+        is_public = serializers.BooleanField(required=False)
+        parent__isnull = serializers.BooleanField(required=False)
+        created_at__gte = serializers.DateTimeField(required=False)
+        created_at__lte = serializers.DateTimeField(required=False)
+        search = serializers.CharField(required=False, allow_blank=True)
+        include_replies = serializers.BooleanField(required=False)
+
+    def get_serializer_class(self):
+        if self.action in {"list", "retrieve"}:
+            return ModerationCommentSerializer
+        return CommentSerializer
+
+    def _validate_bulk_filters(self, data):
+        ser = self.BulkFilterSerializer(data=data)
+        ser.is_valid(raise_exception=True)
+        return ser.validated_data
+
+    def _apply_bulk_filters(self, qs, f):
+        if "article" in f:
+            qs = qs.filter(article_id=f["article"])
+        if "is_public" in f:
+            qs = qs.filter(is_public=f["is_public"])
+        if "is_approved" in f:
+            qs = qs.filter(is_approved=f["is_approved"])
+        if "parent__isnull" in f:
+            qs = qs.filter(parent__isnull=f["parent__isnull"])
+        if "created_at__gte" in f:
+            qs = qs.filter(created_at__gte=f["created_at__gte"])
+        if "created_at__lte" in f:
+            qs = qs.filter(created_at__lte=f["created_at__lte"])
+        if "search" in f and f["search"].strip():
+            term = f["search"].strip()
+            qs = qs.filter(
+                Q(content__icontains=term)
+                | Q(name__icontains=term)
+                | Q(email__icontains=term)
+                | Q(author__username__icontains=term)
+                | Q(article__title__icontains=term)
+                | Q(article__slug__icontains=term)
+            )
+        return qs
+
+    def _include_replies(self, root_qs, f):
+        root_ids = list(root_qs.values_list("id", flat=True))
+        if not root_ids:
+            return root_qs
+        replies_qs = Comment.objects.filter(company=self.request.company, parent_id__in=root_ids)
+        if "is_public" in f:
+            replies_qs = replies_qs.filter(is_public=f["is_public"])
+        reply_ids = list(replies_qs.values_list("id", flat=True))
+        all_ids = root_ids + reply_ids
+        return self.get_queryset().filter(id__in=all_ids)
 
     def get_queryset(self):
         return (
             Comment.objects.filter(company=self.request.company)
             .select_related("article", "author", "company")
+            .prefetch_related(
+                Prefetch(
+                    "replies",
+                    queryset=Comment.objects.filter(company=self.request.company)
+                    .select_related("author")
+                    .order_by("created_at"),
+                    to_attr="prefetched_replies",
+                )
+            )
+            .annotate(reply_count=Count("replies", filter=Q(replies__is_public=True)))
             .order_by("-created_at")
         )
 
     def perform_create(self, serializer):
-        serializer.save(company=self.request.company, author=self.request.user)
+        obj = serializer.save(company=self.request.company, author=self.request.user)
+        log_create(self.request.user, "Comment", obj, request=self.request)
+
+    def perform_destroy(self, instance):
+        log_delete(self.request.user, "Comment", instance, request=self.request)
+        instance.delete()
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -488,6 +576,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         comment = self.get_object()
         comment.is_approved = True
         comment.save(update_fields=["is_approved"])
+        log_update(request.user, "Comment", comment, request=request)
         return Response({"status": "approved"})
 
     @action(detail=True, methods=["post"])
@@ -495,7 +584,64 @@ class CommentViewSet(viewsets.ModelViewSet):
         comment = self.get_object()
         comment.is_approved = False
         comment.save(update_fields=["is_approved"])
+        log_update(request.user, "Comment", comment, request=request)
         return Response({"status": "disapproved"})
+
+    @action(detail=True, methods=["post"])
+    def approve_thread(self, request, pk=None):
+        root = self.get_object()
+        if getattr(root, "parent_id", None):
+            root = root.parent
+        qs = self.get_queryset().filter(Q(id=root.id) | Q(parent_id=root.id))
+        ids = list(qs.values_list("id", flat=True))
+        updated = qs.update(is_approved=True)
+        if ids:
+            for c in Comment.objects.filter(id__in=ids):
+                log_update(request.user, "Comment", c, request=request)
+        return Response({"updated": updated})
+
+    @action(detail=True, methods=["post"])
+    def disapprove_thread(self, request, pk=None):
+        root = self.get_object()
+        if getattr(root, "parent_id", None):
+            root = root.parent
+        qs = self.get_queryset().filter(Q(id=root.id) | Q(parent_id=root.id))
+        ids = list(qs.values_list("id", flat=True))
+        updated = qs.update(is_approved=False)
+        if ids:
+            for c in Comment.objects.filter(id__in=ids):
+                log_update(request.user, "Comment", c, request=request)
+        return Response({"updated": updated})
+
+    @action(detail=True, methods=["post"])
+    def delete_thread(self, request, pk=None):
+        root = self.get_object()
+        if getattr(root, "parent_id", None):
+            root = root.parent
+        qs = self.get_queryset().filter(Q(id=root.id) | Q(parent_id=root.id))
+        to_delete = list(qs)
+        for c in to_delete:
+            log_delete(request.user, "Comment", c, request=request)
+        deleted, _ = qs.delete()
+        return Response({"deleted": deleted})
+
+    @action(detail=True, methods=["get"])
+    def replies(self, request, pk=None):
+        from config.pagination import DefaultPagination
+
+        root = self.get_object()
+        if getattr(root, "parent_id", None):
+            root = root.parent
+        qs = (
+            self.get_queryset()
+            .filter(parent_id=root.id, is_public=True)
+            .select_related("article", "author", "company")
+            .order_by("created_at", "id")
+        )
+        pagination = DefaultPagination()
+        page = pagination.paginate_queryset(qs, request, view=self)
+        ser = ModerationReplySerializer(page, many=True, context={"request": request})
+        return pagination.get_paginated_response(ser.data)
 
     class BulkIdsSerializer(serializers.Serializer):
         ids = serializers.ListField(child=serializers.IntegerField(min_value=1), allow_empty=False)
@@ -505,7 +651,10 @@ class CommentViewSet(viewsets.ModelViewSet):
         ser = self.BulkIdsSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         ids = ser.validated_data["ids"]
-        updated = self.get_queryset().filter(id__in=ids).update(is_approved=True)
+        qs = self.get_queryset().filter(id__in=ids)
+        updated = qs.update(is_approved=True)
+        for c in Comment.objects.filter(id__in=ids):
+            log_update(request.user, "Comment", c, request=request)
         return Response({"updated": updated})
 
     @action(detail=False, methods=["post"])
@@ -513,7 +662,10 @@ class CommentViewSet(viewsets.ModelViewSet):
         ser = self.BulkIdsSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         ids = ser.validated_data["ids"]
-        updated = self.get_queryset().filter(id__in=ids).update(is_approved=False)
+        qs = self.get_queryset().filter(id__in=ids)
+        updated = qs.update(is_approved=False)
+        for c in Comment.objects.filter(id__in=ids):
+            log_update(request.user, "Comment", c, request=request)
         return Response({"updated": updated})
 
     @action(detail=False, methods=["post"])
@@ -521,8 +673,64 @@ class CommentViewSet(viewsets.ModelViewSet):
         ser = self.BulkIdsSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         ids = ser.validated_data["ids"]
-        deleted, _ = self.get_queryset().filter(id__in=ids).delete()
+        qs = self.get_queryset().filter(id__in=ids)
+        to_delete = list(qs)
+        for c in to_delete:
+            log_delete(request.user, "Comment", c, request=request)
+        deleted, _ = qs.delete()
         return Response({"deleted": deleted})
+
+    @action(detail=False, methods=["post"])
+    def bulk_approve_filtered(self, request):
+        f = self._validate_bulk_filters(request.data)
+        include_replies = bool(f.get("include_replies")) and f.get("parent__isnull") is True
+        qs = self._apply_bulk_filters(self.get_queryset(), f)
+        if include_replies:
+            qs = self._include_replies(qs, f)
+        ids = list(qs.values_list("id", flat=True))
+        updated = qs.update(is_approved=True)
+        if ids:
+            for c in Comment.objects.filter(id__in=ids):
+                log_update(request.user, "Comment", c, request=request)
+        return Response({"updated": updated})
+
+    @action(detail=False, methods=["post"])
+    def bulk_disapprove_filtered(self, request):
+        f = self._validate_bulk_filters(request.data)
+        include_replies = bool(f.get("include_replies")) and f.get("parent__isnull") is True
+        qs = self._apply_bulk_filters(self.get_queryset(), f)
+        if include_replies:
+            qs = self._include_replies(qs, f)
+        ids = list(qs.values_list("id", flat=True))
+        updated = qs.update(is_approved=False)
+        if ids:
+            for c in Comment.objects.filter(id__in=ids):
+                log_update(request.user, "Comment", c, request=request)
+        return Response({"updated": updated})
+
+    @action(detail=False, methods=["post"])
+    def bulk_delete_filtered(self, request):
+        f = self._validate_bulk_filters(request.data)
+        include_replies = bool(f.get("include_replies")) and f.get("parent__isnull") is True
+        qs = self._apply_bulk_filters(self.get_queryset(), f)
+        if include_replies:
+            qs = self._include_replies(qs, f)
+        to_delete = list(qs)
+        for c in to_delete:
+            log_delete(request.user, "Comment", c, request=request)
+        deleted, _ = qs.delete()
+        return Response({"deleted": deleted})
+
+    @action(detail=False, methods=["post"])
+    def bulk_filtered_count(self, request):
+        f = self._validate_bulk_filters(request.data)
+        include_replies = bool(f.get("include_replies")) and f.get("parent__isnull") is True
+        qs = self._apply_bulk_filters(self.get_queryset(), f)
+        if include_replies:
+            qs = self._include_replies(qs, f)
+        count = qs.count()
+        sample_ids = list(qs.order_by("-created_at").values_list("id", flat=True)[:20])
+        return Response({"count": count, "sample_ids": sample_ids})
 
 
 @extend_schema_view(
@@ -534,11 +742,16 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
     Endpoint público de comentários com moderação e rate limit básico.
     """
 
-    serializer_class = CommentSerializer
+    serializer_class = PublicCommentSerializer
     permission_classes = [permissions.AllowAny]
     filterset_fields = ["article"]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return CommentSerializer
+        return PublicCommentSerializer
 
     def _notify_moderators(self, comment: Comment, article: Article):
         if not TenantModule.objects.filter(company=article.company, module__code="articles", is_active=True).exists():
@@ -548,7 +761,7 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         from apps.notifications.tasks import send_websocket_notification
 
         User = get_user_model()
-        perm = "articles.article_manage"
+        perm = "articles.comment_moderate"
         candidates = (
             User.all_objects.filter(company=article.company, is_active=True)
             .select_related("role")
@@ -566,12 +779,38 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         if getattr(comment, "author_id", None):
             recipients = [u for u in recipients if u.id != comment.author_id]
 
-        link = f"/artigos/comentarios?status=pending&article={article.id}"
-        title = "Novo comentário pendente"
+        is_reply = bool(getattr(comment, "parent_id", None))
+        if is_reply:
+            link = f"/artigos/comentarios?status=approved&article={article.id}"
+            title = "Nova resposta pendente"
+        else:
+            link = f"/artigos/comentarios?status=pending&article={article.id}"
+            title = "Novo comentário pendente"
         msg_content = (comment.content or "").strip()
-        message = (
-            f"{article.title}: {msg_content[:120]}" if msg_content else f"Novo comentário pendente em {article.title}."
-        )
+        if is_reply:
+            parent_content = None
+            try:
+                parent_id = comment.parent_id
+                if parent_id:
+                    parent_content = (
+                        Comment.objects.filter(company=article.company, id=parent_id)
+                        .values_list("content", flat=True)
+                        .first()
+                    )
+            except Exception:
+                parent_content = None
+
+            parent_snippet = ((parent_content or "").strip()[:80]) if parent_content else ""
+            if msg_content and parent_snippet:
+                message = f"{article.title}: {parent_snippet} → {msg_content[:120]}"
+            elif msg_content:
+                message = f"{article.title}: {msg_content[:120]}"
+            else:
+                message = f"Nova resposta pendente em {article.title}."
+        else:
+            message = (
+                f"{article.title}: {msg_content[:120]}" if msg_content else f"Novo comentário pendente em {article.title}."
+            )
 
         for u in recipients:
             notification = Notification.objects.create(
@@ -602,8 +841,18 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         from .models import Article
 
         qs = (
-            Comment.objects.filter(is_approved=True)
+            Comment.objects.filter(is_approved=True, is_public=True, parent__isnull=True)
             .select_related("article", "author", "company")
+            .annotate(reply_count=Count("replies", filter=Q(replies__is_approved=True, replies__is_public=True)))
+            .prefetch_related(
+                Prefetch(
+                    "replies",
+                    queryset=Comment.objects.filter(is_approved=True, is_public=True)
+                    .select_related("author")
+                    .order_by("created_at"),
+                    to_attr="prefetched_replies",
+                )
+            )
             .order_by("-created_at")
         )
         article_slug = self.request.query_params.get("article_slug")
@@ -626,6 +875,28 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
             qs = qs.none()
         return qs
 
+    @action(detail=True, methods=["get"])
+    def replies(self, request, pk=None):
+        from config.pagination import DefaultPagination
+
+        company = getattr(request, "company", None)
+        if not company:
+            return Response({"detail": "Contexto de empresa ausente."}, status=status.HTTP_400_BAD_REQUEST)
+
+        root = Comment.objects.filter(company=company, id=pk, is_public=True, is_approved=True, parent__isnull=True).first()
+        if not root:
+            return Response({"detail": "Comentário não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        qs = (
+            Comment.objects.filter(company=company, parent_id=root.id, is_public=True, is_approved=True)
+            .select_related("author")
+            .order_by("created_at", "id")
+        )
+        pagination = DefaultPagination()
+        page = pagination.paginate_queryset(qs, request, view=self)
+        ser = PublicReplySerializer(page, many=True, context={"request": request})
+        return pagination.get_paginated_response(ser.data)
+
     def create(self, request, *args, **kwargs):
         """
         Cria comentário público com moderação (is_approved=False) e rate limit por IP.
@@ -634,11 +905,12 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         from .models import Article
 
         data = request.data.copy()
+        if data.get("website") or data.get("hp"):
+            return Response(status=status.HTTP_204_NO_CONTENT)
         article_slug = data.get("article_slug")
         article_id = data.get("article")
         company = getattr(request, "company", None)
 
-        # Rate limit simples: 5 comentários/10min por IP por empresa
         forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         ip = (
             forwarded_for.split(",")[0].strip()
@@ -646,14 +918,6 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
             else request.META.get("REMOTE_ADDR", "unknown")
         )
         company_key = company.slug if company else "public"
-        key = f"rate:pub_comment:{company_key}:{ip}"
-        count = cache.get(key, 0)
-        if count >= 5:
-            return Response(
-                {"detail": "Limite de envio de comentários atingido. Tente mais tarde."},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-        cache.set(key, count + 1, timeout=600)
 
         # Resolver artigo
         article = None
@@ -671,17 +935,65 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         if not article:
             return Response({"detail": "Artigo não encontrado ou não público."}, status=status.HTTP_404_NOT_FOUND)
 
+        key = f"rate:pub_comment:{company_key}:{article.id}:{ip}"
+        count = cache.get(key, 0)
+        if count >= 5:
+            return Response(
+                {"detail": "Limite de envio de comentários atingido. Tente mais tarde."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        cache.set(key, count + 1, timeout=600)
+
+        parent_id = data.get("parent")
+        parent = None
+        if parent_id:
+            try:
+                parent_obj = Comment.objects.filter(
+                    pk=parent_id, article=article, company=article.company, is_public=True, is_approved=True
+                ).select_related("parent").first()
+            except Exception:
+                parent_obj = None
+            if not parent_obj:
+                return Response({"detail": "Comentário pai inválido."}, status=status.HTTP_400_BAD_REQUEST)
+            parent = parent_obj.parent if parent_obj.parent_id else parent_obj
+
+        author = None
+        if request.user.is_authenticated and getattr(request.user, "company_id", None) == article.company_id:
+            author = request.user
+
+        name_value = data.get("name", "") or ""
+        email_value = data.get("email", "") or ""
+        if author:
+            if not name_value:
+                name_value = author.get_full_name() or author.username
+            if not email_value:
+                email_value = getattr(author, "email", "") or ""
+
+        normalized_email = (email_value or "").strip().lower()
+        if normalized_email:
+            cooldown_seconds = 20 if parent else 30
+            cooldown_key = f"cooldown:pub_comment:{company_key}:{normalized_email}:{parent.id if parent else 0}"
+            if cache.get(cooldown_key):
+                return Response(
+                    {"detail": "Aguarde um pouco antes de enviar outro comentário."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            cache.set(cooldown_key, 1, timeout=cooldown_seconds)
+
         # Criar comentário pendente de moderação
         serializer = self.get_serializer(
             data={
                 "article": article.id,
-                "name": data.get("name", ""),
-                "email": data.get("email", ""),
+                "parent": parent.id if parent else None,
+                "name": name_value,
+                "email": email_value,
                 "content": data.get("content", ""),
             }
         )
         serializer.is_valid(raise_exception=True)
-        obj = serializer.save(company=article.company, author=None, is_approved=False)
+        obj = serializer.save(company=article.company, author=author, is_approved=False, is_public=True, parent=parent)
         self._notify_moderators(obj, article)
         headers = self.get_success_headers(serializer.data)
-        return Response(self.get_serializer(obj).data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(
+            PublicCommentSerializer(obj, context={"request": request}).data, status=status.HTTP_201_CREATED, headers=headers
+        )

@@ -9,11 +9,10 @@ export default function ArticleCommentsModerationPage() {
   return (
     <ModuleGuard moduleCode="articles">
       <Suspense fallback={null}>
-        <Protected requiredPermissions={["articles.article_manage"]}>
+        <Protected requiredPermissions={["articles.comment_moderate"]}>
           <CommentModeration />
         </Protected>
       </Suspense>
     </ModuleGuard>
   )
 }
-

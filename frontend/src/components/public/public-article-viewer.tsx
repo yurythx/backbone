@@ -34,6 +34,7 @@ interface Article {
     published_at?: string
     updated_at?: string
     company_slug?: string | null
+    comment_count?: number
 }
 
 interface Props {
@@ -105,9 +106,24 @@ export function PublicArticleViewer({ initialArticle, slug }: Props) {
     }
 
     const imageUrl = fixImageUrl(article.cover_image || article.image)
+    const commentCount = Number(article.comment_count ?? 0)
+    const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: article.title,
+        datePublished: article.published_at || article.created_at,
+        dateModified: article.updated_at || article.published_at || article.created_at,
+        author: article.author_name ? { "@type": "Person", name: article.author_name } : undefined,
+        commentCount,
+        mainEntityOfPage: { "@type": "WebPage", "@id": `/p/artigos/${slug}` },
+    }
 
     return (
         <article className="max-w-4xl mx-auto py-10 px-4 sm:px-6" role="article" aria-labelledby="article-title">
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
             <Button
                 variant="ghost"
                 size="sm"

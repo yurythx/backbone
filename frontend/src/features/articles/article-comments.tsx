@@ -7,6 +7,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { MessageSquare, Trash2, Send, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -37,6 +38,7 @@ interface Comment {
     author_name: string
     created_at: string
     is_approved: boolean
+    is_public?: boolean
 }
 
 interface ArticleCommentsProps {
@@ -54,7 +56,7 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
     // Bug 10: verifica permissão antes de exibir o formulário de criação
     const canManageComments = !!(
         user?.is_superuser ||
-        user?.role_details?.permissions?.includes('articles.article_manage')
+        user?.role_details?.permissions?.includes('articles.comment_moderate')
     )
 
     const { data: comments, isLoading } = useQuery({
@@ -154,6 +156,11 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-semibold text-sm">{comment.author_name || 'Anônimo'}</span>
+                                                    {comment.is_public && (
+                                                        <Badge variant="outline" className="text-[10px]">
+                                                            Comentário público
+                                                        </Badge>
+                                                    )}
                                                     <span className="text-xs text-muted-foreground">
                                                         {format(new Date(comment.created_at), "dd 'de' MMM, HH:mm", { locale: ptBR })}
                                                     </span>

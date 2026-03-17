@@ -46,7 +46,7 @@ class AccountsAPITest(APITestCase):
     def test_role_crud_and_protect_system_role(self):
         # Create role
         res = self.client.post(
-            "/api/accounts/roles/", {"name": "Editor Custom", "permissions": ["articles.article_manage"]}, format="json"
+            "/api/accounts/roles/", {"name": "Editor Custom", "permissions": ["articles.comment_moderate"]}, format="json"
         )
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         role_id = res.data["id"]

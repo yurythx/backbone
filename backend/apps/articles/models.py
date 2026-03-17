@@ -131,10 +131,12 @@ class ArticleView(BaseTenantModel):
 @reversion.register()
 class Comment(BaseTenantModel):
     article = models.ForeignKey(Article, related_name="comments", on_delete=models.CASCADE)
+    parent = models.ForeignKey("self", null=True, blank=True, related_name="replies", on_delete=models.CASCADE)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     name = models.CharField(max_length=100, blank=True)
     email = models.EmailField(blank=True)
     content = models.TextField()
+    is_public = models.BooleanField(default=False, db_index=True)
     is_approved = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

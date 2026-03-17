@@ -6,7 +6,7 @@ import { api } from "@/lib/axios"
 import { Article, Category } from "@/types"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
-import { Plus, Pencil, Trash2, Eye, Calendar, Clock, Image as ImageIcon } from "lucide-react"
+import { Plus, Pencil, Trash2, Eye, Calendar, Clock, Image as ImageIcon, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
@@ -283,10 +283,14 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
                     </div>
                     <span>{article.author_name || 'Admin'}</span>
                   </div>
-                  <span className="flex items-center gap-1">
-                    {/* Bug 9: tempo de leitura calculado dinamicamente */}
-                    <Clock className="h-3 w-3" aria-hidden="true" /> {getReadingTime(article.content)}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1" title="Comentários públicos">
+                      <MessageSquare className="h-3 w-3" aria-hidden="true" /> {Number(article.comment_count ?? 0)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" aria-hidden="true" /> {getReadingTime(article.content)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

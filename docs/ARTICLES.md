@@ -87,7 +87,7 @@ Base: `/api/articles/`
   - Busca/ordenação/filtros: SearchFilter (title, content, excerpt) + FilterSet (title, content, category, author, is_published; datas). [views.py](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/backend/apps/articles/views.py#L163-L166) • [filters.py](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/backend/apps/articles/filters.py)
 
 - Comentários (privado) `/comments/`
-  - Requer permissão `articles.article_manage`. Aprovação via POST `{id}/approve/`. [CommentViewSet](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/backend/apps/articles/views.py#L380-L406)
+  - Requer permissão `articles.comment_moderate`. Aprovação via POST `{id}/approve/`. [CommentViewSet](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/backend/apps/articles/views.py#L380-L406)
 
 
 ## API REST (Público)

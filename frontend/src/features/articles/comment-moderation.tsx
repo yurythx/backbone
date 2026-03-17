@@ -22,17 +22,24 @@ import {
 import { toast } from "sonner"
 import { Check, Loader2, Search, Trash2, X } from "lucide-react"
 
-type Comment = {
+type ModerationItem = {
   id: number
-  article: number
-  article_title?: string | null
-  article_slug?: string | null
   content: string
   created_at: string
+  parent?: number | null
+  is_public?: boolean
   is_approved: boolean
   author_name?: string | null
   name?: string | null
   email?: string | null
+}
+
+type Comment = ModerationItem & {
+  article: number
+  article_title?: string | null
+  article_slug?: string | null
+  replies?: ModerationItem[]
+  reply_count?: number
 }
 
 type Paginated<T> = {
@@ -61,13 +68,19 @@ export function CommentModeration() {
   const searchParams = useSearchParams()
   const [query, setQuery] = React.useState("")
   const [status, setStatus] = React.useState<"pending" | "approved" | "all">("pending")
-  const [commentToDelete, setCommentToDelete] = React.useState<Comment | null>(null)
+  const [commentToDelete, setCommentToDelete] = React.useState<ModerationItem | null>(null)
+  const [threadToDelete, setThreadToDelete] = React.useState<Comment | null>(null)
   const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bulkFilterConfirmOpen, setBulkFilterConfirmOpen] = React.useState(false)
+  const [bulkFilterAction, setBulkFilterAction] = React.useState<"approve" | "disapprove" | "delete" | null>(null)
+  const [bulkFilterCount, setBulkFilterCount] = React.useState<number | null>(null)
+  const [bulkIncludeReplies, setBulkIncludeReplies] = React.useState(true)
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set())
   const [articleId, setArticleId] = React.useState<string>("")
   const [fromDate, setFromDate] = React.useState<string>("")
   const [toDate, setToDate] = React.useState<string>("")
   const initializedRef = React.useRef(false)
+  const [repliesByParent, setRepliesByParent] = React.useState<Record<number, { items: ModerationItem[]; next: string | null; isLoading: boolean }>>({})
 
   const debounced = React.useMemo(() => query.trim(), [query])
 
@@ -116,15 +129,28 @@ export function CommentModeration() {
     return Number.isFinite(d.getTime()) ? d.toISOString() : null
   }, [toDate])
 
+  const filterPayload = React.useMemo(() => {
+    const payload: Record<string, string | number | boolean> = { is_public: true, parent__isnull: true }
+    if (status === "pending") payload.is_approved = false
+    if (status === "approved") payload.is_approved = true
+    if (debounced) payload.search = debounced
+    if (articleId) payload.article = Number(articleId)
+    if (createdAtGte) payload.created_at__gte = createdAtGte
+    if (createdAtLte) payload.created_at__lte = createdAtLte
+    payload.include_replies = bulkIncludeReplies
+    return payload
+  }, [articleId, bulkIncludeReplies, createdAtGte, createdAtLte, debounced, status])
+
   const commentsQuery = useInfiniteQuery<Paginated<Comment>>({
     queryKey: ["articles-comments-moderation", status, debounced, articleId, createdAtGte, createdAtLte],
     initialPageParam: 1,
     queryFn: async ({ pageParam, signal }) => {
-      const params: Record<string, string | number | boolean> = { ordering: "-created_at", page: pageParam, page_size: 20 }
+      const params: Record<string, string | number | boolean> = { ordering: "-created_at", page: pageParam, page_size: 20, is_public: true }
       if (status === "pending") params.is_approved = false
       if (status === "approved") params.is_approved = true
       if (debounced) params.search = debounced
       if (articleId) params.article = Number(articleId)
+      params.parent__isnull = true
       if (createdAtGte) params.created_at__gte = createdAtGte
       if (createdAtLte) params.created_at__lte = createdAtLte
       const res = await api.get<Paginated<Comment>>("/api/articles/comments/", { params, signal })
@@ -137,6 +163,31 @@ export function CommentModeration() {
     const pages = commentsQuery.data?.pages ?? []
     return pages.flatMap((p) => p.results)
   }, [commentsQuery.data])
+
+  const loadMoreReplies = async (parentId: number) => {
+    const cur = repliesByParent[parentId]
+    const pageParam = parsePageParam(cur?.next ?? null) ?? 1
+    setRepliesByParent((prev) => {
+      const existing = prev[parentId]
+      return { ...prev, [parentId]: { items: existing?.items ?? [], next: existing?.next ?? null, isLoading: true } }
+    })
+    try {
+      const res = await api.get<Paginated<ModerationItem>>(`/api/articles/comments/${parentId}/replies/`, {
+        params: { page: pageParam, page_size: 20 },
+      })
+      setRepliesByParent((prev) => {
+        const existing = prev[parentId]?.items ?? []
+        const seen = new Set(existing.map((x) => x.id))
+        const merged = [...existing, ...res.data.results.filter((x) => !seen.has(x.id))]
+        return { ...prev, [parentId]: { items: merged, next: res.data.next, isLoading: false } }
+      })
+    } catch {
+      setRepliesByParent((prev) => {
+        const existing = prev[parentId]
+        return { ...prev, [parentId]: { items: existing?.items ?? [], next: existing?.next ?? null, isLoading: false } }
+      })
+    }
+  }
 
   React.useEffect(() => {
     setSelectedIds(new Set())
@@ -216,6 +267,76 @@ export function CommentModeration() {
     },
   })
 
+  const bulkApproveFilteredMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ updated: number }>("/api/articles/comments/bulk_approve_filtered/", filterPayload)
+      return res.data
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["articles-comments-moderation"] })
+      toast.success(`Aprovados: ${data.updated}`)
+      clearSelection()
+    },
+    onError: () => {
+      toast.error("Erro ao aprovar pelo filtro")
+    },
+  })
+
+  const bulkDisapproveFilteredMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ updated: number }>("/api/articles/comments/bulk_disapprove_filtered/", filterPayload)
+      return res.data
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["articles-comments-moderation"] })
+      toast.success(`Reprovados: ${data.updated}`)
+      clearSelection()
+    },
+    onError: () => {
+      toast.error("Erro ao reprovar pelo filtro")
+    },
+  })
+
+  const bulkDeleteFilteredMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ deleted: number }>("/api/articles/comments/bulk_delete_filtered/", filterPayload)
+      return res.data
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["articles-comments-moderation"] })
+      toast.success(`Removidos: ${data.deleted}`)
+      clearSelection()
+      setBulkDeleteFilteredOpen(false)
+    },
+    onError: () => {
+      toast.error("Erro ao remover pelo filtro")
+    },
+  })
+
+  const bulkFilteredCountMutation = useMutation({
+    mutationFn: async (payload: Record<string, string | number | boolean>) => {
+      const res = await api.post<{ count: number }>("/api/articles/comments/bulk_filtered_count/", payload)
+      return res.data
+    },
+    onSuccess: (data) => {
+      setBulkFilterCount(Number.isFinite(Number(data.count)) ? Number(data.count) : 0)
+    },
+    onError: () => {
+      setBulkFilterCount(null)
+      toast.error("Erro ao calcular quantidade do filtro")
+    },
+  })
+
+  React.useEffect(() => {
+    if (!bulkFilterConfirmOpen) {
+      setBulkFilterAction(null)
+      setBulkFilterCount(null)
+      return
+    }
+    setBulkFilterCount(null)
+    bulkFilteredCountMutation.mutate(filterPayload)
+  }, [bulkFilterConfirmOpen, bulkFilteredCountMutation, filterPayload])
+
   const disapproveMutation = useMutation({
     mutationFn: async (commentId: number) => {
       await api.post(`/api/articles/comments/${commentId}/disapprove/`)
@@ -226,6 +347,51 @@ export function CommentModeration() {
     },
     onError: () => {
       toast.error("Erro ao reprovar comentário")
+    },
+  })
+
+  const approveThreadMutation = useMutation({
+    mutationFn: async (rootId: number) => {
+      const res = await api.post<{ updated?: number }>(`/api/articles/comments/${rootId}/approve_thread/`)
+      return res.data
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["articles-comments-moderation"] })
+      toast.success(`Thread aprovada${typeof data?.updated === "number" ? `: ${data.updated}` : ""}`)
+      clearSelection()
+    },
+    onError: () => {
+      toast.error("Erro ao aprovar thread")
+    },
+  })
+
+  const disapproveThreadMutation = useMutation({
+    mutationFn: async (rootId: number) => {
+      const res = await api.post<{ updated?: number }>(`/api/articles/comments/${rootId}/disapprove_thread/`)
+      return res.data
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["articles-comments-moderation"] })
+      toast.success(`Thread reprovada${typeof data?.updated === "number" ? `: ${data.updated}` : ""}`)
+      clearSelection()
+    },
+    onError: () => {
+      toast.error("Erro ao reprovar thread")
+    },
+  })
+
+  const deleteThreadMutation = useMutation({
+    mutationFn: async (rootId: number) => {
+      const res = await api.post<{ deleted?: number }>(`/api/articles/comments/${rootId}/delete_thread/`)
+      return res.data
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["articles-comments-moderation"] })
+      toast.success(`Thread removida${typeof data?.deleted === "number" ? `: ${data.deleted}` : ""}`)
+      clearSelection()
+    },
+    onError: () => {
+      toast.error("Erro ao remover thread")
     },
   })
 
@@ -316,6 +482,55 @@ export function CommentModeration() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-border/50 bg-background/60 backdrop-blur-sm p-3">
+        <div className="text-sm text-muted-foreground">Ações por filtro</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={bulkIncludeReplies}
+              onChange={(e) => setBulkIncludeReplies(e.target.checked)}
+            />
+            Incluir respostas
+          </label>
+          <Button
+            size="sm"
+            onClick={() => {
+              setBulkFilterAction("approve")
+              setBulkFilterConfirmOpen(true)
+            }}
+            disabled={bulkApproveFilteredMutation.isPending}
+          >
+            <Check className="mr-2 h-4 w-4" />
+            Aprovar filtro
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setBulkFilterAction("disapprove")
+              setBulkFilterConfirmOpen(true)
+            }}
+            disabled={bulkDisapproveFilteredMutation.isPending}
+          >
+            <X className="mr-2 h-4 w-4" />
+            Reprovar filtro
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive"
+            onClick={() => {
+              setBulkFilterAction("delete")
+              setBulkFilterConfirmOpen(true)
+            }}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Remover filtro
+          </Button>
+        </div>
+      </div>
+
       {selectedIds.size > 0 && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-border/50 bg-background/60 backdrop-blur-sm p-3">
           <div className="text-sm">
@@ -373,6 +588,8 @@ export function CommentModeration() {
                 const meta = c.email ? `${authorLabel} • ${c.email}` : authorLabel
                 const canApprove = !c.is_approved
                 const canDisapprove = c.is_approved
+                const replyCount = Number.isFinite(Number(c.reply_count)) ? Number(c.reply_count) : 0
+                const hasReplies = replyCount > 0
                 const articleHref = c.article_slug ? `/artigos/preview/${encodeURIComponent(c.article_slug)}` : "/artigos"
                 const publicHref = c.article_slug ? `/p/artigos/${encodeURIComponent(c.article_slug)}` : null
 
@@ -392,6 +609,12 @@ export function CommentModeration() {
                             {c.article_title || `Artigo #${c.article}`}
                           </Link>
                           {c.is_approved ? <Badge variant="secondary">Aprovado</Badge> : <Badge>Pendente</Badge>}
+                          {c.is_public && (
+                            <Badge variant="outline">Comentário público</Badge>
+                          )}
+                          {!!c.parent && (
+                            <Badge variant="outline">Resposta</Badge>
+                          )}
                         </div>
                         <div className="text-sm text-muted-foreground">
                           {meta} • {new Date(c.created_at).toLocaleString()}
@@ -429,6 +652,28 @@ export function CommentModeration() {
                             Reprovar
                           </Button>
                         )}
+                        {hasReplies && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => approveThreadMutation.mutate(c.id)}
+                            disabled={approveThreadMutation.isPending}
+                          >
+                            <Check className="mr-2 h-4 w-4" />
+                            Aprovar thread
+                          </Button>
+                        )}
+                        {hasReplies && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => disapproveThreadMutation.mutate(c.id)}
+                            disabled={disapproveThreadMutation.isPending}
+                          >
+                            <X className="mr-2 h-4 w-4" />
+                            Reprovar thread
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
@@ -439,11 +684,102 @@ export function CommentModeration() {
                           <Trash2 className="mr-2 h-4 w-4" />
                           Remover
                         </Button>
+                        {hasReplies && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive"
+                            onClick={() => setThreadToDelete(c)}
+                            disabled={deleteThreadMutation.isPending}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Remover thread
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div className="rounded-xl border border-border/50 bg-muted/20 p-3 whitespace-pre-wrap">
                       {c.content}
                     </div>
+                    {(() => {
+                      const repliesInitial = Array.isArray(c.replies) ? c.replies : []
+                      const state = repliesByParent[c.id]
+                      const replies = state?.items?.length ? state.items : repliesInitial
+                      const replyCount = Number.isFinite(Number(c.reply_count)) ? Number(c.reply_count) : repliesInitial.length
+                      return (
+                        <div className="pl-4 border-l border-border/50 space-y-3">
+                          {replyCount > replies.length && (
+                            <div className="flex">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => loadMoreReplies(c.id)}
+                                disabled={state?.isLoading}
+                              >
+                                {state?.isLoading ? "Carregando..." : `Carregar mais respostas (${replyCount - replies.length})`}
+                              </Button>
+                            </div>
+                          )}
+                          {replies.length > 0 &&
+                            replies.map((r) => {
+                              const authorLabel2 = r.author_name || r.name || "Anônimo"
+                              const meta2 = r.email ? `${authorLabel2} • ${r.email}` : authorLabel2
+                              const canApprove2 = !r.is_approved
+                              const canDisapprove2 = r.is_approved
+                              return (
+                                <div key={r.id} className="rounded-xl border border-border/50 bg-background/40 p-3">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        {r.is_approved ? <Badge variant="secondary">Aprovado</Badge> : <Badge>Pendente</Badge>}
+                                        <Badge variant="outline">Resposta</Badge>
+                                        <Badge variant="outline">Comentário público</Badge>
+                                      </div>
+                                      <div className="text-sm text-muted-foreground">
+                                        {meta2} • {new Date(r.created_at).toLocaleString()}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {canApprove2 && (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => approveMutation.mutate(r.id)}
+                                          disabled={approveMutation.isPending}
+                                        >
+                                          <Check className="mr-2 h-4 w-4" />
+                                          Aprovar
+                                        </Button>
+                                      )}
+                                      {canDisapprove2 && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => disapproveMutation.mutate(r.id)}
+                                          disabled={disapproveMutation.isPending}
+                                        >
+                                          <X className="mr-2 h-4 w-4" />
+                                          Reprovar
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-destructive"
+                                        onClick={() => setCommentToDelete(r)}
+                                        disabled={deleteMutation.isPending}
+                                      >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Remover
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div className="mt-2 whitespace-pre-wrap">{r.content}</div>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}
@@ -486,6 +822,30 @@ export function CommentModeration() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={!!threadToDelete} onOpenChange={(open) => { if (!open) setThreadToDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover thread</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O comentário e todas as respostas serão removidos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteThreadMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteThreadMutation.isPending}
+              onClick={() => {
+                if (!threadToDelete) return
+                deleteThreadMutation.mutate(threadToDelete.id)
+                setThreadToDelete(null)
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -502,6 +862,57 @@ export function CommentModeration() {
               onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
             >
               Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={bulkFilterConfirmOpen} onOpenChange={setBulkFilterConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {bulkFilterAction === "approve"
+                ? "Aprovar comentários (filtro)"
+                : bulkFilterAction === "disapprove"
+                  ? "Reprovar comentários (filtro)"
+                  : "Remover comentários (filtro)"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {bulkFilterCount === null
+                ? "Calculando quantidade de comentários no filtro..."
+                : `Comentários afetados: ${bulkFilterCount}${bulkIncludeReplies ? " (inclui respostas)." : "."}`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={
+                bulkApproveFilteredMutation.isPending ||
+                bulkDisapproveFilteredMutation.isPending ||
+                bulkDeleteFilteredMutation.isPending ||
+                bulkFilteredCountMutation.isPending
+              }
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant={bulkFilterAction === "delete" ? "destructive" : "default"}
+              disabled={
+                bulkFilterCount === null ||
+                bulkFilteredCountMutation.isPending ||
+                bulkApproveFilteredMutation.isPending ||
+                bulkDisapproveFilteredMutation.isPending ||
+                bulkDeleteFilteredMutation.isPending
+              }
+              onClick={() => {
+                if (bulkFilterAction === "approve") bulkApproveFilteredMutation.mutate()
+                else if (bulkFilterAction === "disapprove") bulkDisapproveFilteredMutation.mutate()
+                else bulkDeleteFilteredMutation.mutate()
+              }}
+            >
+              {bulkFilterAction === "approve"
+                ? "Aprovar"
+                : bulkFilterAction === "disapprove"
+                  ? "Reprovar"
+                  : "Remover"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

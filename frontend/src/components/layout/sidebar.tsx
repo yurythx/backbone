@@ -160,12 +160,12 @@ export function Sidebar() {
     return userPermissions.includes(permission)
   }
 
-  const canModerateComments = hasPermission("articles.article_manage") && isModuleActive("articles")
+  const canModerateComments = hasPermission("articles.comment_moderate") && isModuleActive("articles")
   const pendingCountQuery = useQuery({
     queryKey: ["articles-comments-pending-count"],
     queryFn: async ({ signal }) => {
       const res = await api.get<{ count?: number }>("/api/articles/comments/", {
-        params: { is_approved: false, page_size: 1 },
+        params: { is_approved: false, is_public: true, page_size: 1 },
         signal,
       })
       const count = typeof res.data?.count === "number" ? res.data.count : 0
@@ -198,7 +198,7 @@ export function Sidebar() {
         return hasPermission('admin.view_dashboard')
       }
 
-      if (item.href === '/artigos/comentarios' && !hasPermission('articles.article_manage')) return false
+      if (item.href === '/artigos/comentarios' && !hasPermission('articles.comment_moderate')) return false
 
       return true
     })

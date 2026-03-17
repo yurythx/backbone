@@ -26,6 +26,7 @@ class ArticleSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source="company.name", read_only=True)
     company_slug = serializers.CharField(source="company.slug", read_only=True)
     tag_list = TagSerializer(source="tags", many=True, read_only=True)
+    comment_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Article
@@ -149,6 +150,7 @@ class ArticlePublicSerializer(serializers.ModelSerializer):
     tags = serializers.SlugRelatedField(slug_field="name", many=True, read_only=True)
     cover_image = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    comment_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Article
@@ -172,6 +174,7 @@ class ArticlePublicSerializer(serializers.ModelSerializer):
             "author_info",
             "company_name",
             "company_slug",
+            "comment_count",
         ]
         read_only_fields = fields
 
@@ -216,7 +219,38 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = "__all__"
-        read_only_fields = ["company", "created_at", "author", "is_approved"]
+        read_only_fields = ["company", "created_at", "author", "is_approved", "is_public"]
+
+
+class PublicCommentSerializer(serializers.ModelSerializer):
+    author_name = serializers.CharField(source="author.username", read_only=True)
+    replies = serializers.SerializerMethodField()
+    reply_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = ["id", "content", "created_at", "author_name", "name", "is_public", "reply_count", "replies"]
+        read_only_fields = fields
+
+    def get_replies(self, obj):
+        replies = getattr(obj, "prefetched_replies", None)
+        if replies is None:
+            replies = obj.replies.all()
+        if isinstance(replies, list):
+            replies = replies[:3]
+        items = []
+        for r in replies:
+            items.append(
+                {
+                    "id": r.id,
+                    "content": r.content,
+                    "created_at": r.created_at.isoformat() if getattr(r, "created_at", None) else None,
+                    "author_name": getattr(r.author, "username", None) if getattr(r, "author", None) else None,
+                    "name": r.name,
+                    "is_public": r.is_public,
+                }
+            )
+        return items
 
     def validate(self, attrs):
         if attrs.get("content"):
@@ -226,6 +260,90 @@ class CommentSerializer(serializers.ModelSerializer):
         if attrs.get("email"):
             attrs["email"] = sanitize_plain_text(attrs["email"])
         return attrs
+
+
+class ModerationCommentSerializer(serializers.ModelSerializer):
+    author_name = serializers.CharField(source="author.username", read_only=True)
+    article_title = serializers.CharField(source="article.title", read_only=True)
+    article_slug = serializers.CharField(source="article.slug", read_only=True)
+    replies = serializers.SerializerMethodField()
+    reply_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = [
+            "id",
+            "article",
+            "article_title",
+            "article_slug",
+            "parent",
+            "content",
+            "created_at",
+            "is_approved",
+            "is_public",
+            "author_name",
+            "name",
+            "email",
+            "reply_count",
+            "replies",
+        ]
+        read_only_fields = fields
+
+    def get_replies(self, obj):
+        replies = getattr(obj, "prefetched_replies", None)
+        if replies is None:
+            replies = obj.replies.all()
+        if isinstance(replies, list):
+            replies = replies[:3]
+        items = []
+        for r in replies:
+            items.append(
+                {
+                    "id": r.id,
+                    "parent": r.parent_id,
+                    "content": r.content,
+                    "created_at": r.created_at.isoformat() if getattr(r, "created_at", None) else None,
+                    "is_approved": r.is_approved,
+                    "is_public": r.is_public,
+                    "author_name": getattr(r.author, "username", None) if getattr(r, "author", None) else None,
+                    "name": r.name,
+                    "email": r.email,
+                }
+            )
+        return items
+
+
+class PublicReplySerializer(serializers.ModelSerializer):
+    author_name = serializers.CharField(source="author.username", read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = ["id", "parent", "content", "created_at", "author_name", "name", "is_public"]
+        read_only_fields = fields
+
+
+class ModerationReplySerializer(serializers.ModelSerializer):
+    author_name = serializers.CharField(source="author.username", read_only=True)
+    article_title = serializers.CharField(source="article.title", read_only=True)
+    article_slug = serializers.CharField(source="article.slug", read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = [
+            "id",
+            "article",
+            "article_title",
+            "article_slug",
+            "parent",
+            "content",
+            "created_at",
+            "is_approved",
+            "is_public",
+            "author_name",
+            "name",
+            "email",
+        ]
+        read_only_fields = fields
 
 
 class ArticleAnalyticsSerializer(serializers.Serializer):

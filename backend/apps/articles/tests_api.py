@@ -111,10 +111,10 @@ class PublicArticlesAPITest(APITestCase):
         TenantModule.objects.create(company=self.company_b, module=mod, is_active=True)
 
         role_a, _ = Role.all_objects.get_or_create(
-            company=self.company_a, name="Moderator", defaults={"permissions": ["articles.article_manage"]}
+            company=self.company_a, name="Moderator", defaults={"permissions": ["articles.comment_moderate"]}
         )
-        if role_a.permissions != ["articles.article_manage"]:
-            role_a.permissions = ["articles.article_manage"]
+        if role_a.permissions != ["articles.comment_moderate"]:
+            role_a.permissions = ["articles.comment_moderate"]
             role_a.save(update_fields=["permissions"])
         self.moderator_a = User.all_objects.create_user(
             username="moda", email="moda@alpha.com", password="pass", company=self.company_a, role=role_a
@@ -216,6 +216,7 @@ class PublicArticlesAPITest(APITestCase):
         created_id = res_create.data.get("id")
         comment = Comment.objects.get(id=created_id)
         self.assertFalse(comment.is_approved)
+        self.assertTrue(comment.is_public)
         self.assertEqual(comment.company, self.company_a)
         from apps.notifications.models import Notification
 
@@ -247,12 +248,57 @@ class PublicArticlesAPITest(APITestCase):
         )
         self.assertEqual(len(data_approved), 1)
         self.assertEqual(data_approved[0]["content"], "Ótimo artigo!")
+        self.assertEqual(data_approved[0].get("replies", []), [])
+
+        # Reply to the approved public comment
+        payload_reply = {
+            "article_slug": self.art_a.slug,
+            "parent": created_id,
+            "name": "Visitante 2",
+            "email": "visitante2@example.com",
+            "content": "Concordo!",
+        }
+        res_reply = self.public_client.post(
+            "/api/articles/public/comments/", payload_reply, format="json", HTTP_X_COMPANY_SLUG="alpha"
+        )
+        self.assertEqual(res_reply.status_code, status.HTTP_201_CREATED)
+        reply_id = res_reply.data.get("id")
+        reply = Comment.objects.get(id=reply_id)
+        reply.is_approved = True
+        reply.save(update_fields=["is_approved"])
+
+        res_list_with_reply = self.public_client.get(
+            "/api/articles/public/comments/", {"article_slug": self.art_a.slug}, HTTP_X_COMPANY_SLUG="alpha"
+        )
+        self.assertEqual(res_list_with_reply.status_code, status.HTTP_200_OK)
+        data_with_reply = (
+            res_list_with_reply.data
+            if isinstance(res_list_with_reply.data, list)
+            else res_list_with_reply.data.get("results", [])
+        )
+        self.assertEqual(len(data_with_reply), 1)
+        self.assertEqual(len(data_with_reply[0].get("replies", [])), 1)
+        self.assertEqual(data_with_reply[0]["replies"][0]["content"], "Concordo!")
+
+        res_replies = self.public_client.get(
+            f"/api/articles/public/comments/{created_id}/replies/", HTTP_X_COMPANY_SLUG="alpha"
+        )
+        self.assertEqual(res_replies.status_code, status.HTTP_200_OK)
+        reply_results = res_replies.data.get("results", [])
+        self.assertEqual(len(reply_results), 1)
+        self.assertEqual(reply_results[0]["content"], "Concordo!")
+        from apps.notifications.models import Notification
+
+        self.assertTrue(
+            Notification.objects.filter(company=self.company_a, recipient=self.moderator_a, title="Nova resposta pendente").exists()
+        )
 
         # Test rate limit: 6 quick posts should yield 429 on the 6th
-        # Considering initial create above counts as 1, allow only 4 more before rate limit (max=5)
-        for i in range(4):
+        # Considering initial create + reply counts as 2, allow only 3 more before rate limit (max=5)
+        for i in range(3):
             pl = dict(payload)
             pl["content"] = f"Outro comentário {i}"
+            pl["email"] = f"visitante{i}@example.com"
             res_ok = self.public_client.post(
                 "/api/articles/public/comments/", pl, format="json", HTTP_X_COMPANY_SLUG="alpha"
             )

@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { showApiError } from '@/lib/toast-helpers';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { useAuth } from '@/hooks/use-auth';
 
 interface Comment {
     id: number;
@@ -17,6 +19,14 @@ interface Comment {
     created_at: string;
     author_name?: string | null;
     name?: string | null;
+    reply_count?: number;
+    replies?: Array<{
+        id: number;
+        content: string;
+        created_at: string;
+        author_name?: string | null;
+        name?: string | null;
+    }>;
 }
 
 interface PublicArticleCommentsProps {
@@ -27,12 +37,29 @@ interface PublicArticleCommentsProps {
 
 export function PublicArticleComments({ articleId, articleSlug, companySlug }: PublicArticleCommentsProps) {
     const queryClient = useQueryClient();
+    const { user } = useAuth();
     const [name, setName] = React.useState('');
     const [email, setEmail] = React.useState('');
     const [content, setContent] = React.useState('');
     const [submitted, setSubmitted] = React.useState(false);
     const [emailError, setEmailError] = React.useState<string | null>(null);
+    const [replyTo, setReplyTo] = React.useState<Comment | null>(null);
+    const [website, setWebsite] = React.useState('');
+    const prefilledRef = React.useRef(false);
     const maxLength = 1500;
+    const [repliesByParent, setRepliesByParent] = React.useState<Record<number, { items: Comment['replies']; next: string | null; isLoading: boolean }>>({})
+
+    const parseNextPage = (nextUrl: string | null) => {
+        if (!nextUrl) return undefined
+        try {
+            const url = new URL(nextUrl, 'http://localhost')
+            const p = url.searchParams.get('page')
+            const n = p ? Number(p) : NaN
+            return Number.isFinite(n) && n > 0 ? n : undefined
+        } catch {
+            return undefined
+        }
+    }
 
     const normalizedEmail = React.useMemo(() => email.trim(), [email]);
     const isEmailValid = React.useMemo(() => {
@@ -52,6 +79,17 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
         if (submitted) setSubmitted(false);
     }, [name, email, content, submitted]);
 
+    React.useEffect(() => {
+        if (prefilledRef.current) return;
+        if (!user) return;
+        prefilledRef.current = true;
+
+        const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+        const fallbackName = fullName || user.username || '';
+        if (!name.trim() && fallbackName) setName(fallbackName);
+        if (!email.trim() && user.email) setEmail(user.email);
+    }, [email, name, user]);
+
     const { data, isLoading } = useQuery({
         queryKey: ['public-article-comments', articleId, companySlug],
         queryFn: async ({ signal }) => {
@@ -69,6 +107,35 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
 
     const comments = Array.isArray(data) ? data : [];
 
+    const loadMoreReplies = async (parentId: number) => {
+        setRepliesByParent((prev) => {
+            const cur = prev[parentId]
+            return { ...prev, [parentId]: { items: cur?.items ?? [], next: cur?.next ?? null, isLoading: true } }
+        })
+        try {
+            const cur = repliesByParent[parentId]
+            const pageParam = parseNextPage(cur?.next ?? null) ?? 1
+            const res = await api.get<{ results?: Comment['replies']; next?: string | null } | Comment['replies']>(`/api/articles/public/comments/${parentId}/replies/`, {
+                params: { page: pageParam },
+                headers: companySlug ? { 'X-Company-Slug': companySlug } : {},
+            })
+            const body = res.data as any
+            const newItems = Array.isArray(body) ? body : (Array.isArray(body?.results) ? body.results : [])
+            const next = Array.isArray(body) ? null : (body?.next ?? null)
+            setRepliesByParent((prev) => {
+                const existing = prev[parentId]?.items ?? []
+                const seen = new Set(existing?.map((x: any) => x.id))
+                const merged = [...existing, ...newItems.filter((x: any) => !seen.has(x.id))]
+                return { ...prev, [parentId]: { items: merged, next, isLoading: false } }
+            })
+        } catch {
+            setRepliesByParent((prev) => {
+                const cur2 = prev[parentId]
+                return { ...prev, [parentId]: { items: cur2?.items ?? [], next: cur2?.next ?? null, isLoading: false } }
+            })
+        }
+    }
+
     const createMutation = useMutation({
         mutationFn: async () => {
             const trimmed = content.trim();
@@ -83,6 +150,8 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
             else payload.article = articleId;
             if (name.trim()) payload.name = name.trim();
             if (normalizedEmail) payload.email = normalizedEmail;
+            if (replyTo?.id) payload.parent = replyTo.id;
+            if (website.trim()) payload.website = website.trim();
 
             const res = await api.post('/api/articles/public/comments/', payload, {
                 headers: companySlug ? { 'X-Company-Slug': companySlug } : {},
@@ -91,6 +160,7 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
         },
         onSuccess: () => {
             setContent('');
+            setReplyTo(null);
             setSubmitted(true);
             toast.success('Comentário enviado', { description: 'Ele ficará visível após aprovação.' });
             queryClient.invalidateQueries({ queryKey: ['public-article-comments', articleId, companySlug] });
@@ -111,7 +181,7 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
     });
 
     return (
-        <section className="mt-12 pt-10 border-t border-border/50" aria-label="Comentários">
+        <section id="comentarios" className="mt-12 pt-10 border-t border-border/50" aria-label="Comentários">
             <div className="space-y-6">
                 <div className="space-y-1">
                     <h2 className="text-lg font-bold">Comentários</h2>
@@ -142,9 +212,31 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
                             )}
                         </div>
                     </div>
+                    <div className="hidden">
+                        <Input
+                            value={website}
+                            onChange={(e) => setWebsite(e.target.value)}
+                            placeholder="website"
+                            autoComplete="off"
+                            tabIndex={-1}
+                        />
+                    </div>
 
                     <div className="space-y-1">
                         <div className="text-xs font-medium text-muted-foreground">Comentário</div>
+                        {replyTo && (
+                            <div className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                                <div className="text-xs text-muted-foreground truncate">
+                                    Respondendo a{' '}
+                                    <span className="font-semibold text-foreground">
+                                        {(replyTo.author_name || replyTo.name || 'Anônimo').trim()}
+                                    </span>
+                                </div>
+                                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setReplyTo(null)}>
+                                    Cancelar
+                                </Button>
+                            </div>
+                        )}
                         <Textarea
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
@@ -200,16 +292,62 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
                                 ? ''
                                 : new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(dt);
                             const displayName = (c.author_name || c.name || 'Anônimo').trim();
+                            const repliesInitial = Array.isArray(c.replies) ? c.replies : [];
+                            const repliesState = repliesByParent[c.id]
+                            const replies = (repliesState?.items && Array.isArray(repliesState.items) ? repliesState.items : repliesInitial) || []
+                            const replyCount = Number.isFinite(Number(c.reply_count)) ? Number(c.reply_count) : repliesInitial.length
 
                             return (
                                 <div key={c.id} role="listitem" className="rounded-2xl border border-primary/10 bg-background/95 backdrop-blur p-5">
                                     <div className="flex items-center justify-between gap-4">
-                                        <div className="font-semibold truncate">{displayName}</div>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <div className="font-semibold truncate">{displayName}</div>
+                                            <Badge variant="secondary" className="text-[10px] rounded-full px-3">
+                                                Comentário público
+                                            </Badge>
+                                        </div>
                                         <div className="text-xs text-muted-foreground">{dateLabel}</div>
                                     </div>
                                     <div className="mt-3 text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                                         {c.content}
                                     </div>
+                                    <div className="mt-3 flex items-center justify-between">
+                                        <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setReplyTo(c)}>
+                                            Responder
+                                        </Button>
+                                        {replyCount > replies.length && (
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-8 px-2"
+                                                onClick={() => loadMoreReplies(c.id)}
+                                                disabled={!!repliesState?.isLoading}
+                                            >
+                                                {repliesState?.isLoading ? 'Carregando...' : `Ver mais respostas (${replyCount - replies.length})`}
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {replies.length > 0 && (
+                                        <div className="mt-4 space-y-3 pl-4 border-l border-border/50">
+                                            {replies.map((r) => {
+                                                const dt2 = new Date(r.created_at);
+                                                const date2 = Number.isNaN(dt2.getTime())
+                                                    ? ''
+                                                    : new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(dt2);
+                                                const name2 = (r.author_name || r.name || 'Anônimo').trim();
+
+                                                return (
+                                                    <div key={r.id} className="rounded-xl border border-border/50 bg-muted/10 p-4">
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div className="font-semibold truncate">{name2}</div>
+                                                            <div className="text-xs text-muted-foreground">{date2}</div>
+                                                        </div>
+                                                        <div className="mt-2 text-sm whitespace-pre-wrap">{r.content}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}

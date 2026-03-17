@@ -14,6 +14,7 @@ AVAILABLE_PERMISSIONS = {
     "articles.article_delete": "Excluir Artigos",
     "articles.article_publish": "Publicar Artigos",
     "articles.category_manage": "Gerenciar Categorias/Tags",
+    "articles.comment_moderate": "Moderar Comentários",
     # CMS/Páginas
     "pages.page_view": "Visualizar Páginas",
     "pages.page_create": "Criar Páginas",
@@ -49,6 +50,7 @@ DEFAULT_ROLES = {
             "articles.article_edit",
             "articles.article_publish",
             "articles.category_manage",
+            "articles.comment_moderate",
             "pages.page_view",
             "pages.page_create",
             "pages.page_edit",

@@ -193,6 +193,7 @@ export interface Article {
   meta_keywords?: string;
   company_name?: string;
   company_slug?: string;
+  comment_count?: number;
 }
 
 export interface PlanFeature {

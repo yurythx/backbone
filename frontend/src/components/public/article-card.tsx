@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Article } from "@/types"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CalendarDays } from "lucide-react"
+import { CalendarDays, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
 
@@ -91,9 +91,15 @@ export function PublicArticleCard({ article, showVisibilityBadge = false, useDas
                     </p>
                 </CardContent>
                 <CardFooter className="p-5 pt-0 flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                        <CalendarDays className="h-3 w-3" aria-hidden="true" />
-                        {dateLabel || ""}
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                            <CalendarDays className="h-3 w-3" aria-hidden="true" />
+                            {dateLabel || ""}
+                        </div>
+                        <div className="flex items-center gap-1.5" title="Comentários">
+                            <MessageSquare className="h-3 w-3" aria-hidden="true" />
+                            {Number(article.comment_count ?? 0)}
+                        </div>
                     </div>
                     <div className="flex items-center gap-1.5 text-primary font-semibold">
                         Ler mais

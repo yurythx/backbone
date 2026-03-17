@@ -33,10 +33,10 @@ class ArticleCommentsAPITest(APITestCase):
         self.assertEqual(res_forbidden.status_code, status.HTTP_403_FORBIDDEN)
 
         role, _ = Role.all_objects.get_or_create(
-            company=self.company, name="Editor", defaults={"permissions": ["articles.article_manage"]}
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
         )
-        if role.permissions != ["articles.article_manage"]:
-            role.permissions = ["articles.article_manage"]
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
             role.save(update_fields=["permissions"])
         self.user.role = role
         self.user.save(update_fields=["role"])
@@ -47,10 +47,10 @@ class ArticleCommentsAPITest(APITestCase):
 
     def test_filter_comments(self):
         role, _ = Role.all_objects.get_or_create(
-            company=self.company, name="Editor", defaults={"permissions": ["articles.article_manage"]}
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
         )
-        if role.permissions != ["articles.article_manage"]:
-            role.permissions = ["articles.article_manage"]
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
             role.save(update_fields=["permissions"])
         self.user.role = role
         self.user.save(update_fields=["role"])
@@ -71,10 +71,10 @@ class ArticleCommentsAPITest(APITestCase):
 
     def test_approve_and_disapprove_comment(self):
         role, _ = Role.all_objects.get_or_create(
-            company=self.company, name="Editor", defaults={"permissions": ["articles.article_manage"]}
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
         )
-        if role.permissions != ["articles.article_manage"]:
-            role.permissions = ["articles.article_manage"]
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
             role.save(update_fields=["permissions"])
         self.user.role = role
         self.user.save(update_fields=["role"])
@@ -95,10 +95,10 @@ class ArticleCommentsAPITest(APITestCase):
 
     def test_bulk_actions_and_date_filters(self):
         role, _ = Role.all_objects.get_or_create(
-            company=self.company, name="Editor", defaults={"permissions": ["articles.article_manage"]}
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
         )
-        if role.permissions != ["articles.article_manage"]:
-            role.permissions = ["articles.article_manage"]
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
             role.save(update_fields=["permissions"])
         self.user.role = role
         self.user.save(update_fields=["role"])
@@ -136,3 +136,199 @@ class ArticleCommentsAPITest(APITestCase):
         res_bulk_delete = self.client.post("/api/articles/comments/bulk_delete/", {"ids": [c2.id]}, format="json")
         self.assertEqual(res_bulk_delete.status_code, status.HTTP_200_OK)
         self.assertFalse(Comment.objects.filter(id=c2.id).exists())
+
+    def test_moderation_list_includes_replies(self):
+        role, _ = Role.all_objects.get_or_create(
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
+        )
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
+            role.save(update_fields=["permissions"])
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        parent = Comment.objects.create(
+            company=self.company, article=self.article, author=None, name="Visitante", content="Pai", is_public=True, is_approved=False
+        )
+        reply = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante 2",
+            content="Filho",
+            is_public=True,
+            is_approved=False,
+            parent=parent,
+        )
+
+        res = self.client.get("/api/articles/comments/", {"article": self.article.id, "is_public": True, "parent__isnull": True})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        data = res.data.get("results", [])
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["id"], parent.id)
+        self.assertEqual(len(data[0].get("replies", [])), 1)
+        self.assertEqual(data[0]["replies"][0]["id"], reply.id)
+
+        res_replies = self.client.get(f"/api/articles/comments/{parent.id}/replies/")
+        self.assertEqual(res_replies.status_code, status.HTTP_200_OK)
+        results = res_replies.data.get("results", [])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["id"], reply.id)
+
+    def test_bulk_filtered_actions(self):
+        role, _ = Role.all_objects.get_or_create(
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
+        )
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
+            role.save(update_fields=["permissions"])
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        c1 = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="C1",
+            is_public=True,
+            is_approved=False,
+        )
+        c2 = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="C2",
+            is_public=True,
+            is_approved=False,
+        )
+        Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=self.user,
+            content="Interno",
+            is_public=False,
+            is_approved=True,
+        )
+
+        res_approve = self.client.post(
+            "/api/articles/comments/bulk_approve_filtered/",
+            {"article": self.article.id, "is_public": True, "parent__isnull": True, "is_approved": False},
+            format="json",
+        )
+        self.assertEqual(res_approve.status_code, status.HTTP_200_OK)
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        self.assertTrue(c1.is_approved)
+        self.assertTrue(c2.is_approved)
+
+        res_disapprove = self.client.post(
+            "/api/articles/comments/bulk_disapprove_filtered/",
+            {"article": self.article.id, "is_public": True, "parent__isnull": True, "search": "C1"},
+            format="json",
+        )
+        self.assertEqual(res_disapprove.status_code, status.HTTP_200_OK)
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        self.assertFalse(c1.is_approved)
+        self.assertTrue(c2.is_approved)
+
+        res_delete = self.client.post(
+            "/api/articles/comments/bulk_delete_filtered/",
+            {"article": self.article.id, "is_public": True, "parent__isnull": True, "search": "C2"},
+            format="json",
+        )
+        self.assertEqual(res_delete.status_code, status.HTTP_200_OK)
+        self.assertFalse(Comment.objects.filter(id=c2.id).exists())
+
+        res_count = self.client.post(
+            "/api/articles/comments/bulk_filtered_count/",
+            {"article": self.article.id, "is_public": True, "parent__isnull": True},
+            format="json",
+        )
+        self.assertEqual(res_count.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_count.data.get("count"), 1)
+
+        parent = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="Pai Include",
+            is_public=True,
+            is_approved=False,
+        )
+        child = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="Filho Include",
+            is_public=True,
+            is_approved=False,
+            parent=parent,
+        )
+
+        res_approve_with_replies = self.client.post(
+            "/api/articles/comments/bulk_approve_filtered/",
+            {"article": self.article.id, "is_public": True, "parent__isnull": True, "search": "Pai Include", "include_replies": True},
+            format="json",
+        )
+        self.assertEqual(res_approve_with_replies.status_code, status.HTTP_200_OK)
+        parent.refresh_from_db()
+        child.refresh_from_db()
+        self.assertTrue(parent.is_approved)
+        self.assertTrue(child.is_approved)
+
+        res_count_with_replies = self.client.post(
+            "/api/articles/comments/bulk_filtered_count/",
+            {"article": self.article.id, "is_public": True, "parent__isnull": True, "search": "Pai Include", "include_replies": True},
+            format="json",
+        )
+        self.assertEqual(res_count_with_replies.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_count_with_replies.data.get("count"), 2)
+
+    def test_thread_actions(self):
+        role, _ = Role.all_objects.get_or_create(
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
+        )
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
+            role.save(update_fields=["permissions"])
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        parent = Comment.objects.create(
+            company=self.company, article=self.article, author=None, name="Visitante", content="Pai", is_public=True, is_approved=False
+        )
+        r1 = Comment.objects.create(
+            company=self.company, article=self.article, author=None, name="V1", content="R1", is_public=True, is_approved=False, parent=parent
+        )
+        r2 = Comment.objects.create(
+            company=self.company, article=self.article, author=None, name="V2", content="R2", is_public=True, is_approved=True, parent=parent
+        )
+
+        res_approve = self.client.post(f"/api/articles/comments/{parent.id}/approve_thread/", {}, format="json")
+        self.assertEqual(res_approve.status_code, status.HTTP_200_OK)
+        parent.refresh_from_db()
+        r1.refresh_from_db()
+        r2.refresh_from_db()
+        self.assertTrue(parent.is_approved)
+        self.assertTrue(r1.is_approved)
+        self.assertTrue(r2.is_approved)
+
+        res_disapprove = self.client.post(f"/api/articles/comments/{parent.id}/disapprove_thread/", {}, format="json")
+        self.assertEqual(res_disapprove.status_code, status.HTTP_200_OK)
+        parent.refresh_from_db()
+        r1.refresh_from_db()
+        r2.refresh_from_db()
+        self.assertFalse(parent.is_approved)
+        self.assertFalse(r1.is_approved)
+        self.assertFalse(r2.is_approved)
+
+        res_delete = self.client.post(f"/api/articles/comments/{parent.id}/delete_thread/", {}, format="json")
+        self.assertEqual(res_delete.status_code, status.HTTP_200_OK)
+        self.assertFalse(Comment.objects.filter(id=parent.id).exists())
+        self.assertFalse(Comment.objects.filter(id=r1.id).exists())
+        self.assertFalse(Comment.objects.filter(id=r2.id).exists())
