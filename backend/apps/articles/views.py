@@ -590,14 +590,14 @@ class CommentViewSet(viewsets.ModelViewSet):
         if request.user and request.user.is_authenticated and request.user.id == parent.author_id:
             return
         pref = getattr(parent.author, "notification_preference", None)
-        if pref and pref.notify_reply_approved is False:
+        if pref and pref.notify_reply_approved_single is False:
             return
 
         from apps.notifications.models import Notification
         from apps.notifications.tasks import send_websocket_notification
 
         slug = getattr(reply.article, "slug", None)
-        link = f"/artigos/preview/{slug}" if slug else "/artigos"
+        link = f"/p/artigos/{slug}#resposta-{reply.id}" if slug else "/artigos"
         snippet = (reply.content or "").strip()
         message = f"{reply.article.title}: {snippet[:120]}" if snippet else f"Seu comentário em {reply.article.title} recebeu uma resposta."
 
@@ -633,12 +633,8 @@ class CommentViewSet(viewsets.ModelViewSet):
         if request.user and request.user.is_authenticated and request.user.id == root.author_id:
             return
         pref = getattr(root.author, "notification_preference", None)
-        if pref and pref.notify_reply_approved is False:
+        if pref and pref.notify_reply_approved_thread is False:
             return
-        cooldown_key = f"cooldown:notif:thread_reply_approved:{root.company_id}:{root.author_id}:{root.id}"
-        if cache.get(cooldown_key):
-            return
-        cache.set(cooldown_key, 1, timeout=300)
         if not TenantModule.objects.filter(company=root.company, module__code="articles", is_active=True).exists():
             return
 
@@ -646,17 +642,69 @@ class CommentViewSet(viewsets.ModelViewSet):
         from apps.notifications.tasks import send_websocket_notification
 
         slug = getattr(root.article, "slug", None)
-        link = f"/artigos/preview/{slug}" if slug else "/artigos"
-        message = f"{newly_approved_replies} resposta(s) foram aprovadas em {root.article.title}."
-
-        notification = Notification.objects.create(
-            company=root.company,
-            recipient=root.author,
-            notification_type=Notification.TYPE_MESSAGE,
-            title="Novas respostas ao seu comentário",
-            message=message,
-            link=link,
+        link = f"/p/artigos/{slug}#comentario-{root.id}" if slug else "/artigos"
+        title = "Novas respostas ao seu comentário"
+        aggregate_key = f"articles.thread.reply_approved:{root.id}"
+        notification = (
+            Notification.objects.filter(
+                company=root.company,
+                recipient=root.author,
+                is_read=False,
+                notification_type=Notification.TYPE_MESSAGE,
+                title=title,
+                aggregate_key=aggregate_key,
+            )
+            .order_by("-created_at")
+            .first()
         )
+
+        total = int(newly_approved_replies)
+        if notification:
+            total = int(getattr(notification, "aggregate_count", 1) or 1) + int(newly_approved_replies)
+
+        last_reply = (
+            Comment.objects.filter(company=request.company, parent_id=root.id, is_public=True)
+            .order_by("-created_at")
+            .values("id", "content")
+            .first()
+        )
+        last_snippet = ((last_reply.get("content") or "").strip()[:120]) if last_reply else ""
+        if last_snippet:
+            message = f"{total} resposta(s) foram aprovadas em {root.article.title}. Último: {last_snippet}"
+        else:
+            message = f"{total} resposta(s) foram aprovadas em {root.article.title}."
+
+        if notification:
+            notification.message = message
+            notification.link = link
+            notification.is_read = False
+            notification.aggregate_count = total
+            notification.metadata = {
+                "kind": "thread_reply_approved",
+                "root_comment_id": root.id,
+                "article_id": root.article_id,
+                "last_reply_id": last_reply.get("id") if last_reply else None,
+                "last_snippet": last_snippet or None,
+            }
+            notification.save(update_fields=["message", "link", "is_read", "aggregate_count", "metadata"])
+        else:
+            notification = Notification.objects.create(
+                company=root.company,
+                recipient=root.author,
+                notification_type=Notification.TYPE_MESSAGE,
+                title=title,
+                message=message,
+                link=link,
+                aggregate_key=aggregate_key,
+                aggregate_count=total,
+                metadata={
+                    "kind": "thread_reply_approved",
+                    "root_comment_id": root.id,
+                    "article_id": root.article_id,
+                    "last_reply_id": last_reply.get("id") if last_reply else None,
+                    "last_snippet": last_snippet or None,
+                },
+            )
         try:
             send_websocket_notification.delay(
                 f"notifications_user_{root.author_id}",
@@ -694,6 +742,46 @@ class CommentViewSet(viewsets.ModelViewSet):
         comment.save(update_fields=["is_approved"])
         log_update(request.user, "Comment", comment, request=request)
         return Response({"status": "disapproved"})
+
+    @action(detail=False, methods=["get"])
+    def moderation_metrics(self, request):
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+
+        company = request.company
+        now = timezone.now()
+        fifteen_days_ago = now.date() - timezone.timedelta(days=15)
+
+        pending_qs = Comment.objects.filter(company=company, is_public=True, is_approved=False)
+        pending_comments = pending_qs.filter(parent__isnull=True).count()
+        pending_replies = pending_qs.filter(parent__isnull=False).count()
+
+        pending_by_date = (
+            pending_qs.filter(created_at__date__gte=fifteen_days_ago)
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
+
+        top_articles = (
+            pending_qs.values("article_id", "article__title", "article__slug")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:5]
+        )
+
+        oldest = pending_qs.order_by("created_at").values("created_at", "article__title", "article__slug").first()
+
+        return Response(
+            {
+                "pending_comments": pending_comments,
+                "pending_replies": pending_replies,
+                "pending_total": pending_comments + pending_replies,
+                "pending_by_date": list(pending_by_date),
+                "top_articles": list(top_articles),
+                "oldest_pending": oldest,
+            }
+        )
 
     @action(detail=True, methods=["post"])
     def approve_thread(self, request, pk=None):
@@ -875,6 +963,7 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         from apps.notifications.tasks import send_websocket_notification
 
         User = get_user_model()
+        is_reply = bool(getattr(comment, "parent_id", None))
         perm = "articles.comment_moderate"
         candidates = (
             User.all_objects.filter(company=article.company, is_active=True)
@@ -884,8 +973,11 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         recipients = []
         for u in candidates:
             pref = getattr(u, "notification_preference", None)
-            if pref and pref.notify_comment_moderation is False:
-                continue
+            if pref:
+                if is_reply and pref.notify_moderation_reply_pending is False:
+                    continue
+                if not is_reply and pref.notify_moderation_comment_pending is False:
+                    continue
             if u.is_superuser or u.is_staff:
                 recipients.append(u)
                 continue
@@ -896,12 +988,12 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         if getattr(comment, "author_id", None):
             recipients = [u for u in recipients if u.id != comment.author_id]
 
-        is_reply = bool(getattr(comment, "parent_id", None))
+        root_id = comment.parent_id or comment.id
         if is_reply:
-            link = f"/artigos/comentarios?status=approved&article={article.id}"
+            link = f"/artigos/comentarios?status=approved&article={article.id}&comment={root_id}#comentario-{root_id}"
             title = "Nova resposta pendente"
         else:
-            link = f"/artigos/comentarios?status=pending&article={article.id}"
+            link = f"/artigos/comentarios?status=pending&article={article.id}&comment={root_id}#comentario-{root_id}"
             title = "Novo comentário pendente"
         msg_content = (comment.content or "").strip()
         if is_reply:
@@ -930,19 +1022,70 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
             )
 
         for u in recipients:
-            cooldown_seconds = 60
-            cooldown_key = f"cooldown:notif:comment_moderation:{article.company_id}:{u.id}:{article.id}:{1 if is_reply else 0}"
-            if cache.get(cooldown_key):
-                continue
-            cache.set(cooldown_key, 1, timeout=cooldown_seconds)
-            notification = Notification.objects.create(
-                company=article.company,
-                recipient=u,
-                notification_type=Notification.TYPE_APPROVAL,
-                title=title,
-                message=message,
-                link=link,
+            aggregate_key = f"articles.moderation.pending:{article.id}:{'r' if is_reply else 'c'}"
+            notification = (
+                Notification.objects.filter(
+                    company=article.company,
+                    recipient=u,
+                    is_read=False,
+                    notification_type=Notification.TYPE_APPROVAL,
+                    title=title,
+                    aggregate_key=aggregate_key,
+                )
+                .order_by("-created_at")
+                .first()
             )
+
+            count = 1
+            if notification:
+                count = int(getattr(notification, "aggregate_count", 1) or 1) + 1
+
+            last = message
+            prefix = f"{article.title}: "
+            if last.startswith(prefix):
+                last = last[len(prefix) :]
+
+            if count <= 1:
+                final_message = message
+            else:
+                if is_reply:
+                    final_message = f"{count} respostas pendentes em {article.title}. Último: {last}"
+                else:
+                    final_message = f"{count} comentários pendentes em {article.title}. Último: {last}"
+
+            if notification:
+                notification.message = final_message
+                notification.link = link
+                notification.is_read = False
+                notification.aggregate_count = count
+                notification.metadata = {
+                    "kind": "comment_moderation_pending",
+                    "article_id": article.id,
+                    "root_comment_id": root_id,
+                    "last_comment_id": comment.id,
+                    "is_reply": bool(is_reply),
+                    "last_snippet": last,
+                }
+                notification.save(update_fields=["message", "link", "is_read", "aggregate_count", "metadata"])
+            else:
+                notification = Notification.objects.create(
+                    company=article.company,
+                    recipient=u,
+                    notification_type=Notification.TYPE_APPROVAL,
+                    title=title,
+                    message=final_message,
+                    link=link,
+                    aggregate_key=aggregate_key,
+                    aggregate_count=count,
+                    metadata={
+                        "kind": "comment_moderation_pending",
+                        "article_id": article.id,
+                        "root_comment_id": root_id,
+                        "last_comment_id": comment.id,
+                        "is_reply": bool(is_reply),
+                        "last_snippet": last,
+                    },
+                )
             try:
                 send_websocket_notification.delay(
                     f"notifications_user_{u.id}",
@@ -1091,6 +1234,16 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
             if not email_value:
                 email_value = getattr(author, "email", "") or ""
 
+        content_value = (data.get("content", "") or "").strip()
+        if not content_value:
+            return Response({"detail": "Conteúdo obrigatório."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(content_value) < 3:
+            return Response({"detail": "Conteúdo muito curto."}, status=status.HTTP_400_BAD_REQUEST)
+        lowered = content_value.lower()
+        link_hits = lowered.count("http://") + lowered.count("https://") + lowered.count("www.")
+        if link_hits >= 3:
+            return Response({"detail": "Conteúdo suspeito."}, status=status.HTTP_400_BAD_REQUEST)
+
         normalized_email = (email_value or "").strip().lower()
         if normalized_email:
             cooldown_seconds = 20 if parent else 30
@@ -1102,6 +1255,32 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
                 )
             cache.set(cooldown_key, 1, timeout=cooldown_seconds)
 
+            email_key = f"rate:pub_comment:email:{company_key}:{article.id}:{normalized_email}"
+            email_count = cache.get(email_key, 0)
+            if email_count >= 3:
+                return Response(
+                    {"detail": "Limite de envio por email atingido. Tente mais tarde."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            cache.set(email_key, email_count + 1, timeout=3600)
+
+        try:
+            import hashlib
+
+            ua = (request.META.get("HTTP_USER_AGENT") or "")[:200]
+            fp_source = f"{ip}|{ua}|{normalized_email or '-'}"
+            fp = hashlib.sha256(fp_source.encode("utf-8")).hexdigest()[:16]
+            fp_key = f"rate:pub_comment:fp:{company_key}:{article.id}:{fp}"
+            fp_count = cache.get(fp_key, 0)
+            if fp_count >= 5:
+                return Response(
+                    {"detail": "Limite de envio atingido. Tente mais tarde."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            cache.set(fp_key, fp_count + 1, timeout=3600)
+        except Exception:
+            pass
+
         # Criar comentário pendente de moderação
         serializer = self.get_serializer(
             data={
@@ -1109,7 +1288,7 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
                 "parent": parent.id if parent else None,
                 "name": name_value,
                 "email": email_value,
-                "content": data.get("content", ""),
+                "content": content_value,
             }
         )
         serializer.is_valid(raise_exception=True)

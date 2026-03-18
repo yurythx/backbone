@@ -135,8 +135,10 @@ export interface UserThemePreference {
 export interface UserNotificationPreference {
   id: number;
   user: number;
-  notify_comment_moderation: boolean;
-  notify_reply_approved: boolean;
+  notify_moderation_comment_pending: boolean;
+  notify_moderation_reply_pending: boolean;
+  notify_reply_approved_single: boolean;
+  notify_reply_approved_thread: boolean;
   created_at: string;
   updated_at: string;
 }

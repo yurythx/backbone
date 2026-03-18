@@ -20,6 +20,9 @@ class Notification(BaseTenantModel):
     title = models.CharField(max_length=255)
     message = models.TextField()
     link = models.CharField(max_length=500, blank=True, null=True)
+    aggregate_key = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    aggregate_count = models.PositiveIntegerField(default=1)
+    metadata = models.JSONField(blank=True, null=True)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -27,6 +30,7 @@ class Notification(BaseTenantModel):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["recipient", "is_read"]),
+            models.Index(fields=["recipient", "is_read", "aggregate_key"]),
         ]
 
     def __str__(self):

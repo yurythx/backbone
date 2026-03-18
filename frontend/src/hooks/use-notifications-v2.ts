@@ -23,6 +23,9 @@ export interface Notification {
     title: string
     message: string
     link?: string
+    aggregate_key?: string | null
+    aggregate_count?: number
+    metadata?: Record<string, unknown> | null
     is_read: boolean
     created_at: string
 }

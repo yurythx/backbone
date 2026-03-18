@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import { Check, Loader2, Search, Trash2, X } from "lucide-react"
+import { Check, Link2, Loader2, Search, Trash2, X } from "lucide-react"
 
 type ModerationItem = {
   id: number
@@ -82,6 +82,8 @@ export function CommentModeration() {
   const [bulkFilterCount, setBulkFilterCount] = React.useState<number | null>(null)
   const [bulkFilterSample, setBulkFilterSample] = React.useState<SampleItem[] | null>(null)
   const [bulkIncludeReplies, setBulkIncludeReplies] = React.useState(true)
+  const [focusCommentId, setFocusCommentId] = React.useState<number | null>(null)
+  const [highlightCommentId, setHighlightCommentId] = React.useState<number | null>(null)
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set())
   const [articleId, setArticleId] = React.useState<string>("")
   const [fromDate, setFromDate] = React.useState<string>("")
@@ -90,6 +92,26 @@ export function CommentModeration() {
   const [repliesByParent, setRepliesByParent] = React.useState<Record<number, { items: ModerationItem[]; next: string | null; isLoading: boolean }>>({})
 
   const debounced = React.useMemo(() => query.trim(), [query])
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success("Link copiado")
+    } catch {
+      toast.error("Não foi possível copiar o link")
+    }
+  }
+
+  const makePublicUrl = (articleSlug: string | null | undefined, hash: string) => {
+    if (!articleSlug) return null
+    try {
+      const base = new URL(`/p/artigos/${encodeURIComponent(articleSlug)}`, window.location.origin)
+      base.hash = hash
+      return base.toString()
+    } catch {
+      return null
+    }
+  }
 
   React.useEffect(() => {
     if (initializedRef.current) return
@@ -111,7 +133,22 @@ export function CommentModeration() {
 
     const to = searchParams.get("to")
     if (to) setToDate(to)
+
+    const commentIdParam = searchParams.get("comment")
+    if (commentIdParam && /^[0-9]+$/.test(commentIdParam)) setFocusCommentId(Number(commentIdParam))
   }, [searchParams])
+
+  React.useEffect(() => {
+    if (!focusCommentId) return
+    const el = document.getElementById(`comentario-${focusCommentId}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: "smooth", block: "start" })
+    setHighlightCommentId(focusCommentId)
+    window.clearTimeout((window as any).__bb_moderation_highlight_timeout)
+    ;(window as any).__bb_moderation_highlight_timeout = window.setTimeout(() => {
+      setHighlightCommentId(null)
+    }, 2500)
+  }, [comments.length, focusCommentId])
 
   const articlesQuery = useQuery({
     queryKey: ["articles-lite"],
@@ -605,7 +642,14 @@ export function CommentModeration() {
                 const publicHref = c.article_slug ? `/p/artigos/${encodeURIComponent(c.article_slug)}` : null
 
                 return (
-                  <div key={c.id} className="p-4 sm:p-6 flex flex-col gap-3">
+                  <div
+                    id={`comentario-${c.id}`}
+                    key={c.id}
+                    className={[
+                      "p-4 sm:p-6 flex flex-col gap-3 transition-colors",
+                      highlightCommentId === c.id ? "bg-primary/5 ring-2 ring-primary/40" : "",
+                    ].filter(Boolean).join(" ")}
+                  >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -642,6 +686,16 @@ export function CommentModeration() {
                             </Link>
                           </Button>
                         )}
+                        {(() => {
+                          const url = makePublicUrl(c.article_slug, `comentario-${c.id}`)
+                          if (!url) return null
+                          return (
+                            <Button size="sm" variant="outline" onClick={() => copyToClipboard(url)}>
+                              <Link2 className="mr-2 h-4 w-4" />
+                              Copiar link
+                            </Button>
+                          )
+                        })()}
                         {canApprove && (
                           <Button
                             size="sm"
@@ -737,6 +791,7 @@ export function CommentModeration() {
                               const meta2 = r.email ? `${authorLabel2} • ${r.email}` : authorLabel2
                               const canApprove2 = !r.is_approved
                               const canDisapprove2 = r.is_approved
+                              const replyUrl = makePublicUrl(c.article_slug, `resposta-${r.id}`)
                               return (
                                 <div key={r.id} className="rounded-xl border border-border/50 bg-background/40 p-3">
                                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -751,6 +806,12 @@ export function CommentModeration() {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2">
+                                      {replyUrl && (
+                                        <Button size="sm" variant="outline" onClick={() => copyToClipboard(replyUrl)}>
+                                          <Link2 className="mr-2 h-4 w-4" />
+                                          Copiar link
+                                        </Button>
+                                      )}
                                       {canApprove2 && (
                                         <Button
                                           size="sm"

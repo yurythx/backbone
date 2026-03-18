@@ -129,11 +129,17 @@ class UserThemePreference(models.Model):
 
 class UserNotificationPreference(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="notification_preference")
-    notify_comment_moderation = models.BooleanField(
-        default=True, help_text="Receber notificações de moderação (comentários/repostas pendentes)"
+    notify_moderation_comment_pending = models.BooleanField(
+        default=True, help_text="Receber notificações quando houver comentários pendentes"
     )
-    notify_reply_approved = models.BooleanField(
-        default=True, help_text="Receber notificações quando uma resposta ao seu comentário for aprovada"
+    notify_moderation_reply_pending = models.BooleanField(
+        default=True, help_text="Receber notificações quando houver respostas pendentes"
+    )
+    notify_reply_approved_single = models.BooleanField(
+        default=True, help_text="Receber notificação quando uma resposta ao seu comentário for aprovada"
+    )
+    notify_reply_approved_thread = models.BooleanField(
+        default=True, help_text="Receber notificação quando replies forem aprovadas na sua thread"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

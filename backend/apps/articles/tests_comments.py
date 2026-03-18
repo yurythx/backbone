@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -374,3 +375,99 @@ class ArticleCommentsAPITest(APITestCase):
         self.assertTrue(
             Notification.objects.filter(company=self.company, recipient=parent_author, title="Nova resposta ao seu comentário").exists()
         )
+
+    def test_approve_thread_notification_aggregates_for_parent_author(self):
+        cache.clear()
+        role, _ = Role.all_objects.get_or_create(
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
+        )
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
+            role.save(update_fields=["permissions"])
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        parent_author = User.all_objects.create_user(
+            username="parent-author-2", email="parent2@author.com", password="pass", company=self.company
+        )
+        parent = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=parent_author,
+            content="Comentário do autor 2",
+            is_public=True,
+            is_approved=True,
+        )
+        Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="R1",
+            is_public=True,
+            is_approved=False,
+            parent=parent,
+        )
+
+        res_approve1 = self.client.post(f"/api/articles/comments/{parent.id}/approve_thread/", {}, format="json")
+        self.assertEqual(res_approve1.status_code, status.HTTP_200_OK)
+        qs = Notification.objects.filter(company=self.company, recipient=parent_author, title="Novas respostas ao seu comentário")
+        self.assertEqual(qs.count(), 1)
+        self.assertTrue("1 resposta(s) foram aprovadas" in (qs.first().message or ""))
+
+        cache.clear()
+        Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="R2 mais recente",
+            is_public=True,
+            is_approved=False,
+            parent=parent,
+        )
+        res_approve2 = self.client.post(f"/api/articles/comments/{parent.id}/approve_thread/", {}, format="json")
+        self.assertEqual(res_approve2.status_code, status.HTTP_200_OK)
+
+        qs2 = Notification.objects.filter(company=self.company, recipient=parent_author, title="Novas respostas ao seu comentário")
+        self.assertEqual(qs2.count(), 1)
+        msg = qs2.first().message or ""
+        self.assertTrue("2 resposta(s) foram aprovadas" in msg)
+        self.assertTrue("R2 mais recente" in msg)
+
+    def test_moderation_metrics_endpoint(self):
+        role, _ = Role.all_objects.get_or_create(
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
+        )
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
+            role.save(update_fields=["permissions"])
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        parent = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="Pendente",
+            is_public=True,
+            is_approved=False,
+        )
+        Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="Resposta pendente",
+            is_public=True,
+            is_approved=False,
+            parent=parent,
+        )
+
+        res = self.client.get("/api/articles/comments/moderation_metrics/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data.get("pending_comments"), 1)
+        self.assertEqual(res.data.get("pending_replies"), 1)
+        self.assertEqual(res.data.get("pending_total"), 2)
+        self.assertTrue(isinstance(res.data.get("top_articles"), list))

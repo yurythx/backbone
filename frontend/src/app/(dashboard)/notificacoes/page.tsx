@@ -7,6 +7,7 @@ import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
 import { useDebounce } from "@/hooks/use-debounce"
+import { Badge } from "@/components/ui/badge"
 
 export default function NotificationsPage() {
     const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications({ showToasts: false })
@@ -173,6 +174,11 @@ export default function NotificationsPage() {
                                                 <h3 className={`font-black tracking-tight ${n.is_read ? 'text-foreground/70' : 'text-foreground'}`}>
                                                     {n.title}
                                                 </h3>
+                                                {typeof n.aggregate_count === "number" && n.aggregate_count > 1 && (
+                                                    <Badge variant="secondary" className="text-[10px] h-6 px-2 rounded-xl">
+                                                        {n.aggregate_count}
+                                                    </Badge>
+                                                )}
                                                 {!n.is_read && (
                                                     <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                                                 )}
@@ -182,9 +188,25 @@ export default function NotificationsPage() {
                                                 {formatDateTime(n.created_at)}
                                             </div>
                                         </div>
-                                        <p className={`text-sm leading-relaxed ${n.is_read ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
-                                            {n.message}
-                                        </p>
+                                        {(() => {
+                                            const count = typeof n.aggregate_count === "number" ? n.aggregate_count : 1
+                                            const meta = n.metadata || {}
+                                            const lastSnippet = typeof (meta as any).last_snippet === "string" ? (meta as any).last_snippet : null
+                                            const raw = n.message || ""
+                                            const main = count > 1 && raw.includes("Último:") ? raw.split("Último:")[0].trim() : raw
+                                            return (
+                                                <div className="space-y-1">
+                                                    <p className={`text-sm leading-relaxed ${n.is_read ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
+                                                        {main}
+                                                    </p>
+                                                    {count > 1 && lastSnippet && (
+                                                        <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                                                            Último: {lastSnippet}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )
+                                        })()}
 
                                         <div className="flex items-center gap-4 pt-2">
                                             {n.link && (

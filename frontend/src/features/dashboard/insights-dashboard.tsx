@@ -3,15 +3,24 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { SlideUp, FadeIn } from "@/components/ui/motion"
 import { H2, P } from "@/components/ui/typography"
-import { Activity, TrendingUp, Users, Eye, Sparkles, Lock } from "lucide-react"
+import { Activity, TrendingUp, Users, Eye, Sparkles, Lock, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
-interface InsightsDashboardProps {
-    isPremium: boolean
+type ModerationMetrics = {
+    pending_comments: number
+    pending_replies: number
+    pending_total: number
+    top_articles: Array<{ article_id: number; article__title: string; article__slug: string; count: number }>
+    oldest_pending?: { created_at?: string; article__title?: string; article__slug?: string } | null
 }
 
-export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
+interface InsightsDashboardProps {
+    isPremium: boolean
+    moderationMetrics?: ModerationMetrics | null
+}
+
+export function InsightsDashboard({ isPremium, moderationMetrics }: InsightsDashboardProps) {
     if (!isPremium) {
         return (
             <Card className="border-dashed border-2 bg-muted/30 h-[500px] flex flex-col items-center justify-center text-center p-12">
@@ -74,6 +83,84 @@ export function InsightsDashboard({ isPremium }: InsightsDashboardProps) {
                         </CardContent>
                     </Card>
                 </SlideUp>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <FadeIn delay={0.35}>
+                    <Card className="overflow-hidden border-primary/10">
+                        <CardHeader className="bg-muted/30">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-lg">Moderação</CardTitle>
+                                    <CardDescription>Comentários e respostas pendentes</CardDescription>
+                                </div>
+                                <MessageCircle className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            {!moderationMetrics ? (
+                                <div className="text-sm text-muted-foreground">
+                                    Métricas indisponíveis para este usuário.
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="flex items-end justify-between gap-4">
+                                        <div>
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                Pendentes (total)
+                                            </div>
+                                            <div className="text-3xl font-black">{moderationMetrics.pending_total}</div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                                                {moderationMetrics.pending_comments} comentários
+                                            </Badge>
+                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                                                {moderationMetrics.pending_replies} respostas
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    {moderationMetrics.oldest_pending?.created_at && (
+                                        <div className="text-xs text-muted-foreground">
+                                            Mais antigo:{" "}
+                                            {new Date(moderationMetrics.oldest_pending.created_at).toLocaleString("pt-BR")}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </FadeIn>
+
+                <FadeIn delay={0.45}>
+                    <Card className="overflow-hidden border-primary/10">
+                        <CardHeader className="bg-muted/30">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-lg">Artigos com mais pendências</CardTitle>
+                                    <CardDescription>Top 5 por volume</CardDescription>
+                                </div>
+                                <Activity className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="divide-y">
+                                {(moderationMetrics?.top_articles ?? []).length === 0 ? (
+                                    <div className="p-4 text-sm text-muted-foreground">Sem dados.</div>
+                                ) : (
+                                    (moderationMetrics?.top_articles ?? []).map((it) => (
+                                        <div key={it.article_id} className="flex items-center justify-between p-4 hover:bg-muted/20 transition-colors">
+                                            <div className="text-sm font-medium truncate max-w-[280px]">{it.article__title}</div>
+                                            <Badge variant="secondary" className="text-[10px] rounded-xl">
+                                                {it.count}
+                                            </Badge>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </FadeIn>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

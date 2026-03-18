@@ -6,7 +6,18 @@ from .models import Notification, PushSubscription
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
-        fields = ["id", "notification_type", "title", "message", "link", "is_read", "created_at"]
+        fields = [
+            "id",
+            "notification_type",
+            "title",
+            "message",
+            "link",
+            "aggregate_key",
+            "aggregate_count",
+            "metadata",
+            "is_read",
+            "created_at",
+        ]
         read_only_fields = ["id", "created_at"]
 
 

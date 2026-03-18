@@ -98,17 +98,26 @@ class AccountsAPITest(APITestCase):
     def test_notification_preference_update(self):
         res = self.client.get("/api/accounts/preferences/notifications/current/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(res.data.get("notify_comment_moderation"))
-        self.assertTrue(res.data.get("notify_reply_approved"))
+        self.assertTrue(res.data.get("notify_moderation_comment_pending"))
+        self.assertTrue(res.data.get("notify_moderation_reply_pending"))
+        self.assertTrue(res.data.get("notify_reply_approved_single"))
+        self.assertTrue(res.data.get("notify_reply_approved_thread"))
 
         res2 = self.client.put(
             "/api/accounts/preferences/notifications/update_current/",
-            {"notify_comment_moderation": False, "notify_reply_approved": False},
+            {
+                "notify_moderation_comment_pending": False,
+                "notify_moderation_reply_pending": False,
+                "notify_reply_approved_single": False,
+                "notify_reply_approved_thread": False,
+            },
             format="json",
         )
         self.assertEqual(res2.status_code, status.HTTP_200_OK)
-        self.assertFalse(res2.data.get("notify_comment_moderation"))
-        self.assertFalse(res2.data.get("notify_reply_approved"))
+        self.assertFalse(res2.data.get("notify_moderation_comment_pending"))
+        self.assertFalse(res2.data.get("notify_moderation_reply_pending"))
+        self.assertFalse(res2.data.get("notify_reply_approved_single"))
+        self.assertFalse(res2.data.get("notify_reply_approved_thread"))
 
     def test_user_update_with_role_and_avatar(self):
         # Usar self.admin_role já criado no setUp (evita UNIQUE constraint em name+company)

@@ -192,6 +192,16 @@ class PublicArticlesAPITest(APITestCase):
         self.assertIn("excerpt", res.data)
         self.assertIn("content", res.data)
 
+    def test_public_comment_rejects_link_spam(self):
+        payload = {
+            "article_slug": self.art_a.slug,
+            "name": "Visitante",
+            "email": "spam@example.com",
+            "content": "Veja http://a.com http://b.com http://c.com",
+        }
+        res = self.public_client.post("/api/articles/public/comments/", payload, format="json", HTTP_X_COMPANY_SLUG="alpha")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_public_comments_create_and_list_with_moderation_and_rate_limit(self):
         # Initially, list should be empty (no approved comments)
         res_list_empty = self.public_client.get(
@@ -322,6 +332,7 @@ class PublicArticlesAPITest(APITestCase):
         }
         res1 = self.public_client.post("/api/articles/public/comments/", payload, format="json", HTTP_X_COMPANY_SLUG="alpha")
         self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        cache.clear()
 
         payload2 = dict(payload)
         payload2["email"] = "cooldown2@example.com"
@@ -329,7 +340,10 @@ class PublicArticlesAPITest(APITestCase):
         res2 = self.public_client.post("/api/articles/public/comments/", payload2, format="json", HTTP_X_COMPANY_SLUG="alpha")
         self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
 
-        self.assertEqual(Notification.objects.filter(company=self.company_a, recipient=self.moderator_a).count(), 1)
+        qs = Notification.objects.filter(company=self.company_a, recipient=self.moderator_a)
+        self.assertEqual(qs.count(), 1)
+        n = qs.first()
+        self.assertTrue("2 comentários pendentes" in (n.message or ""))
 
     def test_public_retrieve_records_view(self):
         # No views initially

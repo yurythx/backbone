@@ -12,6 +12,7 @@ import { showApiError } from '@/lib/toast-helpers';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { useAuth } from '@/hooks/use-auth';
+import { Link2 } from 'lucide-react';
 
 interface Comment {
     id: number;
@@ -46,6 +47,7 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
     const [replyTo, setReplyTo] = React.useState<Comment | null>(null);
     const [website, setWebsite] = React.useState('');
     const prefilledRef = React.useRef(false);
+    const [highlightId, setHighlightId] = React.useState<string | null>(null)
     const maxLength = 1500;
     const [repliesByParent, setRepliesByParent] = React.useState<Record<number, { items: Comment['replies']; next: string | null; isLoading: boolean }>>({})
 
@@ -106,6 +108,33 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
     });
 
     const comments = Array.isArray(data) ? data : [];
+
+    const copyLink = async (hashId: string) => {
+        if (typeof window === 'undefined') return
+        try {
+            const url = new URL(window.location.href)
+            url.hash = `#${hashId}`
+            await navigator.clipboard.writeText(url.toString())
+            toast.success('Link copiado')
+        } catch {
+            toast.error('Não foi possível copiar o link')
+        }
+    }
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return
+        const hash = window.location.hash || ''
+        if (!hash.startsWith('#comentario-') && !hash.startsWith('#resposta-')) return
+        const id = hash.slice(1)
+        const el = document.getElementById(id)
+        if (!el) return
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        setHighlightId(id)
+        window.clearTimeout((window as any).__bb_comment_highlight_timeout)
+        ;(window as any).__bb_comment_highlight_timeout = window.setTimeout(() => {
+            setHighlightId(null)
+        }, 2500)
+    }, [comments.length])
 
     const loadMoreReplies = async (parentId: number) => {
         setRepliesByParent((prev) => {
@@ -298,7 +327,15 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
                             const replyCount = Number.isFinite(Number(c.reply_count)) ? Number(c.reply_count) : repliesInitial.length
 
                             return (
-                                <div key={c.id} role="listitem" className="rounded-2xl border border-primary/10 bg-background/95 backdrop-blur p-5">
+                                <div
+                                    key={c.id}
+                                    id={`comentario-${c.id}`}
+                                    role="listitem"
+                                    className={[
+                                        "rounded-2xl border border-primary/10 bg-background/95 backdrop-blur p-5 transition-colors",
+                                        highlightId === `comentario-${c.id}` ? "ring-2 ring-primary/40 bg-primary/5" : "",
+                                    ].filter(Boolean).join(" ")}
+                                >
                                     <div className="flex items-center justify-between gap-4">
                                         <div className="flex items-center gap-2 min-w-0">
                                             <div className="font-semibold truncate">{displayName}</div>
@@ -306,7 +343,18 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
                                                 Comentário público
                                             </Badge>
                                         </div>
-                                        <div className="text-xs text-muted-foreground">{dateLabel}</div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-xs text-muted-foreground">{dateLabel}</div>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-8 px-2"
+                                                onClick={() => copyLink(`comentario-${c.id}`)}
+                                                aria-label={`Copiar link do comentário ${c.id}`}
+                                            >
+                                                <Link2 className="h-4 w-4" aria-hidden="true" />
+                                            </Button>
+                                        </div>
                                     </div>
                                     <div className="mt-3 text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                                         {c.content}
@@ -337,10 +385,28 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
                                                 const name2 = (r.author_name || r.name || 'Anônimo').trim();
 
                                                 return (
-                                                    <div key={r.id} className="rounded-xl border border-border/50 bg-muted/10 p-4">
+                                                    <div
+                                                        key={r.id}
+                                                        id={`resposta-${r.id}`}
+                                                        className={[
+                                                            "rounded-xl border border-border/50 bg-muted/10 p-4 transition-colors",
+                                                            highlightId === `resposta-${r.id}` ? "ring-2 ring-primary/40 bg-primary/5" : "",
+                                                        ].filter(Boolean).join(" ")}
+                                                    >
                                                         <div className="flex items-center justify-between gap-4">
                                                             <div className="font-semibold truncate">{name2}</div>
-                                                            <div className="text-xs text-muted-foreground">{date2}</div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="text-xs text-muted-foreground">{date2}</div>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="h-8 px-2"
+                                                                    onClick={() => copyLink(`resposta-${r.id}`)}
+                                                                    aria-label={`Copiar link da resposta ${r.id}`}
+                                                                >
+                                                                    <Link2 className="h-4 w-4" aria-hidden="true" />
+                                                                </Button>
+                                                            </div>
                                                         </div>
                                                         <div className="mt-2 text-sm whitespace-pre-wrap">{r.content}</div>
                                                     </div>

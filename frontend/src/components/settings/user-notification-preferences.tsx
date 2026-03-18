@@ -8,8 +8,10 @@ import { toast } from "sonner"
 import { H3, P } from "@/components/ui/typography"
 
 type UserNotificationPreference = {
-  notify_comment_moderation: boolean
-  notify_reply_approved: boolean
+  notify_moderation_comment_pending: boolean
+  notify_moderation_reply_pending: boolean
+  notify_reply_approved_single: boolean
+  notify_reply_approved_thread: boolean
 }
 
 export function UserNotificationPreferences() {
@@ -62,28 +64,56 @@ export function UserNotificationPreferences() {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-6 rounded-2xl border border-border/50 bg-muted/20 p-4">
           <div className="min-w-0">
-            <div className="font-medium">Moderação de comentários</div>
+            <div className="font-medium">Comentários pendentes</div>
             <div className="text-sm text-muted-foreground">
-              Notificar quando houver comentários ou respostas pendentes de aprovação.
+              Notificar quando houver comentários pendentes de aprovação.
             </div>
           </div>
           <Switch
-            checked={data.notify_comment_moderation}
-            onCheckedChange={(checked) => updateMutation.mutate({ notify_comment_moderation: checked })}
+            checked={data.notify_moderation_comment_pending}
+            onCheckedChange={(checked) => updateMutation.mutate({ notify_moderation_comment_pending: checked })}
             disabled={updateMutation.isPending}
           />
         </div>
 
         <div className="flex items-start justify-between gap-6 rounded-2xl border border-border/50 bg-muted/20 p-4">
           <div className="min-w-0">
-            <div className="font-medium">Respostas aprovadas</div>
+            <div className="font-medium">Respostas pendentes</div>
+            <div className="text-sm text-muted-foreground">
+              Notificar quando houver respostas pendentes de aprovação.
+            </div>
+          </div>
+          <Switch
+            checked={data.notify_moderation_reply_pending}
+            onCheckedChange={(checked) => updateMutation.mutate({ notify_moderation_reply_pending: checked })}
+            disabled={updateMutation.isPending}
+          />
+        </div>
+
+        <div className="flex items-start justify-between gap-6 rounded-2xl border border-border/50 bg-muted/20 p-4">
+          <div className="min-w-0">
+            <div className="font-medium">Resposta aprovada (individual)</div>
             <div className="text-sm text-muted-foreground">
               Notificar quando uma resposta ao seu comentário for aprovada.
             </div>
           </div>
           <Switch
-            checked={data.notify_reply_approved}
-            onCheckedChange={(checked) => updateMutation.mutate({ notify_reply_approved: checked })}
+            checked={data.notify_reply_approved_single}
+            onCheckedChange={(checked) => updateMutation.mutate({ notify_reply_approved_single: checked })}
+            disabled={updateMutation.isPending}
+          />
+        </div>
+
+        <div className="flex items-start justify-between gap-6 rounded-2xl border border-border/50 bg-muted/20 p-4">
+          <div className="min-w-0">
+            <div className="font-medium">Respostas aprovadas (thread)</div>
+            <div className="text-sm text-muted-foreground">
+              Notificar quando várias replies forem aprovadas na sua thread.
+            </div>
+          </div>
+          <Switch
+            checked={data.notify_reply_approved_thread}
+            onCheckedChange={(checked) => updateMutation.mutate({ notify_reply_approved_thread: checked })}
             disabled={updateMutation.isPending}
           />
         </div>
@@ -91,4 +121,3 @@ export function UserNotificationPreferences() {
     </div>
   )
 }
-

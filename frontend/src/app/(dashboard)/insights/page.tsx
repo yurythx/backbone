@@ -21,6 +21,16 @@ export default function InsightsPage() {
         licenseData?.plan === 'Enterprise' ||
         licenseData?.plan === 'Premium'
 
+    const moderationQuery = useQuery({
+        queryKey: ['articles', 'comments', 'moderation_metrics'],
+        queryFn: async ({ signal }) => {
+            const res = await api.get('/api/articles/comments/moderation_metrics/', { signal })
+            return res.data
+        },
+        enabled: Boolean(isPremium),
+        retry: false,
+    })
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-[60vh]" role="status" aria-live="polite" aria-label="Carregando insights">
@@ -41,7 +51,7 @@ export default function InsightsPage() {
                 </div>
             </div>
 
-            <InsightsDashboard isPremium={isPremium} />
+            <InsightsDashboard isPremium={isPremium} moderationMetrics={moderationQuery.data ?? null} />
         </div>
     )
 }

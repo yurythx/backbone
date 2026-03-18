@@ -195,6 +195,11 @@ export function NotificationBell() {
                                                         {notification.title}
                                                     </h5>
                                                     <div className="flex items-center gap-2">
+                                                        {typeof notification.aggregate_count === "number" && notification.aggregate_count > 1 && (
+                                                            <Badge variant="secondary" className="text-[9px] h-5 px-2">
+                                                                {notification.aggregate_count}
+                                                            </Badge>
+                                                        )}
                                                         <Badge variant="outline" className="text-[9px] h-5 px-2">
                                                             {typeLabel(notification.notification_type)}
                                                         </Badge>
@@ -216,9 +221,25 @@ export function NotificationBell() {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                                                    {notification.message}
-                                                </p>
+                                                {(() => {
+                                                    const count = typeof notification.aggregate_count === "number" ? notification.aggregate_count : 1
+                                                    const meta = notification.metadata || {}
+                                                    const lastSnippet = typeof (meta as any).last_snippet === "string" ? (meta as any).last_snippet : null
+                                                    const raw = notification.message || ""
+                                                    const main = count > 1 && raw.includes("Último:") ? raw.split("Último:")[0].trim() : raw
+                                                    return (
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                                                                {main}
+                                                            </p>
+                                                            {count > 1 && lastSnippet && (
+                                                                <p className="text-[11px] text-muted-foreground/80 line-clamp-2">
+                                                                    Último: {lastSnippet}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
                                                 {notification.link && (
                                                     <button
                                                         className="inline-flex items-center gap-1 text-[10px] font-black text-primary uppercase tracking-widest mt-2 hover:underline"
