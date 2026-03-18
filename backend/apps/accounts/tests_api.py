@@ -95,6 +95,21 @@ class AccountsAPITest(APITestCase):
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
+    def test_notification_preference_update(self):
+        res = self.client.get("/api/accounts/preferences/notifications/current/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data.get("notify_comment_moderation"))
+        self.assertTrue(res.data.get("notify_reply_approved"))
+
+        res2 = self.client.put(
+            "/api/accounts/preferences/notifications/update_current/",
+            {"notify_comment_moderation": False, "notify_reply_approved": False},
+            format="json",
+        )
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertFalse(res2.data.get("notify_comment_moderation"))
+        self.assertFalse(res2.data.get("notify_reply_approved"))
+
     def test_user_update_with_role_and_avatar(self):
         # Usar self.admin_role já criado no setUp (evita UNIQUE constraint em name+company)
         role = self.admin_role

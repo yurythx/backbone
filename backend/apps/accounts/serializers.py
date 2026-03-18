@@ -6,7 +6,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from apps.core.models import Company
 from apps.core.serializers import CompanySerializer
 
-from .models import Invitation, Role, UserThemePreference
+from .models import Invitation, Role, UserNotificationPreference, UserThemePreference
 
 User = get_user_model()
 
@@ -205,6 +205,23 @@ class UserThemePreferenceSerializer(serializers.ModelSerializer):
             "theme_palette",
             "use_tenant_theme",
             "dark_mode_preference",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+
+class UserNotificationPreferenceSerializer(serializers.ModelSerializer):
+    user_details = UserSerializer(source="user", read_only=True)
+
+    class Meta:
+        model = UserNotificationPreference
+        fields = [
+            "id",
+            "user",
+            "user_details",
+            "notify_comment_moderation",
+            "notify_reply_approved",
             "created_at",
             "updated_at",
         ]

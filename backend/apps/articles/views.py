@@ -568,15 +568,123 @@ class CommentViewSet(viewsets.ModelViewSet):
         log_delete(self.request.user, "Comment", instance, request=self.request)
         instance.delete()
 
+    def _notify_parent_author_reply_approved(self, request, reply: Comment):
+        if not getattr(reply, "parent_id", None):
+            return
+        if not getattr(reply, "is_public", False):
+            return
+        if not getattr(reply, "article_id", None):
+            return
+        if not TenantModule.objects.filter(company=reply.company, module__code="articles", is_active=True).exists():
+            return
+
+        parent = (
+            Comment.objects.filter(company=request.company, id=reply.parent_id)
+            .select_related("author")
+            .only("id", "author_id", "content")
+            .first()
+        )
+        if not parent or not getattr(parent, "author_id", None):
+            return
+
+        if request.user and request.user.is_authenticated and request.user.id == parent.author_id:
+            return
+        pref = getattr(parent.author, "notification_preference", None)
+        if pref and pref.notify_reply_approved is False:
+            return
+
+        from apps.notifications.models import Notification
+        from apps.notifications.tasks import send_websocket_notification
+
+        slug = getattr(reply.article, "slug", None)
+        link = f"/artigos/preview/{slug}" if slug else "/artigos"
+        snippet = (reply.content or "").strip()
+        message = f"{reply.article.title}: {snippet[:120]}" if snippet else f"Seu comentário em {reply.article.title} recebeu uma resposta."
+
+        notification = Notification.objects.create(
+            company=reply.company,
+            recipient=parent.author,
+            notification_type=Notification.TYPE_MESSAGE,
+            title="Nova resposta ao seu comentário",
+            message=message,
+            link=link,
+        )
+        try:
+            send_websocket_notification.delay(
+                f"notifications_user_{parent.author_id}",
+                {
+                    "type": "notification_message",
+                    "notification_id": str(notification.id),
+                    "notification_type": notification.notification_type,
+                    "title": notification.title,
+                    "message": notification.message,
+                    "link": notification.link,
+                    "created_at": notification.created_at.isoformat(),
+                },
+            )
+        except Exception:
+            pass
+
+    def _notify_parent_author_thread_replies_approved(self, request, root: Comment, newly_approved_replies: int):
+        if newly_approved_replies <= 0:
+            return
+        if not getattr(root, "author_id", None):
+            return
+        if request.user and request.user.is_authenticated and request.user.id == root.author_id:
+            return
+        pref = getattr(root.author, "notification_preference", None)
+        if pref and pref.notify_reply_approved is False:
+            return
+        cooldown_key = f"cooldown:notif:thread_reply_approved:{root.company_id}:{root.author_id}:{root.id}"
+        if cache.get(cooldown_key):
+            return
+        cache.set(cooldown_key, 1, timeout=300)
+        if not TenantModule.objects.filter(company=root.company, module__code="articles", is_active=True).exists():
+            return
+
+        from apps.notifications.models import Notification
+        from apps.notifications.tasks import send_websocket_notification
+
+        slug = getattr(root.article, "slug", None)
+        link = f"/artigos/preview/{slug}" if slug else "/artigos"
+        message = f"{newly_approved_replies} resposta(s) foram aprovadas em {root.article.title}."
+
+        notification = Notification.objects.create(
+            company=root.company,
+            recipient=root.author,
+            notification_type=Notification.TYPE_MESSAGE,
+            title="Novas respostas ao seu comentário",
+            message=message,
+            link=link,
+        )
+        try:
+            send_websocket_notification.delay(
+                f"notifications_user_{root.author_id}",
+                {
+                    "type": "notification_message",
+                    "notification_id": str(notification.id),
+                    "notification_type": notification.notification_type,
+                    "title": notification.title,
+                    "message": notification.message,
+                    "link": notification.link,
+                    "created_at": notification.created_at.isoformat(),
+                },
+            )
+        except Exception:
+            pass
+
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         """
         Aprova um comentário pendente de moderação.
         """
         comment = self.get_object()
+        was_approved = bool(comment.is_approved)
         comment.is_approved = True
         comment.save(update_fields=["is_approved"])
         log_update(request.user, "Comment", comment, request=request)
+        if not was_approved:
+            self._notify_parent_author_reply_approved(request, comment)
         return Response({"status": "approved"})
 
     @action(detail=True, methods=["post"])
@@ -592,12 +700,16 @@ class CommentViewSet(viewsets.ModelViewSet):
         root = self.get_object()
         if getattr(root, "parent_id", None):
             root = root.parent
+        newly_approved_replies = (
+            Comment.objects.filter(company=request.company, parent_id=root.id, is_approved=False).count()
+        )
         qs = self.get_queryset().filter(Q(id=root.id) | Q(parent_id=root.id))
         ids = list(qs.values_list("id", flat=True))
         updated = qs.update(is_approved=True)
         if ids:
             for c in Comment.objects.filter(id__in=ids):
                 log_update(request.user, "Comment", c, request=request)
+        self._notify_parent_author_thread_replies_approved(request, root, newly_approved_replies)
         return Response({"updated": updated})
 
     @action(detail=True, methods=["post"])
@@ -730,7 +842,9 @@ class CommentViewSet(viewsets.ModelViewSet):
             qs = self._include_replies(qs, f)
         count = qs.count()
         sample_ids = list(qs.order_by("-created_at").values_list("id", flat=True)[:20])
-        return Response({"count": count, "sample_ids": sample_ids})
+        sample_qs = self.get_queryset().filter(id__in=sample_ids).order_by("-created_at")
+        sample_items = ModerationReplySerializer(sample_qs, many=True, context={"request": request}).data
+        return Response({"count": count, "sample_ids": sample_ids, "sample_items": sample_items})
 
 
 @extend_schema_view(
@@ -764,11 +878,14 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         perm = "articles.comment_moderate"
         candidates = (
             User.all_objects.filter(company=article.company, is_active=True)
-            .select_related("role")
+            .select_related("role", "notification_preference")
             .filter(Q(is_superuser=True) | Q(is_staff=True) | Q(role__isnull=False))
         )
         recipients = []
         for u in candidates:
+            pref = getattr(u, "notification_preference", None)
+            if pref and pref.notify_comment_moderation is False:
+                continue
             if u.is_superuser or u.is_staff:
                 recipients.append(u)
                 continue
@@ -813,6 +930,11 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
             )
 
         for u in recipients:
+            cooldown_seconds = 60
+            cooldown_key = f"cooldown:notif:comment_moderation:{article.company_id}:{u.id}:{article.id}:{1 if is_reply else 0}"
+            if cache.get(cooldown_key):
+                continue
+            cache.set(cooldown_key, 1, timeout=cooldown_seconds)
             notification = Notification.objects.create(
                 company=article.company,
                 recipient=u,

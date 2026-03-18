@@ -6,6 +6,7 @@ import { Protected } from "@/components/auth/protected"
 import { Palette, User } from "lucide-react"
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Bell } from "lucide-react"
 
 const ProfileForm = dynamic(
   () => import("@/features/settings/profile-form").then((m) => m.ProfileForm),
@@ -31,6 +32,19 @@ const UserThemeSelector = dynamic(
         <Skeleton className="h-10 w-full rounded-xl" />
         <Skeleton className="h-24 w-full rounded-2xl" />
         <Skeleton className="h-10 w-44 rounded-xl" />
+      </div>
+    ),
+  }
+)
+
+const UserNotificationPreferences = dynamic(
+  () => import("@/components/settings/user-notification-preferences").then((m) => m.UserNotificationPreferences),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4" role="status" aria-live="polite" aria-label="Carregando preferências de notificações">
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
       </div>
     ),
   }
@@ -63,6 +77,17 @@ function ProfileContent() {
           </p>
           
           <UserThemeSelector />
+        </div>
+
+        <div className="glass rounded-3xl p-6 md:p-10 border shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex items-center gap-2 mb-2 text-primary">
+            <Bell className="h-5 w-5" />
+            <h2 className="text-xl font-semibold">Notificações</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-6">
+            Ajuste quais eventos geram notificações para o seu usuário.
+          </p>
+          <UserNotificationPreferences />
         </div>
       </div>
     </div>

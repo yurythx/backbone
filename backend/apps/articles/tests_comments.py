@@ -6,6 +6,7 @@ from apps.accounts.models import Role
 from apps.articles.models import Article, Category, Comment
 from apps.core.models import Company
 from apps.module_manager.models import Module, TenantModule
+from apps.notifications.models import Notification
 
 User = get_user_model()
 
@@ -249,6 +250,8 @@ class ArticleCommentsAPITest(APITestCase):
         )
         self.assertEqual(res_count.status_code, status.HTTP_200_OK)
         self.assertEqual(res_count.data.get("count"), 1)
+        self.assertTrue(isinstance(res_count.data.get("sample_ids"), list))
+        self.assertTrue(isinstance(res_count.data.get("sample_items"), list))
 
         parent = Comment.objects.create(
             company=self.company,
@@ -288,6 +291,7 @@ class ArticleCommentsAPITest(APITestCase):
         )
         self.assertEqual(res_count_with_replies.status_code, status.HTTP_200_OK)
         self.assertEqual(res_count_with_replies.data.get("count"), 2)
+        self.assertEqual(len(res_count_with_replies.data.get("sample_items", [])), 2)
 
     def test_thread_actions(self):
         role, _ = Role.all_objects.get_or_create(
@@ -332,3 +336,41 @@ class ArticleCommentsAPITest(APITestCase):
         self.assertFalse(Comment.objects.filter(id=parent.id).exists())
         self.assertFalse(Comment.objects.filter(id=r1.id).exists())
         self.assertFalse(Comment.objects.filter(id=r2.id).exists())
+
+    def test_reply_approval_notifies_parent_author(self):
+        role, _ = Role.all_objects.get_or_create(
+            company=self.company, name="Editor", defaults={"permissions": ["articles.comment_moderate"]}
+        )
+        if role.permissions != ["articles.comment_moderate"]:
+            role.permissions = ["articles.comment_moderate"]
+            role.save(update_fields=["permissions"])
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        parent_author = User.all_objects.create_user(
+            username="parent-author", email="parent@author.com", password="pass", company=self.company
+        )
+        parent = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=parent_author,
+            content="Comentário do autor",
+            is_public=True,
+            is_approved=True,
+        )
+        reply = Comment.objects.create(
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="Resposta pendente",
+            is_public=True,
+            is_approved=False,
+            parent=parent,
+        )
+
+        res_approve = self.client.post(f"/api/articles/comments/{reply.id}/approve/", {}, format="json")
+        self.assertEqual(res_approve.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            Notification.objects.filter(company=self.company, recipient=parent_author, title="Nova resposta ao seu comentário").exists()
+        )

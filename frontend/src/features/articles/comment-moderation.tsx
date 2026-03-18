@@ -42,6 +42,12 @@ type Comment = ModerationItem & {
   reply_count?: number
 }
 
+type SampleItem = ModerationItem & {
+  article?: number
+  article_title?: string | null
+  article_slug?: string | null
+}
+
 type Paginated<T> = {
   count: number
   next: string | null
@@ -74,6 +80,7 @@ export function CommentModeration() {
   const [bulkFilterConfirmOpen, setBulkFilterConfirmOpen] = React.useState(false)
   const [bulkFilterAction, setBulkFilterAction] = React.useState<"approve" | "disapprove" | "delete" | null>(null)
   const [bulkFilterCount, setBulkFilterCount] = React.useState<number | null>(null)
+  const [bulkFilterSample, setBulkFilterSample] = React.useState<SampleItem[] | null>(null)
   const [bulkIncludeReplies, setBulkIncludeReplies] = React.useState(true)
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set())
   const [articleId, setArticleId] = React.useState<string>("")
@@ -315,14 +322,16 @@ export function CommentModeration() {
 
   const bulkFilteredCountMutation = useMutation({
     mutationFn: async (payload: Record<string, string | number | boolean>) => {
-      const res = await api.post<{ count: number }>("/api/articles/comments/bulk_filtered_count/", payload)
+      const res = await api.post<{ count: number; sample_items?: SampleItem[] }>("/api/articles/comments/bulk_filtered_count/", payload)
       return res.data
     },
     onSuccess: (data) => {
       setBulkFilterCount(Number.isFinite(Number(data.count)) ? Number(data.count) : 0)
+      setBulkFilterSample(Array.isArray(data.sample_items) ? data.sample_items : [])
     },
     onError: () => {
       setBulkFilterCount(null)
+      setBulkFilterSample(null)
       toast.error("Erro ao calcular quantidade do filtro")
     },
   })
@@ -331,9 +340,11 @@ export function CommentModeration() {
     if (!bulkFilterConfirmOpen) {
       setBulkFilterAction(null)
       setBulkFilterCount(null)
+      setBulkFilterSample(null)
       return
     }
     setBulkFilterCount(null)
+    setBulkFilterSample(null)
     bulkFilteredCountMutation.mutate(filterPayload)
   }, [bulkFilterConfirmOpen, bulkFilteredCountMutation, filterPayload])
 
@@ -882,6 +893,28 @@ export function CommentModeration() {
                 : `Comentários afetados: ${bulkFilterCount}${bulkIncludeReplies ? " (inclui respostas)." : "."}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {Array.isArray(bulkFilterSample) && bulkFilterSample.length > 0 && (
+            <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-border/50 bg-muted/20 p-3 space-y-2">
+              <div className="text-xs text-muted-foreground">Amostra (até {bulkFilterSample.length} itens)</div>
+              {bulkFilterSample.slice(0, 10).map((it) => {
+                const isReply = Boolean(it.parent)
+                const title = it.article_title || "Artigo"
+                const snippet = (it.content || "").trim().slice(0, 120)
+                return (
+                  <div key={it.id} className="rounded-lg border border-border/50 bg-background/40 p-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isReply ? <Badge variant="outline">Resposta</Badge> : <Badge variant="outline">Comentário</Badge>}
+                      <div className="text-sm font-medium">{title}</div>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      #{it.id} • {new Date(it.created_at).toLocaleString()}
+                    </div>
+                    {snippet && <div className="mt-2 text-sm whitespace-pre-wrap">{snippet}</div>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel
               disabled={

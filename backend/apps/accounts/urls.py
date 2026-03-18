@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .cookie_auth_views import CookieLogoutView, CookieTokenObtainView, CookieTokenRefreshView
+from .notification_views import UserNotificationPreferenceViewSet
 from .theme_views import UserThemePreferenceViewSet
 from .views import (
     AcceptInvitationView,
@@ -21,6 +22,7 @@ router.register(r"users", UserViewSet, basename="users")
 router.register(r"roles", RoleViewSet, basename="roles")
 router.register(r"invitations", InvitationViewSet, basename="invitations")
 router.register(r"preferences/theme", UserThemePreferenceViewSet, basename="user-theme-preferences")
+router.register(r"preferences/notifications", UserNotificationPreferenceViewSet, basename="user-notification-preferences")
 
 urlpatterns = [
     path("register/", UserRegistrationView.as_view(), name="register"),

@@ -127,6 +127,26 @@ class UserThemePreference(models.Model):
         return f"{self.user.username} - {palette}"
 
 
+class UserNotificationPreference(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="notification_preference")
+    notify_comment_moderation = models.BooleanField(
+        default=True, help_text="Receber notificações de moderação (comentários/repostas pendentes)"
+    )
+    notify_reply_approved = models.BooleanField(
+        default=True, help_text="Receber notificações quando uma resposta ao seu comentário for aprovada"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Notification Preference"
+        verbose_name_plural = "User Notification Preferences"
+
+    def __str__(self):
+        return f"{self.user.username} notifications"
+
+
 class Invitation(BaseTenantModel):
     """
     Convite para um novo usuário se juntar à empresa.

@@ -102,6 +102,7 @@ class ArticlesAPITest(APITestCase):
 
 class PublicArticlesAPITest(APITestCase):
     def setUp(self):
+        cache.clear()
         # Tenants
         self.company_a = Company.objects.create(name="Alpha", slug="alpha")
         self.company_b = Company.objects.create(name="Beta", slug="beta")
@@ -309,6 +310,26 @@ class PublicArticlesAPITest(APITestCase):
             "/api/articles/public/comments/", pl_over, format="json", HTTP_X_COMPANY_SLUG="alpha"
         )
         self.assertEqual(res_over.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_public_comment_notification_cooldown(self):
+        from apps.notifications.models import Notification
+
+        payload = {
+            "article_slug": self.art_a.slug,
+            "name": "Visitante",
+            "email": "cooldown1@example.com",
+            "content": "Primeiro",
+        }
+        res1 = self.public_client.post("/api/articles/public/comments/", payload, format="json", HTTP_X_COMPANY_SLUG="alpha")
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+
+        payload2 = dict(payload)
+        payload2["email"] = "cooldown2@example.com"
+        payload2["content"] = "Segundo"
+        res2 = self.public_client.post("/api/articles/public/comments/", payload2, format="json", HTTP_X_COMPANY_SLUG="alpha")
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+
+        self.assertEqual(Notification.objects.filter(company=self.company_a, recipient=self.moderator_a).count(), 1)
 
     def test_public_retrieve_records_view(self):
         # No views initially

@@ -132,6 +132,15 @@ export interface UserThemePreference {
   updated_at: string;
 }
 
+export interface UserNotificationPreference {
+  id: number;
+  user: number;
+  notify_comment_moderation: boolean;
+  notify_reply_approved: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Company {
   id: string;
   name: string;
