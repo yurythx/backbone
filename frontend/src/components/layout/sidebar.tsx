@@ -22,7 +22,8 @@ import {
   Globe,
   KeyRound,
   Calendar as CalendarIcon,
-  DollarSign
+  DollarSign,
+  ClipboardList
 } from "lucide-react"
 import { motion } from "framer-motion"
 import {
@@ -70,6 +71,12 @@ const sidebarSections: SidebarSection[] = [
         href: "/calendar",
         icon: CalendarIcon, // Renamed to avoid conflict with imported Calendar icon if any
         module: "calendar",
+      },
+      {
+        title: "CRM / Suporte",
+        href: "/crm",
+        icon: ClipboardList,
+        module: "crm",
       },
       {
         title: "Financeiro",
@@ -263,7 +270,7 @@ export function Sidebar() {
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 py-6 px-3 space-y-6 overflow-hidden" role="navigation" aria-label="Navegação principal">
+      <nav className="flex-1 py-4 px-3 space-y-4 overflow-y-auto scrollbar-none hover:scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent transition-all" role="navigation" aria-label="Navegação principal">
         <TooltipProvider delayDuration={0}>
           {filteredSections.map((section, sectionIndex) => (
             <div
@@ -294,7 +301,7 @@ export function Sidebar() {
                         <Link
                           href={item.href}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                            "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                             isActive
                               ? "text-primary bg-primary/10 shadow-sm"
                               : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",

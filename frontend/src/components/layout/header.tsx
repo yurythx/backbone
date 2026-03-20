@@ -40,6 +40,7 @@ const navItems = [
   { label: "Páginas", href: "/cms", module: "pages" },
   { label: "Artigos", href: "/artigos", module: "articles" },
   { label: "Messenger", href: "/messenger", module: "messenger" },
+  { label: "CRM / Suporte", href: "/crm", module: "crm" },
   { label: "Financeiro", href: "/finance", module: "finance" },
   { label: "Agenda", href: "/calendar", module: "calendar" },
 ]
@@ -83,6 +84,7 @@ export function Header() {
     pathname.startsWith('/admin') ||
     pathname.startsWith('/artigos') ||
     pathname.startsWith('/calendar') ||
+    pathname.startsWith('/crm') ||
     pathname.startsWith('/cms') ||
     pathname.startsWith('/finance') ||
     pathname.startsWith('/insights') ||
@@ -206,6 +208,14 @@ export function Header() {
                     <ShieldCheck className="h-4 w-4 text-blue-500" aria-hidden="true" />
                   </div>
                   <span>Nova Página</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
+                <Link href="/crm" className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                    <Plus className="h-4 w-4 text-indigo-500" aria-hidden="true" />
+                  </div>
+                  <span>Novo Card / Suporte</span>
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer p-2.5">
