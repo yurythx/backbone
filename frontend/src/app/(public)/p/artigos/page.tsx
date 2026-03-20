@@ -22,43 +22,77 @@ export default function PublicArtigosPage() {
     const searchParams = useSearchParams()
     const router = useRouter()
 
-    const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') ?? "")
-    const debouncedSearchTerm = useDebounce(searchTerm, 300)
-    const [categoryId, setCategoryId] = useState<number | null>(() => {
-        const raw = searchParams.get('category')
-        const n = raw ? Number(raw) : NaN
-        return Number.isFinite(n) && n > 0 ? n : null
+    const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG || null
+    const companySlugFromQuery = (searchParams.get("company_slug") || "").trim() || null
+
+    const [effectiveCompanySlug, setEffectiveCompanySlug] = useState<string | null>(() => {
+        if (companySlugFromQuery) return companySlugFromQuery
+        const saved = typeof window !== "undefined" ? localStorage.getItem("companySlug") : null
+        return (saved || envCompany || null)
     })
-    const categoryRaw = searchParams.get('category') ?? ""
+
+    const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') ?? "")
+    const debouncedSearchTerm = useDebounce(searchTerm, 500)
+    const [selectedCategory, setSelectedCategory] = useState<string>(() => searchParams.get('category') ?? "all")
 
     useEffect(() => {
-        const q = searchParams.get('q') ?? ""
-        const cRaw = searchParams.get('category')
-        const cNum = cRaw ? Number(cRaw) : NaN
-        const c = Number.isFinite(cNum) && cNum > 0 ? cNum : null
-        if (q !== searchTerm) setSearchTerm(q)
-        if (c !== categoryId) setCategoryId(c)
-    }, [searchParams, searchTerm, categoryId])
+        const s = searchParams.get('search') ?? ""
+        const c = searchParams.get('category') ?? "all"
+        const qCompany = (searchParams.get("company_slug") || "").trim() || null
+        if (s !== searchTerm) setSearchTerm(s)
+        if (c !== selectedCategory) setSelectedCategory(c)
+        if (qCompany && qCompany !== effectiveCompanySlug) setEffectiveCompanySlug(qCompany)
+    }, [searchParams, searchTerm, selectedCategory, effectiveCompanySlug])
+
+    useEffect(() => {
+        let active = true
+        const resolveCompany = async () => {
+            if (effectiveCompanySlug) return
+            try {
+                const res = await api.get<{ slug: string }[]>("/api/core/companies/public_list/")
+                const list = Array.isArray(res.data) ? res.data : []
+                const picked = list[0]?.slug
+                if (!picked) return
+                if (!active) return
+                localStorage.setItem("companySlug", picked)
+                setEffectiveCompanySlug(picked)
+            } catch {
+                // ignore
+            }
+        }
+        resolveCompany()
+        return () => {
+            active = false
+        }
+    }, [effectiveCompanySlug])
 
     useEffect(() => {
         const params = new URLSearchParams()
-        if (debouncedSearchTerm.trim()) params.set('q', debouncedSearchTerm.trim())
-        if (categoryId) params.set('category', String(categoryId))
+        if (debouncedSearchTerm.trim()) params.set('search', debouncedSearchTerm.trim())
+        if (selectedCategory && selectedCategory !== "all") params.set('category', selectedCategory)
+        if (companySlugFromQuery) params.set('company_slug', companySlugFromQuery)
         const qs = params.toString()
         router.replace(qs ? `?${qs}` : '?', { scroll: false })
-    }, [debouncedSearchTerm, categoryId, router])
+    }, [debouncedSearchTerm, selectedCategory, router, companySlugFromQuery])
 
     type PublicCategory = { id: number; name: string; slug: string }
 
     const { data: categories } = useQuery({
-        queryKey: ['public-article-categories'],
+        queryKey: ['public-article-categories', effectiveCompanySlug],
         queryFn: async ({ signal }) => {
-            const res = await api.get<PublicCategory[]>('/api/articles/public/categories/', { signal })
+            const params = new URLSearchParams()
+            if (effectiveCompanySlug) params.set("company_slug", effectiveCompanySlug)
+            const res = await api.get<PublicCategory[]>('/api/articles/public/categories/', {
+                signal,
+                params,
+                headers: effectiveCompanySlug ? { "X-Company-Slug": effectiveCompanySlug } : {},
+            })
             const data = res.data
             return Array.isArray(data) ? data : []
         },
         staleTime: 10 * 60 * 1000,
         retry: 1,
+        enabled: !!effectiveCompanySlug,
     })
 
     const {
@@ -69,13 +103,18 @@ export default function PublicArtigosPage() {
         fetchNextPage,
         hasNextPage,
     } = useInfiniteQuery({
-        queryKey: ['public-articles', debouncedSearchTerm, categoryId],
+        queryKey: ['public-articles', effectiveCompanySlug, debouncedSearchTerm, selectedCategory],
         queryFn: async ({ pageParam, signal }) => {
             const params = new URLSearchParams()
             if (debouncedSearchTerm.trim()) params.set('search', debouncedSearchTerm.trim())
-            if (categoryId) params.set('category', String(categoryId))
+            if (selectedCategory && selectedCategory !== "all") params.set('category', selectedCategory)
             if (pageParam) params.set('page', String(pageParam))
-            const res = await api.get('/api/articles/public/articles/', { params, signal })
+            if (effectiveCompanySlug) params.set("company_slug", effectiveCompanySlug)
+            const res = await api.get('/api/articles/public/articles/', {
+                params,
+                signal,
+                headers: effectiveCompanySlug ? { "X-Company-Slug": effectiveCompanySlug } : {},
+            })
             return res.data
         },
         initialPageParam: 1,
@@ -93,6 +132,7 @@ export default function PublicArtigosPage() {
         },
         staleTime: 5 * 60 * 1000,
         retry: 1,
+        enabled: !!effectiveCompanySlug,
     })
 
     const articles: Article[] = useMemo(() => {
@@ -128,6 +168,15 @@ export default function PublicArtigosPage() {
                     </p>
                 </header>
 
+                {!effectiveCompanySlug && (
+                    <div className="text-center py-12 border-2 border-dashed rounded-3xl bg-muted/10" role="alert" aria-live="assertive">
+                        <h3 className="text-lg font-semibold mb-2">Empresa não selecionada</h3>
+                        <p className="text-muted-foreground max-w-md mx-auto">
+                            Selecione uma empresa para visualizar os artigos públicos.
+                        </p>
+                    </div>
+                )}
+
                 <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-3" role="search" aria-label="Pesquisar e filtrar artigos">
                     <div className="sm:col-span-2 relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" aria-hidden="true" />
@@ -138,12 +187,14 @@ export default function PublicArtigosPage() {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             aria-label="Buscar artigos"
+                            disabled={!effectiveCompanySlug}
                         />
                     </div>
                     <div>
                         <Select
-                            value={categoryId ? String(categoryId) : "all"}
-                            onValueChange={(v) => setCategoryId(v === "all" ? null : Number(v))}
+                            value={selectedCategory}
+                            onValueChange={setSelectedCategory}
+                            disabled={!effectiveCompanySlug}
                         >
                             <SelectTrigger className="h-12 sm:h-14 rounded-2xl bg-background/50 backdrop-blur border-primary/10 focus-visible:ring-primary/20">
                                 <SelectValue placeholder="Categoria" />
@@ -202,7 +253,7 @@ export default function PublicArtigosPage() {
                         <div className="text-center text-sm text-muted-foreground" role="status" aria-live="polite">
                             Mostrando {articles.length} {articles.length === 1 ? 'artigo' : 'artigos'}
                             {debouncedSearchTerm.trim() && ` com "${debouncedSearchTerm.trim()}"`}
-                            {categoryRaw && ` na categoria selecionada`}
+                            {selectedCategory !== "all" && ` na categoria selecionada`}
                         </div>
 
                         {hasNextPage && (
@@ -232,10 +283,10 @@ export default function PublicArtigosPage() {
                                 ? `Não encontramos artigos com "${debouncedSearchTerm.trim()}". Tente ajustar sua busca ou limpar o filtro.`
                                 : "Nenhum artigo público disponível no momento. Volte em breve!"}
                         </p>
-                        {(searchTerm || categoryId) && (
+                        {(searchTerm || selectedCategory !== "all") && (
                             <button
                                 type="button"
-                                onClick={() => { setSearchTerm(""); setCategoryId(null) }}
+                                onClick={() => { setSearchTerm(""); setSelectedCategory("all") }}
                                 className="mt-4 text-primary hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-md"
                                 aria-label="Limpar busca"
                             >
