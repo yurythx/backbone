@@ -5,6 +5,7 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasRolePermission
+from apps.core.models import Company
 from apps.module_manager.permissions import HasModuleAccess
 
 from .models import Page
@@ -34,6 +35,10 @@ class PublicPageViewSet(viewsets.ReadOnlyModelViewSet):
         company_slug = self.request.query_params.get("company_slug") or self.request.headers.get("X-Company-Slug")
         if company_slug:
             return qs.filter(company__slug=company_slug).order_by("title")
+
+        fallback = Company.objects.filter(slug="raiz").first() or Company.objects.first()
+        if fallback:
+            return qs.filter(company=fallback).order_by("title")
 
         return Page.all_objects.none()
 

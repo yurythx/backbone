@@ -48,23 +48,6 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl)
     }
 
-    if (hasSession && pathname === '/p/artigos') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/artigos'
-        url.search = ''
-        return NextResponse.redirect(url)
-    }
-
-    if (hasSession && pathname.startsWith('/p/artigos/')) {
-        const slug = pathname.slice('/p/artigos/'.length)
-        if (slug) {
-            const url = request.nextUrl.clone()
-            url.pathname = `/artigos/preview/${encodeURIComponent(slug)}`
-            url.search = ''
-            return NextResponse.redirect(url)
-        }
-    }
-
     return NextResponse.next()
 }
 

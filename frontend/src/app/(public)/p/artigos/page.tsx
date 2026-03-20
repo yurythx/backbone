@@ -5,7 +5,7 @@ import { Article } from "@/types"
 import { PublicArticleCard } from "@/components/public/article-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
-import { Search, BookOpen } from "lucide-react"
+import { Search, BookOpen, Filter, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { api } from "@/lib/axios"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -177,30 +177,37 @@ export default function PublicArtigosPage() {
                     </div>
                 )}
 
-                <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-3" role="search" aria-label="Pesquisar e filtrar artigos">
-                    <div className="sm:col-span-2 relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" aria-hidden="true" />
+                <div
+                    className="grid grid-cols-1 md:grid-cols-4 gap-4 sticky top-4 z-10 bg-background/80 backdrop-blur-md p-4 rounded-2xl border shadow-sm max-w-5xl mx-auto"
+                    role="search"
+                    aria-label="Pesquisar e filtrar artigos"
+                >
+                    <div className="md:col-span-2 relative group">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
                         <Input
                             type="search"
-                            placeholder="Buscar por título, resumo ou conteúdo..."
-                            className="pl-12 h-12 sm:h-14 rounded-2xl bg-background/50 backdrop-blur border-primary/10 focus-visible:ring-primary/20"
+                            placeholder="Buscar por título, resumo ou categoria..."
+                            className="pl-11 h-12 rounded-xl bg-card border-muted hover:border-primary/30 focus-visible:ring-primary/20 transition-all shadow-sm"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             aria-label="Buscar artigos"
                             disabled={!effectiveCompanySlug}
                         />
                     </div>
-                    <div>
+                    <div className="relative">
                         <Select
                             value={selectedCategory}
                             onValueChange={setSelectedCategory}
                             disabled={!effectiveCompanySlug}
                         >
-                            <SelectTrigger className="h-12 sm:h-14 rounded-2xl bg-background/50 backdrop-blur border-primary/10 focus-visible:ring-primary/20">
-                                <SelectValue placeholder="Categoria" />
+                            <SelectTrigger className="pl-4 h-12 rounded-xl bg-card border-muted hover:border-primary/30 shadow-sm">
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Filter className="h-4 w-4" aria-hidden="true" />
+                                    <SelectValue placeholder="Categoria" />
+                                </div>
                             </SelectTrigger>
                             <SelectContent className="rounded-xl border shadow-xl p-1">
-                                <SelectItem value="all" className="rounded-lg cursor-pointer">Todas as categorias</SelectItem>
+                                <SelectItem value="all" className="rounded-lg cursor-pointer">Todas as Categorias</SelectItem>
                                 {(categories ?? []).map((cat) => (
                                     <SelectItem key={cat.id} value={String(cat.id)} className="rounded-lg cursor-pointer">
                                         {cat.name}
@@ -209,6 +216,16 @@ export default function PublicArtigosPage() {
                             </SelectContent>
                         </Select>
                     </div>
+                    {(searchTerm || selectedCategory !== "all") && (
+                        <button
+                            type="button"
+                            onClick={() => { setSearchTerm(""); setSelectedCategory("all") }}
+                            className="h-12 rounded-xl gap-2 hover:bg-destructive/10 hover:text-destructive transition-colors inline-flex items-center justify-center border border-transparent"
+                            disabled={!effectiveCompanySlug}
+                        >
+                            <X className="h-4 w-4" aria-hidden="true" /> Limpar
+                        </button>
+                    )}
                 </div>
 
                 {/* Error State */}

@@ -57,21 +57,7 @@ class PublicCategoryViewSet(viewsets.ReadOnlyModelViewSet):
             else:
                 return Category.all_objects.none()
 
-        return (
-            qs.annotate(
-                public_articles_count=Count(
-                    "articles",
-                    filter=Q(
-                        articles__is_public=True,
-                        articles__status=Article.STATUS_PUBLISHED,
-                        articles__published_at__isnull=False,
-                    ),
-                    distinct=True,
-                )
-            )
-            .filter(public_articles_count__gt=0)
-            .order_by("name")
-        )
+        return qs.order_by("name")
 
 
 @extend_schema_view(
