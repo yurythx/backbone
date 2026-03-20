@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from apps.core.models import Company
 
 from apps.accounts.models import Role
+from apps.module_manager.models import Module, TenantModule
 
 User = get_user_model()
 
@@ -25,6 +26,9 @@ class MediaAPITest(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
         self.client.credentials(HTTP_X_COMPANY_SLUG='media-corp')
+
+        self.mod = Module.objects.create(code="media", name="Media")
+        TenantModule.objects.create(company=self.company, module=self.mod, is_active=True)
 
 
     def test_upload_and_filter_by_tenant(self):

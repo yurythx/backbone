@@ -240,7 +240,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             for mid in updated_ids:
                 await self.channel_layer.group_send(
                     self.room_group_name,
-                    {"type": "delivery_receipt_update", "message_id": mid, "user_id": self.user.id, "is_delivered": True},
+                    {
+                        "type": "delivery_receipt_update",
+                        "message_id": mid,
+                        "user_id": self.user.id,
+                        "is_delivered": True,
+                    },
                 )
             if updated_ids:
                 await self.send(text_data=json.dumps({"type": "message_delivered", "message_ids": updated_ids}))
@@ -371,7 +376,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def mark_messages_read(self, message_ids):
         qs = (
-            Message.all_objects.filter(company=self.conversation.company, conversation=self.conversation, id__in=message_ids)
+            Message.all_objects.filter(
+                company=self.conversation.company, conversation=self.conversation, id__in=message_ids
+            )
             .exclude(sender_id=self.user.id)
             .filter(is_deleted=False)
         )
@@ -380,14 +387,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return []
 
         existing = set(
-            MessageRead.objects.filter(company=self.conversation.company, message_id__in=ids, user_id=self.user.id).values_list(
-                "message_id", flat=True
-            )
+            MessageRead.objects.filter(
+                company=self.conversation.company, message_id__in=ids, user_id=self.user.id
+            ).values_list("message_id", flat=True)
         )
         new_ids = [mid for mid in ids if mid not in existing]
         if new_ids:
             MessageRead.objects.bulk_create(
-                [MessageRead(company=self.conversation.company, message_id=mid, user_id=self.user.id) for mid in new_ids],
+                [
+                    MessageRead(company=self.conversation.company, message_id=mid, user_id=self.user.id)
+                    for mid in new_ids
+                ],
                 ignore_conflicts=True,
             )
 
@@ -399,7 +409,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def mark_messages_delivered(self, message_ids):
         qs = (
-            Message.all_objects.filter(company=self.conversation.company, conversation=self.conversation, id__in=message_ids)
+            Message.all_objects.filter(
+                company=self.conversation.company, conversation=self.conversation, id__in=message_ids
+            )
             .exclude(sender_id=self.user.id)
             .filter(is_deleted=False)
         )
@@ -415,7 +427,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         new_ids = [mid for mid in ids if mid not in existing]
         if new_ids:
             MessageDelivery.objects.bulk_create(
-                [MessageDelivery(company=self.conversation.company, message_id=mid, user_id=self.user.id) for mid in new_ids],
+                [
+                    MessageDelivery(company=self.conversation.company, message_id=mid, user_id=self.user.id)
+                    for mid in new_ids
+                ],
                 ignore_conflicts=True,
             )
 

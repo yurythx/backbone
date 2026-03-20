@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.accounts.models import Role
 from apps.core.models import Company
 from apps.licensing.models import Feature, License, Plan, PlanFeature
 
@@ -11,9 +12,16 @@ User = get_user_model()
 class LicensingAPITest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Lic Corp", slug="lic-corp")
-        self.user = User.all_objects.create_user(
-            username="licuser", email="lic@corp.com", password="pass", company=self.company
+        self.role = Role.objects.create(
+            company=self.company,
+            name="Admin",
+            permissions=["admin.user_manage", "articles.article_create"],
         )
+        self.user = User.all_objects.create_user(
+            username="licuser", email="lic@corp.com", password="pass", company=self.company, role=self.role
+        )
+        self.user.role = self.role
+        self.user.save(update_fields=["role"])
         self.client.force_authenticate(user=self.user)
         self.client.credentials(HTTP_X_COMPANY_SLUG="lic-corp")
 
@@ -81,8 +89,8 @@ class LicensingAPITest(APITestCase):
         )
 
         # Should be blocked by Licensing Enforcement
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Limite de usuários atingido", str(res.data))
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("Limite de users atingido", str(res.data))
 
     def test_article_limit_enforcement(self):
         # Create a plan with limit 0 articles

@@ -192,6 +192,26 @@ class PublicArticlesAPITest(APITestCase):
         self.assertIn("excerpt", res.data)
         self.assertIn("content", res.data)
 
+    def test_public_categories_lists_only_used_categories(self):
+        self.art_a.category = self.cat_a
+        self.art_a.save(update_fields=["category"])
+        self.art_b.category = self.cat_b
+        self.art_b.save(update_fields=["category"])
+
+        res_alpha = self.public_client.get("/api/articles/public/categories/", HTTP_X_COMPANY_SLUG="alpha")
+        self.assertEqual(res_alpha.status_code, status.HTTP_200_OK)
+        data_alpha = res_alpha.data if isinstance(res_alpha.data, list) else res_alpha.data.get("results", [])
+        ids_alpha = [c["id"] for c in data_alpha]
+        self.assertIn(self.cat_a.id, ids_alpha)
+        self.assertNotIn(self.cat_b.id, ids_alpha)
+
+        res_beta = self.public_client.get("/api/articles/public/categories/", HTTP_X_COMPANY_SLUG="beta")
+        self.assertEqual(res_beta.status_code, status.HTTP_200_OK)
+        data_beta = res_beta.data if isinstance(res_beta.data, list) else res_beta.data.get("results", [])
+        ids_beta = [c["id"] for c in data_beta]
+        self.assertIn(self.cat_b.id, ids_beta)
+        self.assertNotIn(self.cat_a.id, ids_beta)
+
     def test_public_comment_rejects_link_spam(self):
         payload = {
             "article_slug": self.art_a.slug,
@@ -199,7 +219,9 @@ class PublicArticlesAPITest(APITestCase):
             "email": "spam@example.com",
             "content": "Veja http://a.com http://b.com http://c.com",
         }
-        res = self.public_client.post("/api/articles/public/comments/", payload, format="json", HTTP_X_COMPANY_SLUG="alpha")
+        res = self.public_client.post(
+            "/api/articles/public/comments/", payload, format="json", HTTP_X_COMPANY_SLUG="alpha"
+        )
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_public_comments_create_and_list_with_moderation_and_rate_limit(self):
@@ -301,7 +323,9 @@ class PublicArticlesAPITest(APITestCase):
         from apps.notifications.models import Notification
 
         self.assertTrue(
-            Notification.objects.filter(company=self.company_a, recipient=self.moderator_a, title="Nova resposta pendente").exists()
+            Notification.objects.filter(
+                company=self.company_a, recipient=self.moderator_a, title="Nova resposta pendente"
+            ).exists()
         )
 
         # Test rate limit: 6 quick posts should yield 429 on the 6th
@@ -330,14 +354,18 @@ class PublicArticlesAPITest(APITestCase):
             "email": "cooldown1@example.com",
             "content": "Primeiro",
         }
-        res1 = self.public_client.post("/api/articles/public/comments/", payload, format="json", HTTP_X_COMPANY_SLUG="alpha")
+        res1 = self.public_client.post(
+            "/api/articles/public/comments/", payload, format="json", HTTP_X_COMPANY_SLUG="alpha"
+        )
         self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
         cache.clear()
 
         payload2 = dict(payload)
         payload2["email"] = "cooldown2@example.com"
         payload2["content"] = "Segundo"
-        res2 = self.public_client.post("/api/articles/public/comments/", payload2, format="json", HTTP_X_COMPANY_SLUG="alpha")
+        res2 = self.public_client.post(
+            "/api/articles/public/comments/", payload2, format="json", HTTP_X_COMPANY_SLUG="alpha"
+        )
         self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
 
         qs = Notification.objects.filter(company=self.company_a, recipient=self.moderator_a)

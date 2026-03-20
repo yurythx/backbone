@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.accounts.models import Role
 from apps.core.models import Company
 from apps.module_manager.models import Module, TenantModule
 from apps.pages.models import Page
@@ -12,8 +13,11 @@ User = get_user_model()
 class PagesAPITest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Pages Corp", slug="pages-corp")
+        self.role = Role.objects.create(
+            company=self.company, name="Admin", permissions=["pages.page_view", "pages.page_create"]
+        )
         self.user = User.objects.create_user(
-            username="pagesuser", email="p@corp.com", password="pass", company=self.company
+            username="pagesuser", email="p@corp.com", password="pass", company=self.company, role=self.role
         )
         self.client.force_authenticate(user=self.user)
         self.client.credentials(HTTP_X_COMPANY_SLUG="pages-corp")

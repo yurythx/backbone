@@ -13,4 +13,3 @@ class Migration(migrations.Migration):
             field=models.UUIDField(blank=True, db_index=True, null=True),
         ),
     ]
-

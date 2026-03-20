@@ -12,4 +12,3 @@ class Migration(migrations.Migration):
             index=models.Index(fields=["user", "is_archived"], name="messenger_c_user_id_4bd6fb_idx"),
         ),
     ]
-

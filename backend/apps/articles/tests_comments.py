@@ -150,7 +150,13 @@ class ArticleCommentsAPITest(APITestCase):
         self.user.save(update_fields=["role"])
 
         parent = Comment.objects.create(
-            company=self.company, article=self.article, author=None, name="Visitante", content="Pai", is_public=True, is_approved=False
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="Pai",
+            is_public=True,
+            is_approved=False,
         )
         reply = Comment.objects.create(
             company=self.company,
@@ -163,7 +169,9 @@ class ArticleCommentsAPITest(APITestCase):
             parent=parent,
         )
 
-        res = self.client.get("/api/articles/comments/", {"article": self.article.id, "is_public": True, "parent__isnull": True})
+        res = self.client.get(
+            "/api/articles/comments/", {"article": self.article.id, "is_public": True, "parent__isnull": True}
+        )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         data = res.data.get("results", [])
         self.assertEqual(len(data), 1)
@@ -276,7 +284,13 @@ class ArticleCommentsAPITest(APITestCase):
 
         res_approve_with_replies = self.client.post(
             "/api/articles/comments/bulk_approve_filtered/",
-            {"article": self.article.id, "is_public": True, "parent__isnull": True, "search": "Pai Include", "include_replies": True},
+            {
+                "article": self.article.id,
+                "is_public": True,
+                "parent__isnull": True,
+                "search": "Pai Include",
+                "include_replies": True,
+            },
             format="json",
         )
         self.assertEqual(res_approve_with_replies.status_code, status.HTTP_200_OK)
@@ -287,7 +301,13 @@ class ArticleCommentsAPITest(APITestCase):
 
         res_count_with_replies = self.client.post(
             "/api/articles/comments/bulk_filtered_count/",
-            {"article": self.article.id, "is_public": True, "parent__isnull": True, "search": "Pai Include", "include_replies": True},
+            {
+                "article": self.article.id,
+                "is_public": True,
+                "parent__isnull": True,
+                "search": "Pai Include",
+                "include_replies": True,
+            },
             format="json",
         )
         self.assertEqual(res_count_with_replies.status_code, status.HTTP_200_OK)
@@ -305,13 +325,33 @@ class ArticleCommentsAPITest(APITestCase):
         self.user.save(update_fields=["role"])
 
         parent = Comment.objects.create(
-            company=self.company, article=self.article, author=None, name="Visitante", content="Pai", is_public=True, is_approved=False
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="Visitante",
+            content="Pai",
+            is_public=True,
+            is_approved=False,
         )
         r1 = Comment.objects.create(
-            company=self.company, article=self.article, author=None, name="V1", content="R1", is_public=True, is_approved=False, parent=parent
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="V1",
+            content="R1",
+            is_public=True,
+            is_approved=False,
+            parent=parent,
         )
         r2 = Comment.objects.create(
-            company=self.company, article=self.article, author=None, name="V2", content="R2", is_public=True, is_approved=True, parent=parent
+            company=self.company,
+            article=self.article,
+            author=None,
+            name="V2",
+            content="R2",
+            is_public=True,
+            is_approved=True,
+            parent=parent,
         )
 
         res_approve = self.client.post(f"/api/articles/comments/{parent.id}/approve_thread/", {}, format="json")
@@ -373,7 +413,9 @@ class ArticleCommentsAPITest(APITestCase):
         res_approve = self.client.post(f"/api/articles/comments/{reply.id}/approve/", {}, format="json")
         self.assertEqual(res_approve.status_code, status.HTTP_200_OK)
         self.assertTrue(
-            Notification.objects.filter(company=self.company, recipient=parent_author, title="Nova resposta ao seu comentário").exists()
+            Notification.objects.filter(
+                company=self.company, recipient=parent_author, title="Nova resposta ao seu comentário"
+            ).exists()
         )
 
     def test_approve_thread_notification_aggregates_for_parent_author(self):
@@ -411,7 +453,9 @@ class ArticleCommentsAPITest(APITestCase):
 
         res_approve1 = self.client.post(f"/api/articles/comments/{parent.id}/approve_thread/", {}, format="json")
         self.assertEqual(res_approve1.status_code, status.HTTP_200_OK)
-        qs = Notification.objects.filter(company=self.company, recipient=parent_author, title="Novas respostas ao seu comentário")
+        qs = Notification.objects.filter(
+            company=self.company, recipient=parent_author, title="Novas respostas ao seu comentário"
+        )
         self.assertEqual(qs.count(), 1)
         self.assertTrue("1 resposta(s) foram aprovadas" in (qs.first().message or ""))
 
@@ -429,7 +473,9 @@ class ArticleCommentsAPITest(APITestCase):
         res_approve2 = self.client.post(f"/api/articles/comments/{parent.id}/approve_thread/", {}, format="json")
         self.assertEqual(res_approve2.status_code, status.HTTP_200_OK)
 
-        qs2 = Notification.objects.filter(company=self.company, recipient=parent_author, title="Novas respostas ao seu comentário")
+        qs2 = Notification.objects.filter(
+            company=self.company, recipient=parent_author, title="Novas respostas ao seu comentário"
+        )
         self.assertEqual(qs2.count(), 1)
         msg = qs2.first().message or ""
         self.assertTrue("2 resposta(s) foram aprovadas" in msg)

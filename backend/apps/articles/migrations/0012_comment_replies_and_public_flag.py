@@ -33,4 +33,3 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(mark_existing_public_comments, migrations.RunPython.noop),
     ]
-

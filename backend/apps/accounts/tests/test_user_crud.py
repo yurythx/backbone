@@ -58,4 +58,3 @@ class UserCRUDTest(APITestCase):
         res_delete = self.client.delete(f"/api/accounts/users/{created_id}/")
         self.assertEqual(res_delete.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(User.all_objects.filter(id=created_id).exists())
-

@@ -122,7 +122,11 @@ class MessengerActionsTest(APITestCase):
 
         res_list = self.client.get("/api/messenger/conversations/")
         self.assertEqual(res_list.status_code, status.HTTP_200_OK)
-        data = res_list.data["results"] if isinstance(res_list.data, dict) and "results" in res_list.data else res_list.data
+        data = (
+            res_list.data["results"]
+            if isinstance(res_list.data, dict) and "results" in res_list.data
+            else res_list.data
+        )
         self.assertEqual(len(data), 0)
 
         res_deleted = self.client.get("/api/messenger/conversations/deleted/")
@@ -164,7 +168,11 @@ class MessengerActionsTest(APITestCase):
         self.assertEqual(res_restore.status_code, status.HTTP_200_OK)
 
         res_list = self.client.get("/api/messenger/conversations/")
-        data = res_list.data["results"] if isinstance(res_list.data, dict) and "results" in res_list.data else res_list.data
+        data = (
+            res_list.data["results"]
+            if isinstance(res_list.data, dict) and "results" in res_list.data
+            else res_list.data
+        )
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["id"], conv.id)
 
@@ -194,7 +202,11 @@ class MessengerActionsTest(APITestCase):
         self.assertEqual(res_retrieve.status_code, status.HTTP_200_OK)
 
         res_list = self.client.get("/api/messenger/conversations/")
-        data = res_list.data["results"] if isinstance(res_list.data, dict) and "results" in res_list.data else res_list.data
+        data = (
+            res_list.data["results"]
+            if isinstance(res_list.data, dict) and "results" in res_list.data
+            else res_list.data
+        )
         self.assertEqual(len(data), 0)
 
         res_archived = self.client.get("/api/messenger/conversations/archived/")
@@ -210,7 +222,11 @@ class MessengerActionsTest(APITestCase):
         self.assertEqual(res_unarch.status_code, status.HTTP_200_OK)
 
         res_list2 = self.client.get("/api/messenger/conversations/")
-        data2 = res_list2.data["results"] if isinstance(res_list2.data, dict) and "results" in res_list2.data else res_list2.data
+        data2 = (
+            res_list2.data["results"]
+            if isinstance(res_list2.data, dict) and "results" in res_list2.data
+            else res_list2.data
+        )
         self.assertEqual(len(data2), 1)
         self.assertEqual(data2[0]["id"], conv.id)
 
@@ -230,18 +246,30 @@ class MessengerActionsTest(APITestCase):
 
         self.client.post(f"/api/messenger/conversations/{conv.id}/send_message/", {"content": "Antes"}, format="json")
         res_list = self.client.get("/api/messenger/conversations/")
-        data = res_list.data["results"] if isinstance(res_list.data, dict) and "results" in res_list.data else res_list.data
+        data = (
+            res_list.data["results"]
+            if isinstance(res_list.data, dict) and "results" in res_list.data
+            else res_list.data
+        )
         self.assertEqual(data[0]["last_message"]["content"], "Antes")
 
         res_clear = self.client.post(f"/api/messenger/conversations/{conv.id}/clear_for_me/", {}, format="json")
         self.assertEqual(res_clear.status_code, status.HTTP_200_OK)
 
         res_msgs = self.client.get(f"/api/messenger/conversations/{conv.id}/messages/")
-        msgs = res_msgs.data["results"] if isinstance(res_msgs.data, dict) and "results" in res_msgs.data else res_msgs.data
+        msgs = (
+            res_msgs.data["results"]
+            if isinstance(res_msgs.data, dict) and "results" in res_msgs.data
+            else res_msgs.data
+        )
         self.assertEqual(len(msgs), 0)
 
         res_list2 = self.client.get("/api/messenger/conversations/")
-        data2 = res_list2.data["results"] if isinstance(res_list2.data, dict) and "results" in res_list2.data else res_list2.data
+        data2 = (
+            res_list2.data["results"]
+            if isinstance(res_list2.data, dict) and "results" in res_list2.data
+            else res_list2.data
+        )
         self.assertIsNone(data2[0]["last_message"])
         self.assertEqual(data2[0]["unread_count"], 0)
 
@@ -255,5 +283,9 @@ class MessengerActionsTest(APITestCase):
         self.assertEqual(res_unclear.status_code, status.HTTP_200_OK)
 
         res_msgs = self.client.get(f"/api/messenger/conversations/{conv.id}/messages/")
-        msgs = res_msgs.data["results"] if isinstance(res_msgs.data, dict) and "results" in res_msgs.data else res_msgs.data
+        msgs = (
+            res_msgs.data["results"]
+            if isinstance(res_msgs.data, dict) and "results" in res_msgs.data
+            else res_msgs.data
+        )
         self.assertEqual(len(msgs), 1)

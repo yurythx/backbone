@@ -24,11 +24,54 @@ from .serializers import (
     GlobalArticlesAnalyticsSerializer,
     ModerationCommentSerializer,
     ModerationReplySerializer,
+    PublicCategorySerializer,
     PublicCommentSerializer,
     PublicReplySerializer,
     TagSerializer,
 )
 from .services import ArticleService
+
+
+@extend_schema_view(
+    list=extend_schema(tags=["Public Articles"], description="Lista categorias com artigos públicos publicados"),
+)
+class PublicCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = PublicCategorySerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+    ordering_fields = ["name"]
+    ordering = ["name"]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_articles"
+
+    def get_queryset(self):
+        company = getattr(self.request, "company", None)
+        qs = Category.all_objects.all()
+
+        if company:
+            qs = qs.filter(company=company)
+        else:
+            company_slug = self.request.query_params.get("company_slug") or self.request.headers.get("X-Company-Slug")
+            if company_slug:
+                qs = qs.filter(company__slug=company_slug)
+            else:
+                return Category.all_objects.none()
+
+        return (
+            qs.annotate(
+                public_articles_count=Count(
+                    "articles",
+                    filter=Q(
+                        articles__is_public=True,
+                        articles__status=Article.STATUS_PUBLISHED,
+                        articles__published_at__isnull=False,
+                    ),
+                    distinct=True,
+                )
+            )
+            .filter(public_articles_count__gt=0)
+            .order_by("name")
+        )
 
 
 @extend_schema_view(
@@ -238,7 +281,9 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 Article.objects.filter(company=user_company)
                 .select_related("category", "author", "company")
                 .prefetch_related("tags")
-                .annotate(comment_count=Count("comments", filter=Q(comments__is_public=True, comments__is_approved=True)))
+                .annotate(
+                    comment_count=Count("comments", filter=Q(comments__is_public=True, comments__is_approved=True))
+                )
                 .order_by("-created_at")
             )
 
@@ -599,7 +644,11 @@ class CommentViewSet(viewsets.ModelViewSet):
         slug = getattr(reply.article, "slug", None)
         link = f"/p/artigos/{slug}#resposta-{reply.id}" if slug else "/artigos"
         snippet = (reply.content or "").strip()
-        message = f"{reply.article.title}: {snippet[:120]}" if snippet else f"Seu comentário em {reply.article.title} recebeu uma resposta."
+        message = (
+            f"{reply.article.title}: {snippet[:120]}"
+            if snippet
+            else f"Seu comentário em {reply.article.title} recebeu uma resposta."
+        )
 
         notification = Notification.objects.create(
             company=reply.company,
@@ -788,9 +837,9 @@ class CommentViewSet(viewsets.ModelViewSet):
         root = self.get_object()
         if getattr(root, "parent_id", None):
             root = root.parent
-        newly_approved_replies = (
-            Comment.objects.filter(company=request.company, parent_id=root.id, is_approved=False).count()
-        )
+        newly_approved_replies = Comment.objects.filter(
+            company=request.company, parent_id=root.id, is_approved=False
+        ).count()
         qs = self.get_queryset().filter(Q(id=root.id) | Q(parent_id=root.id))
         ids = list(qs.values_list("id", flat=True))
         updated = qs.update(is_approved=True)
@@ -1018,7 +1067,9 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
                 message = f"Nova resposta pendente em {article.title}."
         else:
             message = (
-                f"{article.title}: {msg_content[:120]}" if msg_content else f"Novo comentário pendente em {article.title}."
+                f"{article.title}: {msg_content[:120]}"
+                if msg_content
+                else f"Novo comentário pendente em {article.title}."
             )
 
         for u in recipients:
@@ -1148,7 +1199,9 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         if not company:
             return Response({"detail": "Contexto de empresa ausente."}, status=status.HTTP_400_BAD_REQUEST)
 
-        root = Comment.objects.filter(company=company, id=pk, is_public=True, is_approved=True, parent__isnull=True).first()
+        root = Comment.objects.filter(
+            company=company, id=pk, is_public=True, is_approved=True, parent__isnull=True
+        ).first()
         if not root:
             return Response({"detail": "Comentário não encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1213,9 +1266,13 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         parent = None
         if parent_id:
             try:
-                parent_obj = Comment.objects.filter(
-                    pk=parent_id, article=article, company=article.company, is_public=True, is_approved=True
-                ).select_related("parent").first()
+                parent_obj = (
+                    Comment.objects.filter(
+                        pk=parent_id, article=article, company=article.company, is_public=True, is_approved=True
+                    )
+                    .select_related("parent")
+                    .first()
+                )
             except Exception:
                 parent_obj = None
             if not parent_obj:
@@ -1296,5 +1353,7 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         self._notify_moderators(obj, article)
         headers = self.get_success_headers(serializer.data)
         return Response(
-            PublicCommentSerializer(obj, context={"request": request}).data, status=status.HTTP_201_CREATED, headers=headers
+            PublicCommentSerializer(obj, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+            headers=headers,
         )

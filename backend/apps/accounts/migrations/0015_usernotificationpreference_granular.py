@@ -31,7 +31,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="usernotificationpreference",
             name="notify_moderation_comment_pending",
-            field=models.BooleanField(default=True, help_text="Receber notificações quando houver comentários pendentes"),
+            field=models.BooleanField(
+                default=True, help_text="Receber notificações quando houver comentários pendentes"
+            ),
         ),
         migrations.AddField(
             model_name="usernotificationpreference",
@@ -56,4 +58,3 @@ class Migration(migrations.Migration):
         migrations.RemoveField(model_name="usernotificationpreference", name="notify_comment_moderation"),
         migrations.RemoveField(model_name="usernotificationpreference", name="notify_reply_approved"),
     ]
-

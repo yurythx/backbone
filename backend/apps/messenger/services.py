@@ -96,7 +96,9 @@ class MessengerService:
             return conversation
 
     @staticmethod
-    def send_message(user, company, conversation, content=None, file_obj=None, request=None, reply_to_id=None, client_id=None):
+    def send_message(
+        user, company, conversation, content=None, file_obj=None, request=None, reply_to_id=None, client_id=None
+    ):
         """
         Sends a message to a conversation and signals via WebSockets.
         """

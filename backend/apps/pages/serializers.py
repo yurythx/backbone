@@ -33,3 +33,9 @@ class PageSerializer(serializers.ModelSerializer):
         if attrs.get("meta_keywords"):
             attrs["meta_keywords"] = sanitize_plain_text(attrs["meta_keywords"])
         return attrs
+
+
+class PublicPageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Page
+        fields = ["title", "slug", "content", "meta_title", "meta_description", "meta_keywords"]

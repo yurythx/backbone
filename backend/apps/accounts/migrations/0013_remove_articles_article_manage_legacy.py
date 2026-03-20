@@ -29,4 +29,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(drop_article_manage_legacy_permission, migrations.RunPython.noop),
     ]
-

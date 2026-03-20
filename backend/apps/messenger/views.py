@@ -188,13 +188,37 @@ class ConversationViewSet(viewsets.ModelViewSet):
             .annotate(
                 unread_count=Coalesce(Subquery(unread_count_qs[:1]), 0),
                 # Annotate last message details using Subqueries (Performance #26)
-                last_msg_id=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("id")[:1]),
-                last_msg_content=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("content")[:1]),
-                last_msg_sender_id=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("sender_id")[:1]),
-                last_msg_sender_username=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("sender__username")[:1]),
-                last_msg_created_at=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("created_at")[:1]),
-                last_msg_file_name=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("file_name")[:1]),
-                last_msg_file_type=Subquery(last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("file_type")[:1]),
+                last_msg_id=Subquery(
+                    last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("id")[:1]
+                ),
+                last_msg_content=Subquery(
+                    last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("content")[:1]
+                ),
+                last_msg_sender_id=Subquery(
+                    last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("sender_id")[
+                        :1
+                    ]
+                ),
+                last_msg_sender_username=Subquery(
+                    last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values(
+                        "sender__username"
+                    )[:1]
+                ),
+                last_msg_created_at=Subquery(
+                    last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("created_at")[
+                        :1
+                    ]
+                ),
+                last_msg_file_name=Subquery(
+                    last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("file_name")[
+                        :1
+                    ]
+                ),
+                last_msg_file_type=Subquery(
+                    last_msg_qs.filter(created_at__gt=Coalesce(OuterRef("cleared_at"), qs_min_dt)).values("file_type")[
+                        :1
+                    ]
+                ),
             )
             .order_by("-updated_at")
         )
@@ -462,7 +486,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def restore_for_me(self, request, pk=None):
         conversation = (
-            Conversation.objects.filter(participants=request.user, id=pk, company=request.company).select_related("company").first()
+            Conversation.objects.filter(participants=request.user, id=pk, company=request.company)
+            .select_related("company")
+            .first()
         )
         if not conversation:
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -484,7 +510,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def unarchive_for_me(self, request, pk=None):
         conversation = (
-            Conversation.objects.filter(participants=request.user, id=pk, company=request.company).select_related("company").first()
+            Conversation.objects.filter(participants=request.user, id=pk, company=request.company)
+            .select_related("company")
+            .first()
         )
         if not conversation:
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -598,7 +626,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
         qs = qs.order_by("-created_at", "-id")
 
         cleared_at = (
-            ConversationPreference.all_objects.filter(company=request.company, conversation=conversation, user=request.user)
+            ConversationPreference.all_objects.filter(
+                company=request.company, conversation=conversation, user=request.user
+            )
             .values_list("cleared_at", flat=True)
             .first()
         )
@@ -837,13 +867,18 @@ class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets
             .order_by("delivered_at")
         )
         reads_qs = (
-            MessageRead.all_objects.filter(company=message.company, message=message).select_related("user").order_by("read_at")
+            MessageRead.all_objects.filter(company=message.company, message=message)
+            .select_related("user")
+            .order_by("read_at")
         )
 
         deliveries = [
-            {"user_id": d.user_id, "username": d.user.username, "delivered_at": d.delivered_at.isoformat()} for d in deliveries_qs
+            {"user_id": d.user_id, "username": d.user.username, "delivered_at": d.delivered_at.isoformat()}
+            for d in deliveries_qs
         ]
-        reads = [{"user_id": r.user_id, "username": r.user.username, "read_at": r.read_at.isoformat()} for r in reads_qs]
+        reads = [
+            {"user_id": r.user_id, "username": r.user.username, "read_at": r.read_at.isoformat()} for r in reads_qs
+        ]
 
         deliveries_map = {d["user_id"]: d["delivered_at"] for d in deliveries}
         reads_map = {r["user_id"]: r["read_at"] for r in reads}

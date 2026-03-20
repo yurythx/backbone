@@ -1,6 +1,7 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import ContactViewSet, PipelineViewSet, StageViewSet, DealViewSet
+
+from .views import ContactViewSet, DealViewSet, PipelineViewSet, StageViewSet
 
 router = DefaultRouter()
 router.register(r"contacts", ContactViewSet)

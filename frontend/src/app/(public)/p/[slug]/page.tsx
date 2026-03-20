@@ -4,6 +4,8 @@ import { Page } from "@/types"
 import { Metadata } from 'next'
 import PublicPageContent from "./content"
 
+type PublicPage = Pick<Page, "title" | "slug" | "content" | "meta_title" | "meta_description" | "meta_keywords">
+
 export async function generateMetadata(
     { params }: { params: Promise<{ slug: string }> }
 ): Promise<Metadata> {
@@ -12,7 +14,7 @@ export async function generateMetadata(
     try {
         const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG || ''
         const qs = envCompany ? `&company_slug=${encodeURIComponent(envCompany)}` : ''
-        const res = await api.get<Page[]>(`/api/pages/?slug=${slug}${qs}`, {
+        const res = await api.get<PublicPage[]>(`/api/pages/public/pages/?slug=${slug}${qs}`, {
             headers: envCompany ? { 'X-Company-Slug': envCompany } : {}
         })
         const page = res.data[0]

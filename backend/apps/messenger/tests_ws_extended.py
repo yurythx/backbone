@@ -33,6 +33,7 @@ def _create_and_broadcast_message(company, conversation, sender, content: str) -
     MessengerService.broadcast_message(company, conversation, message)
     return message.id
 
+
 class MessengerWSBroadcastTest(TransactionTestCase):
     """T4: Verify that messages are broadcast to ALL participants in a conversation."""
 
@@ -224,7 +225,9 @@ class MessengerWSDeliveryReceiptTest(TransactionTestCase):
         self.alice = User.objects.create_user(
             username="alice_delivery", email="alice@dc.com", password="pwd", company=self.company
         )
-        self.bob = User.objects.create_user(username="bob_delivery", email="bob@dc.com", password="pwd", company=self.company)
+        self.bob = User.objects.create_user(
+            username="bob_delivery", email="bob@dc.com", password="pwd", company=self.company
+        )
         self.alice_token = str(RefreshToken.for_user(self.alice).access_token)
         self.bob_token = str(RefreshToken.for_user(self.bob).access_token)
         self.conv = Conversation.objects.create(company=self.company)
@@ -257,7 +260,9 @@ class MessengerWSDeliveryReceiptTest(TransactionTestCase):
 
         from apps.messenger.models import MessageDelivery
 
-        exists = await sync_to_async(MessageDelivery.all_objects.filter(message_id=msg_id, user_id=self.bob.id).exists)()
+        exists = await sync_to_async(
+            MessageDelivery.all_objects.filter(message_id=msg_id, user_id=self.bob.id).exists
+        )()
         self.assertTrue(exists)
 
         await comm_alice.disconnect()

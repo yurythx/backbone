@@ -6,6 +6,7 @@ from .views import (
     CategoryViewSet,
     CommentViewSet,
     PublicArticleViewSet,
+    PublicCategoryViewSet,
     PublicCommentViewSet,
     TagViewSet,
 )
@@ -20,6 +21,7 @@ router.register(r"comments", CommentViewSet, basename="comments")
 # Router público (sem autenticação)
 public_router = DefaultRouter()
 public_router.register(r"articles", PublicArticleViewSet, basename="public-articles")
+public_router.register(r"categories", PublicCategoryViewSet, basename="public-categories")
 public_router.register(r"comments", PublicCommentViewSet, basename="public-comments")
 
 urlpatterns = [

@@ -13,6 +13,9 @@ export function PublicHeader() {
         </Link>
         <nav className="flex items-center gap-2" aria-label="Ações">
           <Button asChild variant="ghost" className="rounded-xl">
+            <Link href="/p/ecossistema-de-servicos">Serviços</Link>
+          </Button>
+          <Button asChild variant="ghost" className="rounded-xl">
             <Link href={hasSession ? "/artigos" : "/p/artigos"}>Artigos</Link>
           </Button>
           {!hasSession && (

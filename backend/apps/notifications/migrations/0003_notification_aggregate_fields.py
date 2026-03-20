@@ -29,4 +29,3 @@ class Migration(migrations.Migration):
             index=models.Index(fields=["recipient", "is_read", "aggregate_key"], name="notificatio_recipie_aggkey_idx"),
         ),
     ]
-

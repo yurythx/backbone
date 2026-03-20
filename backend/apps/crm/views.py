@@ -1,41 +1,47 @@
-from rest_framework import viewsets, permissions
-from .models import Contact, Pipeline, Stage, Deal
-from .serializers import ContactSerializer, PipelineSerializer, StageSerializer, DealSerializer
+from rest_framework import permissions, viewsets
+
 from apps.module_manager.permissions import HasModuleAccess
+
+from .models import Contact, Deal, Pipeline, Stage
+from .serializers import ContactSerializer, DealSerializer, PipelineSerializer, StageSerializer
+
 
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
     module_code = "crm"
-    
+
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
+
 
 class PipelineViewSet(viewsets.ModelViewSet):
     queryset = Pipeline.objects.all()
     serializer_class = PipelineSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
     module_code = "crm"
-    
+
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
+
 
 class StageViewSet(viewsets.ModelViewSet):
     queryset = Stage.objects.all()
     serializer_class = StageSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
     module_code = "crm"
-    
+
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
+
 
 class DealViewSet(viewsets.ModelViewSet):
     queryset = Deal.objects.all()
     serializer_class = DealSerializer
     permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
     module_code = "crm"
-    
+
     def perform_create(self, serializer):
         # Todo Deal deve ter um owner (quem criou) e a empresa (tenant)
         serializer.save(owner=self.request.user, company=self.request.company)

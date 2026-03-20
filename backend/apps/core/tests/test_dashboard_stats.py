@@ -44,4 +44,3 @@ class DashboardStatsViewTest(APITestCase):
         self.assertIn("count", first)
         self.assertNotIn("name", first)
         self.assertNotIn("value", first)
-

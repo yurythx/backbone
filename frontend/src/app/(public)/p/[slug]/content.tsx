@@ -7,6 +7,8 @@ import { Page } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 
+type PublicPage = Pick<Page, "title" | "slug" | "content" | "meta_title" | "meta_description" | "meta_keywords">
+
 export default function PublicPageContent({ slug }: { slug: string }) {
     const router = useRouter()
 
@@ -15,7 +17,7 @@ export default function PublicPageContent({ slug }: { slug: string }) {
         queryFn: async () => {
             const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
             const qs = companySlug ? `&company_slug=${encodeURIComponent(companySlug)}` : ''
-            const res = await api.get<Page[]>(`/api/pages/?slug=${slug}${qs}`, {
+            const res = await api.get<PublicPage[]>(`/api/pages/public/pages/?slug=${slug}${qs}`, {
                 headers: companySlug ? { 'X-Company-Slug': companySlug } : {}
             })
             return res.data[0] || null

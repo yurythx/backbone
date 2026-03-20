@@ -1,4 +1,5 @@
 from django.db import IntegrityError
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
@@ -7,7 +8,34 @@ from apps.accounts.permissions import HasRolePermission
 from apps.module_manager.permissions import HasModuleAccess
 
 from .models import Page
-from .serializers import PageSerializer
+from .serializers import PageSerializer, PublicPageSerializer
+
+
+@extend_schema_view(
+    list=extend_schema(tags=["Public Pages"], description="Lista páginas publicadas sem autenticação"),
+    retrieve=extend_schema(tags=["Public Pages"], description="Detalhe de página publicada"),
+)
+class PublicPageViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = PublicPageSerializer
+    permission_classes = [permissions.AllowAny]
+    lookup_field = "slug"
+    lookup_url_kwarg = "slug"
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["slug"]
+    pagination_class = None
+
+    def get_queryset(self):
+        company = getattr(self.request, "company", None)
+        qs = Page.all_objects.filter(status=Page.STATUS_PUBLISHED)
+
+        if company:
+            return qs.filter(company=company).order_by("title")
+
+        company_slug = self.request.query_params.get("company_slug") or self.request.headers.get("X-Company-Slug")
+        if company_slug:
+            return qs.filter(company__slug=company_slug).order_by("title")
+
+        return Page.all_objects.none()
 
 
 @extend_schema_view(

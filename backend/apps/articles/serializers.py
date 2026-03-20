@@ -12,11 +12,16 @@ class CategorySerializer(serializers.ModelSerializer):
         read_only_fields = ["company"]
 
 
+class PublicCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "slug"]
+
+
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = "__all__"
-        read_only_fields = ["company"]
 
 
 class ArticleSerializer(serializers.ModelSerializer):

@@ -51,4 +51,3 @@ class Migration(migrations.Migration):
             index=models.Index(fields=["user", "delivered_at"], name="messenger_m_user_id_4f3b38_idx"),
         ),
     ]
-

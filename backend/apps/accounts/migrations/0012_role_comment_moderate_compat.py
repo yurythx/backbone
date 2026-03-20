@@ -24,4 +24,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(add_comment_moderate_permission, migrations.RunPython.noop),
     ]
-

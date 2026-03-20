@@ -13,6 +13,57 @@ DEFAULT_PAGES = [
         "meta_description": "Informações institucionais da empresa.",
     },
     {
+        "title": "Ecossistema de Serviços",
+        "slug": "ecossistema-de-servicos",
+        "content": """
+<h1>Ecossistema de Serviços</h1>
+<p>Acesse todos os serviços e aplicações disponíveis. Organizados por categorias com descrições detalhadas e acesso direto.</p>
+
+<h2>Conhecimento</h2>
+<ul>
+  <li><strong>Central de Artigos</strong> — Base de conhecimento com guias, tutoriais e documentações técnicas. <a href="/p/artigos">Acessar</a></li>
+</ul>
+
+<h2>Comunicação</h2>
+<ul>
+  <li><strong>Backbone Messenger</strong> — Plataforma de comunicação integrada para chat em tempo real. <a href="/messenger">Acessar</a></li>
+  <li><strong>Evolution API</strong> — API para integração com WhatsApp Business, permitindo automação de mensagens e atendimento. <a href="http://evolution.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+  <li><strong>Atendimento</strong> — Plataforma de atendimento ao cliente com chat ao vivo, tickets e integração com múltiplos canais. <a href="https://atendimento.projetoravanna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+</ul>
+
+<h2>Produtividade</h2>
+<ul>
+  <li><strong>Criador de Páginas</strong> — Ferramenta visual para criação e gestão de páginas web personalizadas. <a href="/cms">Acessar</a></li>
+  <li><strong>Nextcloud</strong> — Plataforma de colaboração e compartilhamento de arquivos auto-hospedada com integração ao Samba. <a href="https://nextcloud.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+</ul>
+
+<h2>Entretenimento</h2>
+<ul>
+  <li><strong>Jellyfin</strong> — Servidor de mídia open-source para organizar e transmitir músicas, vídeos e fotos. <a href="https://jellyfin.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+  <li><strong>Komga</strong> — Gerenciador de bibliotecas de quadrinhos e mangás com leitor web integrado. <a href="https://komga.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+  <li><strong>Navidrome</strong> — Servidor de música moderno e compatível com Subsonic. <a href="https://navidrome.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+</ul>
+
+<h2>Automação</h2>
+<ul>
+  <li><strong>n8n</strong> — Plataforma de automação de workflows que conecta diferentes serviços e automatiza tarefas. <a href="https://n8n.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+</ul>
+
+<h2>Monitoramento</h2>
+<ul>
+  <li><strong>Zabbix</strong> — Sistema de monitoramento de infraestrutura que acompanha o desempenho e disponibilidade dos serviços. <a href="https://zabbix.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+</ul>
+
+<h2>Gerenciamento</h2>
+<ul>
+  <li><strong>Portainer</strong> — Interface de gerenciamento para Docker, facilitando a administração de containers e serviços. <a href="https://portainer.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+  <li><strong>GLPI</strong> — Sistema de gerenciamento de ativos de TI e help desk para controle de inventário e suporte técnico. <a href="https://glpi.projetoravenna.cloud/" target="_blank" rel="noopener noreferrer">Acessar</a></li>
+</ul>
+""",
+        "meta_title": "Ecossistema de Serviços",
+        "meta_description": "Central de serviços e aplicações com acesso organizado por categorias.",
+    },
+    {
         "title": "Contato",
         "slug": "contato",
         "content": "<h1>Contato</h1><p>Fale conosco pelos canais oficiais.</p>",

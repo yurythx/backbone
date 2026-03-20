@@ -107,8 +107,12 @@ class MessengerMessagingTest(MessengerBaseTest):
         group_conv = Conversation.objects.create(company=self.company_a, is_group=True, title="Equipe")
         group_conv.participants.add(self.user_a1, self.user_a2)
 
-        m1 = Message.objects.create(company=self.company_a, conversation=self.conv_a, sender=self.user_a1, content="FindMe")
-        m2 = Message.objects.create(company=self.company_a, conversation=group_conv, sender=self.user_a2, content="FindMe too")
+        m1 = Message.objects.create(
+            company=self.company_a, conversation=self.conv_a, sender=self.user_a1, content="FindMe"
+        )
+        m2 = Message.objects.create(
+            company=self.company_a, conversation=group_conv, sender=self.user_a2, content="FindMe too"
+        )
 
         res = self.client.get("/api/messenger/conversations/search/?q=FindMe")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
