@@ -11,13 +11,11 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { toast } from 'sonner'
 import { format } from 'date-fns'
 
 const eventSchema = z.object({
@@ -31,9 +29,8 @@ type EventFormValues = z.infer<typeof eventSchema>
 
 export function CalendarView() {
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
-  const { events, isLoading, createEvent, updateEvent } = useCalendar(dateRange.start, dateRange.end)
+  const { events, createEvent, updateEvent } = useCalendar(dateRange.start, dateRange.end)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<{ start: Date, end: Date } | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
 
   const form = useForm<EventFormValues>({
@@ -57,7 +54,6 @@ export function CalendarView() {
     const start = arg.date
     const end = new Date(start.getTime() + 60 * 60 * 1000) // 1 hour default
     
-    setSelectedDate({ start, end })
     setSelectedEvent(null)
     
     // Reset form
@@ -71,8 +67,8 @@ export function CalendarView() {
     setIsDialogOpen(true)
   }
 
-  const handleEventClick = (arg: { event: any }) => {
-    const event = events.find(e => e.id === arg.event.id)
+  const handleEventClick = (arg: { event: { id: string } }) => {
+    const event = events.find(e => String(e.id) === arg.event.id)
     if (!event) return
 
     setSelectedEvent(event)
@@ -85,8 +81,8 @@ export function CalendarView() {
     setIsDialogOpen(true)
   }
 
-  const handleEventDrop = async (arg: { event: any }) => {
-     const event = events.find(e => e.id === arg.event.id)
+  const handleEventDrop = async (arg: { event: { id: string; startStr: string; endStr?: string | null }; revert: () => void }) => {
+     const event = events.find(e => String(e.id) === arg.event.id)
      if (!event) return
 
      try {
@@ -96,7 +92,7 @@ export function CalendarView() {
          start_datetime: arg.event.startStr,
          end_datetime: arg.event.endStr || arg.event.startStr // Fallback for all-day
        })
-     } catch (error) {
+     } catch {
        arg.revert()
      }
   }
@@ -116,7 +112,7 @@ export function CalendarView() {
         })
       }
       setIsDialogOpen(false)
-    } catch (error) {
+    } catch {
       // Error handled in hook
     }
   }

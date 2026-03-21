@@ -513,7 +513,13 @@ class ArticleCommentsAPITest(APITestCase):
 
         res = self.client.get("/api/articles/comments/moderation_metrics/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data.get("pending_articles"), 0)
         self.assertEqual(res.data.get("pending_comments"), 1)
         self.assertEqual(res.data.get("pending_replies"), 1)
         self.assertEqual(res.data.get("pending_total"), 2)
+        self.assertEqual(res.data.get("pending_total_all"), 2)
         self.assertTrue(isinstance(res.data.get("top_articles"), list))
+
+        res2 = self.client.get("/api/articles/articles/moderation_metrics/")
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(res2.data.get("pending_articles"), 0)

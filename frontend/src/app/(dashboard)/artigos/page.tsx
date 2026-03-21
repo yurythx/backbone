@@ -12,6 +12,7 @@ import { PublicArticleCard } from "@/components/public/article-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Search, BookOpen, Plus } from "lucide-react"
 import { ModuleGuard } from "@/components/module-guard"
+import { ArticleModeration } from "@/features/articles/article-moderation"
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -49,8 +50,19 @@ function ArtigosPageContent() {
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') ?? "")
     const debouncedSearchTerm = useDebounce(searchTerm, 250)
-    const [visibility, setVisibility] = useState<'all' | 'private'>(() => (searchParams.get('v') === 'private' ? 'private' : 'all'))
-    const [activeTab, setActiveTab] = useState<'articles' | 'tags' | 'analytics'>('articles')
+    const [visibility, setVisibility] = useState<'all' | 'private' | 'pending'>(() => {
+        const v = searchParams.get('v')
+        if (v === 'private') return 'private'
+        if (v === 'pending') return 'pending'
+        return 'all'
+    })
+    const [activeTab, setActiveTab] = useState<'articles' | 'tags' | 'analytics' | 'moderation'>(() => {
+        const t = (searchParams.get("tab") || "").toLowerCase()
+        if (t === "moderation") return "moderation"
+        if (t === "tags") return "tags"
+        if (t === "analytics") return "analytics"
+        return "articles"
+    })
     const [categoryId, setCategoryId] = useState<number | null>(() => {
         const raw = searchParams.get('category')
         const n = raw ? Number(raw) : NaN
@@ -79,7 +91,8 @@ function ArtigosPageContent() {
         queryKey: ['dashboard-articles-grid', visibility, debouncedSearchTerm, categoryId],
         queryFn: async ({ pageParam }) => {
             const params = new URLSearchParams()
-            params.set('visibility', visibility === 'all' ? 'all' : 'private')
+            if (visibility === 'private') params.set('is_public', 'false')
+            if (visibility === 'pending') params.set('status', 'pending')
             if (debouncedSearchTerm.trim()) params.set('search', debouncedSearchTerm.trim())
             if (categoryId) params.set('category', String(categoryId))
             if (pageParam) params.set('page', String(pageParam))
@@ -235,10 +248,11 @@ function ArtigosPageContent() {
                 </div>
             </div>
 
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'articles' | 'tags' | 'analytics')} className="w-full">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'articles' | 'tags' | 'analytics' | 'moderation')} className="w-full">
                 <TabsList className="bg-muted/50 p-1 rounded-xl">
                     <TabsTrigger value="articles" className="rounded-lg px-6">Artigos</TabsTrigger>
                     <TabsTrigger value="tags" className="rounded-lg px-6">Tags & Categorias</TabsTrigger>
+                    <TabsTrigger value="moderation" className="rounded-lg px-6">Moderação</TabsTrigger>
                     <TabsTrigger value="analytics" className="rounded-lg px-6">Analytics</TabsTrigger>
                 </TabsList>
 
@@ -269,6 +283,13 @@ function ArtigosPageContent() {
                                 onClick={() => { setVisibility('private') }}
                             >
                                 Privado
+                            </button>
+                            <button
+                                type="button"
+                                className={`h-10 px-3 rounded-full text-sm font-medium border ${visibility === 'pending' ? 'bg-amber-500 text-white border-amber-500' : 'bg-background border-border'}`}
+                                onClick={() => { setVisibility('pending') }}
+                            >
+                                Pendente
                             </button>
                         </div>
                     </div>
@@ -363,6 +384,10 @@ function ArtigosPageContent() {
 
                 <TabsContent value="tags" className="mt-6">
                     {activeTab === 'tags' && <TagList />}
+                </TabsContent>
+
+                <TabsContent value="moderation" className="mt-6">
+                    {activeTab === 'moderation' && <ArticleModeration />}
                 </TabsContent>
 
                 <TabsContent value="analytics" className="mt-6">

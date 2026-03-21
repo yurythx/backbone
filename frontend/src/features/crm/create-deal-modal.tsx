@@ -53,7 +53,7 @@ export function CreateDealModal() {
       })
       setOpen(false)
       form.reset()
-    } catch (error) {
+    } catch {
        // Handled by hook
     }
   }

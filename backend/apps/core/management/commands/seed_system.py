@@ -262,6 +262,7 @@ class Command(BaseCommand):
             {"code": "articles", "name": "Artigos", "description": "Gestão de conteúdo"},
             {"code": "pages", "name": "Páginas", "description": "Páginas institucionais"},
             {"code": "messenger", "name": "Mensagens", "description": "Chat interno"},
+            {"code": "crm", "name": "CRM", "description": "Gestão de leads e chamados"},
         ]
 
         for mod_data in modules_data:

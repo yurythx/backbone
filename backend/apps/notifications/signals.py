@@ -1,5 +1,7 @@
 from urllib.parse import quote
 
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
@@ -73,6 +75,99 @@ def notify_article_status(sender, instance, created, **kwargs):
         return
 
     original_status = getattr(instance, "_original_status", None)
+
+    if instance.status == Article.STATUS_PENDING and original_status != Article.STATUS_PENDING:
+        User = get_user_model()
+        perm = "articles.article_publish"
+        candidates = (
+            User.all_objects.filter(company=instance.company, is_active=True)
+            .select_related("role", "notification_preference")
+            .filter(Q(is_superuser=True) | Q(is_staff=True) | Q(role__isnull=False))
+        )
+        recipients = []
+        for u in candidates:
+            pref = getattr(u, "notification_preference", None)
+            if pref and getattr(pref, "notify_moderation_article_pending", True) is False:
+                continue
+            if u.is_superuser or u.is_staff:
+                recipients.append(u)
+                continue
+            role = getattr(u, "role", None)
+            perms = getattr(role, "permissions", None) if role else None
+            if isinstance(perms, list) and perm in perms:
+                recipients.append(u)
+        if getattr(instance, "author_id", None):
+            recipients = [u for u in recipients if u.id != instance.author_id]
+
+        title = "Novo artigo pendente"
+        link = "/artigos?tab=moderation"
+        msg = f"{instance.title}: aguardando aprovação."
+        for u in recipients:
+            aggregate_key = f"articles.moderation.pending:{instance.id}:a"
+            notification = (
+                Notification.objects.filter(
+                    company=instance.company,
+                    recipient=u,
+                    is_read=False,
+                    notification_type=Notification.TYPE_APPROVAL,
+                    title=title,
+                    aggregate_key=aggregate_key,
+                )
+                .order_by("-created_at")
+                .first()
+            )
+
+            count = 1
+            if notification:
+                count = int(getattr(notification, "aggregate_count", 1) or 1) + 1
+
+            final_message = msg if count <= 1 else f"{count} artigos pendentes. Último: {instance.title}"
+
+            if notification:
+                notification.message = final_message
+                notification.link = link
+                notification.is_read = False
+                notification.aggregate_count = count
+                notification.metadata = {
+                    "kind": "article_moderation_pending",
+                    "article_id": str(instance.id),
+                    "article_slug": instance.slug,
+                    "last_title": instance.title,
+                }
+                notification.save(update_fields=["message", "link", "is_read", "aggregate_count", "metadata"])
+            else:
+                notification = Notification.objects.create(
+                    company=instance.company,
+                    recipient=u,
+                    notification_type=Notification.TYPE_APPROVAL,
+                    title=title,
+                    message=final_message,
+                    link=link,
+                    aggregate_key=aggregate_key,
+                    aggregate_count=count,
+                    metadata={
+                        "kind": "article_moderation_pending",
+                        "article_id": str(instance.id),
+                        "article_slug": instance.slug,
+                        "last_title": instance.title,
+                    },
+                )
+
+            try:
+                send_websocket_notification.delay(
+                    f"notifications_user_{u.id}",
+                    {
+                        "type": "notification_message",
+                        "notification_id": str(notification.id),
+                        "notification_type": notification.notification_type,
+                        "title": notification.title,
+                        "message": notification.message,
+                        "link": notification.link,
+                        "created_at": notification.created_at.isoformat(),
+                    },
+                )
+            except Exception:
+                pass
 
     # Só notifica se houve transição real para 'published'
     if instance.status == Article.STATUS_PUBLISHED and original_status != Article.STATUS_PUBLISHED:

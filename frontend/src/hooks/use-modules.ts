@@ -4,13 +4,10 @@ import { TenantModule } from '@/types'
 import { ensureHasSessionCookie } from '@/lib/session'
 
 export function useModules() {
-    const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null
-    const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
-    const effectiveCompany = companySlug || envCompany || 'unknown'
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
 
     const { data: rawData, isLoading, error } = useQuery<TenantModule[] | { results: TenantModule[] }>({
-        queryKey: ['my-modules', effectiveCompany],
+        queryKey: ['my-modules'],
         queryFn: async () => {
       ensureHasSessionCookie()
             const res = await api.get<TenantModule[] | { results: TenantModule[] }>('/api/modules/my-modules/')

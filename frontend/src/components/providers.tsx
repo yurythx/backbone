@@ -10,9 +10,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js')
-        .then((registration) => {
-          // SW registered successfully
-        })
+        .then(() => {})
 
         .catch((err) => {
           if (process.env.NODE_ENV === 'development') {

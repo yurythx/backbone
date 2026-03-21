@@ -1,5 +1,4 @@
 import { Metadata } from 'next'
-import { notFound } from 'next/navigation'
 import { PublicArticleViewer } from "@/components/public/public-article-viewer"
 
 interface Props {

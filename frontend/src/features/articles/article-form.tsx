@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, ArrowLeft, Image as ImageIcon, X, Globe, MessageSquareQuote, Layout, CheckCircle2, XCircle, Send, Sparkles, Link as LinkIcon, Lock, Trash2 } from "lucide-react"
 import { RichEditor } from "@/components/ui/rich-editor"
@@ -108,6 +107,12 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
   })
 
   // Bug 6: useWatch para preview do Google reativo em tempo real
+  const watchedTitle = useWatch({ control: form.control, name: "title" })
+  const watchedContent = useWatch({ control: form.control, name: "content" })
+  const watchedExcerpt = useWatch({ control: form.control, name: "excerpt" })
+  const watchedCategory = useWatch({ control: form.control, name: "category" })
+  const watchedIsPublic = useWatch({ control: form.control, name: "is_public" })
+  const watchedImage = useWatch({ control: form.control, name: "image" })
   const watchedMetaTitle = useWatch({ control: form.control, name: "meta_title" })
   const watchedMetaDescription = useWatch({ control: form.control, name: "meta_description" })
   const watchedSlug = useWatch({ control: form.control, name: "slug" })
@@ -146,6 +151,62 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       notify.error("Falha na operação", error instanceof Error ? error.message : String(error))
     }
   })
+
+  const requiredChecks = {
+    title: (watchedTitle || "").trim().length >= 5,
+    slug: /^[a-z0-9-]{3,}$/.test((watchedSlug || "").trim()),
+    content: (watchedContent || "").trim().length >= 10,
+    category: Boolean((watchedCategory || "").trim()),
+    excerpt: (watchedExcerpt || "").trim().length >= 10,
+  }
+
+  const recommendedChecks = {
+    image: Boolean((watchedImage || "").trim()),
+    meta_title: Boolean((watchedMetaTitle || "").trim()),
+    meta_description: Boolean((watchedMetaDescription || "").trim()),
+  }
+
+  const isReadyForReview = Object.values(requiredChecks).every(Boolean)
+  const isReadyForPublish = isReadyForReview && (!watchedIsPublic || (recommendedChecks.meta_description && recommendedChecks.meta_title))
+
+  const handleReviewAction = (action: "submit" | "publish" | "reject") => {
+    if (!initialData) return
+    const currentStatus = initialData.status
+
+    if (action === "submit") {
+      if (!isReadyForReview) {
+        notify.warning("Checklist incompleto", "Preencha os campos obrigatórios antes de enviar para revisão.")
+        return
+      }
+      if (currentStatus !== "draft") {
+        notify.warning("Ação indisponível", "Apenas rascunhos podem ser enviados para revisão.")
+        return
+      }
+      reviewMutation.mutate({ action, slug: initialData.slug })
+      return
+    }
+
+    if (action === "publish") {
+      if (!isReadyForPublish) {
+        notify.warning("Checklist incompleto", "Complete os itens obrigatórios para publicar.")
+        return
+      }
+      if (currentStatus !== "pending") {
+        notify.warning("Ação indisponível", "Apenas artigos pendentes podem ser aprovados.")
+        return
+      }
+      reviewMutation.mutate({ action, slug: initialData.slug })
+      return
+    }
+
+    if (action === "reject") {
+      if (currentStatus !== "pending") {
+        notify.warning("Ação indisponível", "Apenas artigos pendentes podem ser rejeitados.")
+        return
+      }
+      reviewMutation.mutate({ action, slug: initialData.slug })
+    }
+  }
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
@@ -235,16 +296,25 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
           {initialData && (
             <>
               {initialData.status === 'draft' && (
-                <Button variant="outline" onClick={() => reviewMutation.mutate({ action: 'submit', slug: initialData.slug })}>
+                <Button
+                  variant="outline"
+                  onClick={() => handleReviewAction("submit")}
+                  disabled={reviewMutation.isPending || !isReadyForReview}
+                >
                   <Send className="mr-2 h-4 w-4" /> Enviar para Revisão
                 </Button>
               )}
               {initialData.status === 'pending' && (
                 <>
-                  <Button variant="destructive" onClick={() => reviewMutation.mutate({ action: 'reject', slug: initialData.slug })}>
+                  <Button variant="destructive" onClick={() => handleReviewAction("reject")} disabled={reviewMutation.isPending}>
                     <XCircle className="mr-2 h-4 w-4" /> Rejeitar
                   </Button>
-                  <Button variant="default" className="bg-green-600 hover:bg-green-700" onClick={() => reviewMutation.mutate({ action: 'publish', slug: initialData.slug })}>
+                  <Button
+                    variant="default"
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={() => handleReviewAction("publish")}
+                    disabled={reviewMutation.isPending || !isReadyForPublish}
+                  >
                     <CheckCircle2 className="mr-2 h-4 w-4" /> Aprovar
                   </Button>
                 </>
@@ -454,6 +524,77 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
               </div>
 
               <div className="p-6 rounded-2xl bg-primary/5 border border-primary/10 space-y-6">
+                <div className="rounded-2xl border bg-background/60 p-4 space-y-3">
+                  <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Checklist
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        {requiredChecks.title ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                        <span>Título</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">obrigatório</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        {requiredChecks.slug ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                        <span>Slug válido</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">obrigatório</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        {requiredChecks.content ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                        <span>Conteúdo</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">obrigatório</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        {requiredChecks.category ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                        <span>Categoria</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">obrigatório</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        {requiredChecks.excerpt ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                        <span>Resumo</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">obrigatório</span>
+                    </div>
+                    <div className="pt-2 border-t text-xs text-muted-foreground space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          {recommendedChecks.image ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <XCircle className="h-4 w-4 text-muted-foreground/60" />}
+                          <span>Imagem de capa</span>
+                        </div>
+                        <span>recomendado</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          {recommendedChecks.meta_title ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <XCircle className="h-4 w-4 text-muted-foreground/60" />}
+                          <span>Título SEO</span>
+                        </div>
+                        <span>recomendado</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          {recommendedChecks.meta_description ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <XCircle className="h-4 w-4 text-muted-foreground/60" />}
+                          <span>Descrição SEO</span>
+                        </div>
+                        <span>recomendado</span>
+                      </div>
+                      {watchedIsPublic && (!recommendedChecks.meta_description || !recommendedChecks.meta_title) && (
+                        <div className="text-[11px] text-amber-700 dark:text-amber-300">
+                          Para publicar como público, é recomendado preencher Título SEO e Descrição SEO.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* VisibilityToggle - Público/Privado */}
                 <FormField
                   control={form.control}

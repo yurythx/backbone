@@ -89,7 +89,7 @@ export function useCRM() {
       const response = await api.patch(`/api/crm/deals/${id}/`, data)
       return response.data
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] })
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCRM, Pipeline, Stage, Deal } from "./use-crm"
+import { useCRM, Pipeline, Deal } from "./use-crm"
 import { Card } from "@/components/ui/card"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { motion, AnimatePresence } from "framer-motion"

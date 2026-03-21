@@ -22,9 +22,9 @@ export default function InsightsPage() {
         licenseData?.plan === 'Premium'
 
     const moderationQuery = useQuery({
-        queryKey: ['articles', 'comments', 'moderation_metrics'],
+        queryKey: ['articles', 'moderation_metrics'],
         queryFn: async ({ signal }) => {
-            const res = await api.get('/api/articles/comments/moderation_metrics/', { signal })
+            const res = await api.get('/api/articles/articles/moderation_metrics/', { signal })
             return res.data
         },
         enabled: Boolean(isPremium),

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { KanbanBoard } from '../kanban-board'
 import * as useCRMHook from '../use-crm'
+import type { Deal, Pipeline } from '../use-crm'
 
 // Mock do hook useCRM
 vi.mock('../use-crm', () => ({
@@ -9,7 +10,7 @@ vi.mock('../use-crm', () => ({
 }))
 
 describe('KanbanBoard Component', () => {
-  const mockPipeline = {
+  const mockPipeline: Pipeline = {
     id: 1,
     name: 'Suporte TI',
     stages: [
@@ -18,7 +19,7 @@ describe('KanbanBoard Component', () => {
     ],
   }
 
-  const mockDeals = [
+  const mockDeals: Deal[] = [
     {
       id: 1,
       uuid: 'deal-1',
@@ -46,36 +47,39 @@ describe('KanbanBoard Component', () => {
   ]
 
   it('deve renderizar as colunas do pipeline corretamente', () => {
-    (useCRMHook.useCRM as any).mockReturnValue({
+    const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
+    mockedUseCRM.mockReturnValue({
       deals: mockDeals,
       updateDeal: { mutateAsync: vi.fn() },
     })
 
-    render(<KanbanBoard pipeline={mockPipeline as any} />)
+    render(<KanbanBoard pipeline={mockPipeline} />)
 
     expect(screen.getByText('Novo')).toBeInTheDocument()
     expect(screen.getByText('Em Andamento')).toBeInTheDocument()
   })
 
   it('deve exibir os cards nas colunas corretas', () => {
-    (useCRMHook.useCRM as any).mockReturnValue({
+    const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
+    mockedUseCRM.mockReturnValue({
       deals: mockDeals,
       updateDeal: { mutateAsync: vi.fn() },
     })
 
-    render(<KanbanBoard pipeline={mockPipeline as any} />)
+    render(<KanbanBoard pipeline={mockPipeline} />)
 
     expect(screen.getByText('Servidor Offline')).toBeInTheDocument()
     expect(screen.getByText('Notebook Lento')).toBeInTheDocument()
   })
 
   it('deve mostrar a prioridade correta nos cards', () => {
-    (useCRMHook.useCRM as any).mockReturnValue({
+    const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
+    mockedUseCRM.mockReturnValue({
       deals: mockDeals,
       updateDeal: { mutateAsync: vi.fn() },
     })
 
-    render(<KanbanBoard pipeline={mockPipeline as any} />)
+    render(<KanbanBoard pipeline={mockPipeline} />)
 
     expect(screen.getByText('URGENT')).toBeInTheDocument()
   })

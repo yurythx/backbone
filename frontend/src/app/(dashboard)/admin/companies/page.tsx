@@ -69,7 +69,7 @@ export default function CompaniesPage() {
             await api.delete(`/api/core/companies/${companyToDelete.slug}/`)
             queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] })
             toast.success("Empresa excluída com sucesso")
-        } catch (error) {
+        } catch {
             toast.error("Erro ao excluir empresa")
         } finally {
             setIsDeleteDialogOpen(false)

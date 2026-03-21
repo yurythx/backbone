@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -8,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
-from apps.accounts.permissions import ActionRolePermission, HasRolePermission
+from apps.accounts.permissions import ActionRolePermission, AnyRolePermission, HasRolePermission
 from apps.module_manager.models import TenantModule
 from apps.module_manager.permissions import HasModuleAccess
 from shared_kernel.audit import log_create, log_delete, log_update
@@ -252,7 +253,19 @@ class ArticleViewSet(viewsets.ModelViewSet):
         "history": "articles.article_view",
         "analytics": "articles.article_view",
         "analytics_detail": "articles.article_view",
+        "moderation_metrics": "articles.article_view",
+        "bulk_publish": "articles.article_publish",
+        "bulk_reject": "articles.article_publish",
     }
+
+    action_any_permissions = {
+        "moderation_metrics": ["articles.article_view", "articles.comment_moderate", "articles.article_publish"],
+    }
+
+    def get_permissions(self):
+        if getattr(self, "action", None) == "moderation_metrics":
+            return [permissions.IsAuthenticated(), HasModuleAccess(), AnyRolePermission()]
+        return super().get_permissions()
 
     def get_queryset(self):
         """
@@ -388,12 +401,6 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="publish")
     def publish(self, request, slug=None):
-        self.required_permission = "articles.article_publish"
-        if not HasRolePermission().has_permission(request, self):
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("Sem permissão para publicar artigos.")
-
         article = self.get_object()
         try:
             ArticleService.publish_article(request.user, article)
@@ -410,6 +417,117 @@ class ArticleViewSet(viewsets.ModelViewSet):
             return Response({"status": "rejected"})
         except ValueError as e:
             return Response({"error": str(e)}, status=400)
+
+    @action(detail=False, methods=["post"], url_path="bulk/publish")
+    def bulk_publish(self, request):
+        slugs = request.data.get("slugs")
+        if not isinstance(slugs, list) or not all(isinstance(s, str) and s.strip() for s in slugs):
+            return Response({"detail": "Campo 'slugs' inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        slugs = [s.strip() for s in slugs]
+        slugs = list(dict.fromkeys(slugs))
+        if len(slugs) == 0:
+            return Response({"detail": "Nenhum slug informado."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(slugs) > 100:
+            return Response({"detail": "Máximo de 100 itens por requisição."}, status=status.HTTP_400_BAD_REQUEST)
+
+        company = request.company
+        qs = Article.objects.filter(company=company, slug__in=slugs).select_related("company")
+        articles_by_slug = {a.slug: a for a in qs}
+
+        approved: list[str] = []
+        failed: list[dict] = []
+
+        with transaction.atomic():
+            for slug in slugs:
+                article = articles_by_slug.get(slug)
+                if not article:
+                    failed.append({"slug": slug, "code": "not_found", "message": "Artigo não encontrado."})
+                    continue
+                try:
+                    ArticleService.publish_article(request.user, article)
+                    approved.append(slug)
+                except ValueError as e:
+                    failed.append({"slug": slug, "code": "invalid", "message": str(e)})
+
+        return Response({"approved": approved, "failed": failed}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], url_path="bulk/reject")
+    def bulk_reject(self, request):
+        slugs = request.data.get("slugs")
+        reason = request.data.get("reason", "") or ""
+        if not isinstance(slugs, list) or not all(isinstance(s, str) and s.strip() for s in slugs):
+            return Response({"detail": "Campo 'slugs' inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        slugs = [s.strip() for s in slugs]
+        slugs = list(dict.fromkeys(slugs))
+        if len(slugs) == 0:
+            return Response({"detail": "Nenhum slug informado."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(slugs) > 100:
+            return Response({"detail": "Máximo de 100 itens por requisição."}, status=status.HTTP_400_BAD_REQUEST)
+
+        company = request.company
+        qs = Article.objects.filter(company=company, slug__in=slugs).select_related("company")
+        articles_by_slug = {a.slug: a for a in qs}
+
+        rejected: list[str] = []
+        failed: list[dict] = []
+
+        with transaction.atomic():
+            for slug in slugs:
+                article = articles_by_slug.get(slug)
+                if not article:
+                    failed.append({"slug": slug, "code": "not_found", "message": "Artigo não encontrado."})
+                    continue
+                try:
+                    ArticleService.reject_article(request.user, article, reason=reason)
+                    rejected.append(slug)
+                except ValueError as e:
+                    failed.append({"slug": slug, "code": "invalid", "message": str(e)})
+
+        return Response({"rejected": rejected, "failed": failed}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"])
+    def moderation_metrics(self, request):
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone
+
+        company = request.company
+        now = timezone.now()
+        fifteen_days_ago = now.date() - timezone.timedelta(days=15)
+
+        pending_articles = Article.objects.filter(company=company, status=Article.STATUS_PENDING).count()
+
+        pending_qs = Comment.objects.filter(company=company, is_public=True, is_approved=False)
+        pending_comments = pending_qs.filter(parent__isnull=True).count()
+        pending_replies = pending_qs.filter(parent__isnull=False).count()
+
+        pending_by_date = (
+            pending_qs.filter(created_at__date__gte=fifteen_days_ago)
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
+
+        top_articles = (
+            pending_qs.values("article_id", "article__title", "article__slug")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:5]
+        )
+
+        oldest = pending_qs.order_by("created_at").values("created_at", "article__title", "article__slug").first()
+
+        return Response(
+            {
+                "pending_articles": pending_articles,
+                "pending_comments": pending_comments,
+                "pending_replies": pending_replies,
+                "pending_total": pending_comments + pending_replies,
+                "pending_total_all": pending_articles + pending_comments + pending_replies,
+                "pending_by_date": list(pending_by_date),
+                "top_articles": list(top_articles),
+                "oldest_pending": oldest,
+            }
+        )
 
     @action(detail=False, methods=["get"])
     def analytics(self, request):
@@ -790,6 +908,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         pending_qs = Comment.objects.filter(company=company, is_public=True, is_approved=False)
         pending_comments = pending_qs.filter(parent__isnull=True).count()
         pending_replies = pending_qs.filter(parent__isnull=False).count()
+        pending_articles = Article.objects.filter(company=company, status=Article.STATUS_PENDING).count()
 
         pending_by_date = (
             pending_qs.filter(created_at__date__gte=fifteen_days_ago)
@@ -809,9 +928,11 @@ class CommentViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
+                "pending_articles": pending_articles,
                 "pending_comments": pending_comments,
                 "pending_replies": pending_replies,
                 "pending_total": pending_comments + pending_replies,
+                "pending_total_all": pending_articles + pending_comments + pending_replies,
                 "pending_by_date": list(pending_by_date),
                 "top_articles": list(top_articles),
                 "oldest_pending": oldest,

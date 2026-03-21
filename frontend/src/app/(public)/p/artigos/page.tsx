@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react"
 import { api } from "@/lib/axios"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useDebounce } from "@/hooks/use-debounce"
+import { usePublicCompanySlug } from "@/hooks/use-public-company-slug"
 import {
     Select,
     SelectContent,
@@ -22,14 +23,8 @@ export default function PublicArtigosPage() {
     const searchParams = useSearchParams()
     const router = useRouter()
 
-    const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG || null
     const companySlugFromQuery = (searchParams.get("company_slug") || "").trim() || null
-
-    const [effectiveCompanySlug, setEffectiveCompanySlug] = useState<string | null>(() => {
-        if (companySlugFromQuery) return companySlugFromQuery
-        const saved = typeof window !== "undefined" ? localStorage.getItem("companySlug") : null
-        return (saved || envCompany || null)
-    })
+    const { companySlug, isResolving } = usePublicCompanySlug()
 
     const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') ?? "")
     const debouncedSearchTerm = useDebounce(searchTerm, 500)
@@ -38,33 +33,9 @@ export default function PublicArtigosPage() {
     useEffect(() => {
         const s = searchParams.get('search') ?? ""
         const c = searchParams.get('category') ?? "all"
-        const qCompany = (searchParams.get("company_slug") || "").trim() || null
         if (s !== searchTerm) setSearchTerm(s)
         if (c !== selectedCategory) setSelectedCategory(c)
-        if (qCompany && qCompany !== effectiveCompanySlug) setEffectiveCompanySlug(qCompany)
-    }, [searchParams, searchTerm, selectedCategory, effectiveCompanySlug])
-
-    useEffect(() => {
-        let active = true
-        const resolveCompany = async () => {
-            if (effectiveCompanySlug) return
-            try {
-                const res = await api.get<{ slug: string }[]>("/api/core/companies/public_list/")
-                const list = Array.isArray(res.data) ? res.data : []
-                const picked = list[0]?.slug
-                if (!picked) return
-                if (!active) return
-                localStorage.setItem("companySlug", picked)
-                setEffectiveCompanySlug(picked)
-            } catch {
-                // ignore
-            }
-        }
-        resolveCompany()
-        return () => {
-            active = false
-        }
-    }, [effectiveCompanySlug])
+    }, [searchParams, searchTerm, selectedCategory])
 
     useEffect(() => {
         const params = new URLSearchParams()
@@ -78,21 +49,21 @@ export default function PublicArtigosPage() {
     type PublicCategory = { id: number; name: string; slug: string }
 
     const { data: categories } = useQuery({
-        queryKey: ['public-article-categories', effectiveCompanySlug],
+        queryKey: ['public-article-categories', companySlug],
         queryFn: async ({ signal }) => {
             const params = new URLSearchParams()
-            if (effectiveCompanySlug) params.set("company_slug", effectiveCompanySlug)
+            if (companySlug) params.set("company_slug", companySlug)
             const res = await api.get<PublicCategory[]>('/api/articles/public/categories/', {
                 signal,
                 params,
-                headers: effectiveCompanySlug ? { "X-Company-Slug": effectiveCompanySlug } : {},
+                headers: companySlug ? { "X-Company-Slug": companySlug } : {},
             })
             const data = res.data
             return Array.isArray(data) ? data : []
         },
         staleTime: 10 * 60 * 1000,
         retry: 1,
-        enabled: !!effectiveCompanySlug,
+        enabled: !!companySlug,
     })
 
     const {
@@ -103,17 +74,17 @@ export default function PublicArtigosPage() {
         fetchNextPage,
         hasNextPage,
     } = useInfiniteQuery({
-        queryKey: ['public-articles', effectiveCompanySlug, debouncedSearchTerm, selectedCategory],
+        queryKey: ['public-articles', companySlug, debouncedSearchTerm, selectedCategory],
         queryFn: async ({ pageParam, signal }) => {
             const params = new URLSearchParams()
             if (debouncedSearchTerm.trim()) params.set('search', debouncedSearchTerm.trim())
             if (selectedCategory && selectedCategory !== "all") params.set('category', selectedCategory)
             if (pageParam) params.set('page', String(pageParam))
-            if (effectiveCompanySlug) params.set("company_slug", effectiveCompanySlug)
+            if (companySlug) params.set("company_slug", companySlug)
             const res = await api.get('/api/articles/public/articles/', {
                 params,
                 signal,
-                headers: effectiveCompanySlug ? { "X-Company-Slug": effectiveCompanySlug } : {},
+                headers: companySlug ? { "X-Company-Slug": companySlug } : {},
             })
             return res.data
         },
@@ -132,7 +103,7 @@ export default function PublicArtigosPage() {
         },
         staleTime: 5 * 60 * 1000,
         retry: 1,
-        enabled: !!effectiveCompanySlug,
+        enabled: !!companySlug,
     })
 
     const articles: Article[] = useMemo(() => {
@@ -168,7 +139,7 @@ export default function PublicArtigosPage() {
                     </p>
                 </header>
 
-                {!effectiveCompanySlug && (
+                {!companySlug && !isResolving && (
                     <div className="text-center py-12 border-2 border-dashed rounded-3xl bg-muted/10" role="alert" aria-live="assertive">
                         <h3 className="text-lg font-semibold mb-2">Empresa não selecionada</h3>
                         <p className="text-muted-foreground max-w-md mx-auto">
@@ -191,14 +162,14 @@ export default function PublicArtigosPage() {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             aria-label="Buscar artigos"
-                            disabled={!effectiveCompanySlug}
+                            disabled={!companySlug}
                         />
                     </div>
                     <div className="relative">
                         <Select
                             value={selectedCategory}
                             onValueChange={setSelectedCategory}
-                            disabled={!effectiveCompanySlug}
+                            disabled={!companySlug}
                         >
                             <SelectTrigger className="pl-4 h-12 rounded-xl bg-card border-muted hover:border-primary/30 shadow-sm">
                                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -221,7 +192,7 @@ export default function PublicArtigosPage() {
                             type="button"
                             onClick={() => { setSearchTerm(""); setSelectedCategory("all") }}
                             className="h-12 rounded-xl gap-2 hover:bg-destructive/10 hover:text-destructive transition-colors inline-flex items-center justify-center border border-transparent"
-                            disabled={!effectiveCompanySlug}
+                            disabled={!companySlug}
                         >
                             <X className="h-4 w-4" aria-hidden="true" /> Limpar
                         </button>

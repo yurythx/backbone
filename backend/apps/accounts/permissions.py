@@ -152,6 +152,28 @@ class ActionRolePermission(permissions.BasePermission):
         return required in request.user.role.permissions
 
 
+class AnyRolePermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        if request.user.is_superuser:
+            return True
+
+        action = getattr(view, "action", None)
+        action_any_permissions = getattr(view, "action_any_permissions", {})
+        required_list = action_any_permissions.get(action) or getattr(view, "any_permissions", None)
+
+        if not required_list:
+            return True
+
+        if not hasattr(request.user, "role") or not request.user.role:
+            return False
+
+        perms = request.user.role.permissions
+        if not isinstance(perms, list):
+            return False
+
+        return any(p in perms for p in required_list)
+
+
 class FeatureLimitPermission(permissions.BasePermission):
     """
     A1: Centralises feature-limit (licensing) checks in a DRF permission class.

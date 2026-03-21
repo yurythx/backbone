@@ -30,6 +30,8 @@ interface Comment {
     }>;
 }
 
+type CommentReply = NonNullable<Comment["replies"]>[number]
+
 interface PublicArticleCommentsProps {
     articleId: number;
     articleSlug?: string | null;
@@ -49,7 +51,8 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
     const prefilledRef = React.useRef(false);
     const [highlightId, setHighlightId] = React.useState<string | null>(null)
     const maxLength = 1500;
-    const [repliesByParent, setRepliesByParent] = React.useState<Record<number, { items: Comment['replies']; next: string | null; isLoading: boolean }>>({})
+    const highlightTimeoutRef = React.useRef<number | null>(null)
+    const [repliesByParent, setRepliesByParent] = React.useState<Record<number, { items: CommentReply[]; next: string | null; isLoading: boolean }>>({})
 
     const parseNextPage = (nextUrl: string | null) => {
         if (!nextUrl) return undefined
@@ -130,8 +133,8 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
         if (!el) return
         el.scrollIntoView({ behavior: 'smooth', block: 'start' })
         setHighlightId(id)
-        window.clearTimeout((window as any).__bb_comment_highlight_timeout)
-        ;(window as any).__bb_comment_highlight_timeout = window.setTimeout(() => {
+        if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current)
+        highlightTimeoutRef.current = window.setTimeout(() => {
             setHighlightId(null)
         }, 2500)
     }, [comments.length])
@@ -144,17 +147,27 @@ export function PublicArticleComments({ articleId, articleSlug, companySlug }: P
         try {
             const cur = repliesByParent[parentId]
             const pageParam = parseNextPage(cur?.next ?? null) ?? 1
-            const res = await api.get<{ results?: Comment['replies']; next?: string | null } | Comment['replies']>(`/api/articles/public/comments/${parentId}/replies/`, {
+            const res = await api.get<{ results?: CommentReply[]; next?: string | null } | CommentReply[]>(
+                `/api/articles/public/comments/${parentId}/replies/`,
+                {
                 params: { page: pageParam },
                 headers: companySlug ? { 'X-Company-Slug': companySlug } : {},
-            })
-            const body = res.data as any
-            const newItems = Array.isArray(body) ? body : (Array.isArray(body?.results) ? body.results : [])
-            const next = Array.isArray(body) ? null : (body?.next ?? null)
+                }
+            )
+            const body: unknown = res.data
+            const newItems: CommentReply[] = Array.isArray(body)
+                ? (body as CommentReply[])
+                : (typeof body === "object" && body && Array.isArray((body as { results?: unknown }).results)
+                    ? ((body as { results: CommentReply[] }).results)
+                    : [])
+            const next =
+                Array.isArray(body)
+                    ? null
+                    : (typeof body === "object" && body ? ((body as { next?: string | null }).next ?? null) : null)
             setRepliesByParent((prev) => {
                 const existing = prev[parentId]?.items ?? []
-                const seen = new Set(existing?.map((x: any) => x.id))
-                const merged = [...existing, ...newItems.filter((x: any) => !seen.has(x.id))]
+                const seen = new Set(existing.map((x) => x.id))
+                const merged = [...existing, ...newItems.filter((x) => !seen.has(x.id))]
                 return { ...prev, [parentId]: { items: merged, next, isLoading: false } }
             })
         } catch {

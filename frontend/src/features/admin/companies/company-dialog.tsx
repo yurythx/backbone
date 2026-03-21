@@ -85,8 +85,18 @@ export function CompanyDialog({ company, open, onOpenChange }: CompanyDialogProp
             toast.success(company ? "Empresa atualizada com sucesso" : "Empresa criada com sucesso")
             onOpenChange(false)
         },
-        onError: (error: any) => {
-            const message = error.response?.data?.detail || error.response?.data?.slug?.[0] || "Erro ao salvar empresa"
+        onError: (error: unknown) => {
+            const err = error as { response?: { data?: unknown } }
+            const data = err.response?.data
+            let message = "Erro ao salvar empresa"
+            if (data && typeof data === "object") {
+                if ("detail" in data && typeof (data as { detail?: unknown }).detail === "string") {
+                    message = (data as { detail: string }).detail
+                } else if ("slug" in data && Array.isArray((data as { slug?: unknown }).slug)) {
+                    const first = (data as { slug: unknown[] }).slug[0]
+                    if (typeof first === "string") message = first
+                }
+            }
             toast.error(message)
         },
         onSettled: () => {

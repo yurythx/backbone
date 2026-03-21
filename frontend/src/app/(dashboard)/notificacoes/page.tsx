@@ -190,8 +190,8 @@ export default function NotificationsPage() {
                                         </div>
                                         {(() => {
                                             const count = typeof n.aggregate_count === "number" ? n.aggregate_count : 1
-                                            const meta = n.metadata || {}
-                                            const lastSnippet = typeof (meta as any).last_snippet === "string" ? (meta as any).last_snippet : null
+                                            const meta = (n.metadata || {}) as Record<string, unknown>
+                                            const lastSnippet = typeof meta.last_snippet === "string" ? meta.last_snippet : null
                                             const raw = n.message || ""
                                             const main = count > 1 && raw.includes("Último:") ? raw.split("Último:")[0].trim() : raw
                                             return (

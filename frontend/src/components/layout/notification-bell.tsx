@@ -223,8 +223,8 @@ export function NotificationBell() {
                                                 </div>
                                                 {(() => {
                                                     const count = typeof notification.aggregate_count === "number" ? notification.aggregate_count : 1
-                                                    const meta = notification.metadata || {}
-                                                    const lastSnippet = typeof (meta as any).last_snippet === "string" ? (meta as any).last_snippet : null
+                                                    const meta = (notification.metadata || {}) as Record<string, unknown>
+                                                    const lastSnippet = typeof meta.last_snippet === "string" ? meta.last_snippet : null
                                                     const raw = notification.message || ""
                                                     const main = count > 1 && raw.includes("Último:") ? raw.split("Último:")[0].trim() : raw
                                                     return (

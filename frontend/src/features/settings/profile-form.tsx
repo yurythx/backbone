@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
-import { User as UserType } from "@/types"
 import { Button } from "@/components/ui/button"
 import {
   Form,

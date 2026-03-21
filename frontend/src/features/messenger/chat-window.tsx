@@ -95,8 +95,6 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   const [isConversationDeleteOpen, setIsConversationDeleteOpen] = React.useState(false)
   const [isConversationClearOpen, setIsConversationClearOpen] = React.useState(false)
   const [isConversationArchiveOpen, setIsConversationArchiveOpen] = React.useState(false)
-  const messagesEndRef = React.useRef<HTMLDivElement>(null)
-
   const [lightboxOpen, setLightboxOpen] = React.useState(false)
   const [lightboxIndex, setLightboxIndex] = React.useState(0)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
@@ -105,7 +103,7 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   const [isPinned, setIsPinned] = React.useState(false)
   const [seekingTarget, setSeekingTarget] = React.useState(false)
   const [highlightedMsgId, setHighlightedMsgId] = React.useState<number | null>(null)
-  const { onlineUsers, userStatuses } = usePresence()
+  const { userStatuses } = usePresence()
 
   const DELETE_FOR_ALL_WINDOW_MS = (() => {
     const raw = process.env.NEXT_PUBLIC_MESSENGER_DELETE_FOR_ALL_WINDOW_SECONDS
@@ -394,7 +392,7 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
       setIsMuted(!!conversation.preference.is_muted)
       setIsPinned(!!conversation.preference.is_pinned)
     }
-  }, [conversation?.id, conversation?.preference?.is_muted, conversation?.preference?.is_pinned])
+  }, [conversation?.id, conversation?.preference])
 
   // Track the active conversation so notifications can be suppressed without relying on URL params
   React.useEffect(() => {
@@ -450,7 +448,7 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   const expectedReaders = React.useMemo(() => {
     const count = Array.isArray(conversation?.participants) ? conversation!.participants.length : 0
     return Math.max(count - 1, 1)
-  }, [conversation?.participants])
+  }, [conversation])
 
   const { typingUsers, handleTyping, sendTypingStatus, markRead, lastMessage } = useChat(
     conversation?.id ?? null,

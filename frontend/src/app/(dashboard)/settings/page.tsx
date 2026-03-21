@@ -3,7 +3,7 @@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Building, Settings2, Mail } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { useEffect, useState, Suspense } from "react"
+import { useEffect, useMemo, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Protected } from "@/components/auth/protected"
 import dynamic from "next/dynamic"
@@ -59,7 +59,7 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const tabParam = searchParams.get("tab")
-  const allowedTabs = new Set(["company", "branding", "email"])
+  const allowedTabs = useMemo(() => new Set(["company", "branding", "email"]), [])
   const [activeTab, setActiveTab] = useState("company")
 
   useEffect(() => {
@@ -72,7 +72,7 @@ function SettingsContent() {
       return
     }
     setActiveTab("company")
-  }, [router, tabParam])
+  }, [router, tabParam, allowedTabs])
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-20">

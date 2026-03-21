@@ -135,6 +135,9 @@ class UserNotificationPreference(models.Model):
     notify_moderation_reply_pending = models.BooleanField(
         default=True, help_text="Receber notificações quando houver respostas pendentes"
     )
+    notify_moderation_article_pending = models.BooleanField(
+        default=True, help_text="Receber notificações quando houver artigos pendentes"
+    )
     notify_reply_approved_single = models.BooleanField(
         default=True, help_text="Receber notificação quando uma resposta ao seu comentário for aprovada"
     )

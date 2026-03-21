@@ -222,6 +222,7 @@ class UserNotificationPreferenceSerializer(serializers.ModelSerializer):
             "user_details",
             "notify_moderation_comment_pending",
             "notify_moderation_reply_pending",
+            "notify_moderation_article_pending",
             "notify_reply_approved_single",
             "notify_reply_approved_thread",
             "created_at",

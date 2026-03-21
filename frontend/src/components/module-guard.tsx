@@ -1,7 +1,6 @@
 "use client"
 
 import { useModules } from "@/hooks/use-modules"
-import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { PackageX, Home } from "lucide-react"
@@ -14,7 +13,6 @@ interface ModuleGuardProps {
 
 export function ModuleGuard({ moduleCode, children }: ModuleGuardProps) {
     const { isModuleActive, isLoading } = useModules()
-    const router = useRouter()
     const [isChecking, setIsChecking] = useState(true)
 
     useEffect(() => {

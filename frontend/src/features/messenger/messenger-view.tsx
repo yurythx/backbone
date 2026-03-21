@@ -259,12 +259,30 @@ export function MessengerView() {
           }
         } else {
           const pList = conversation.participants || []
-          const otherParticipant = pList.find((p: any) =>
-            (typeof p === 'number' ? p !== currentUser.id : p.id !== currentUser.id)
-          )
+          type ParticipantObj = {
+            id: number
+            username?: string
+            email?: string
+            avatar_url?: string | null
+            is_online?: boolean
+            group_names?: string[]
+            is_staff?: boolean
+            last_seen?: string | null
+            status?: string
+            first_name?: string
+            last_name?: string
+          }
+          const otherParticipant = (pList as unknown[]).find((p) => {
+            if (typeof p === 'number') return p !== currentUser.id
+            if (typeof p === 'object' && p && 'id' in p) {
+              const id = (p as ParticipantObj).id
+              return typeof id === 'number' && id !== currentUser.id
+            }
+            return false
+          })
 
           if (otherParticipant) {
-            const p = (typeof otherParticipant === 'number') ? null : otherParticipant
+            const p = (typeof otherParticipant === 'number') ? null : (otherParticipant as ParticipantObj)
             targetContact = {
               id: p?.id || (typeof otherParticipant === 'number' ? otherParticipant : 0),
               username: p?.username || (conversation.participants_list?.[0] !== currentUser.username ? conversation.participants_list?.[0] : conversation.participants_list?.[1]) || "Contato",

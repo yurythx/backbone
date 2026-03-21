@@ -99,6 +99,90 @@ class ArticlesAPITest(APITestCase):
         res = self.client.get("/api/articles/articles/")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_bulk_publish_and_reject(self):
+        role, _ = Role.objects.get_or_create(
+            company=self.company,
+            name="Publisher",
+            defaults={"permissions": ["articles.article_view", "articles.article_create", "articles.article_publish"]},
+        )
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        a1 = Article.objects.create(
+            company=self.company,
+            title="A1",
+            slug="a1",
+            content="x",
+            status=Article.STATUS_PENDING,
+        )
+        a2 = Article.objects.create(
+            company=self.company,
+            title="A2",
+            slug="a2",
+            content="x",
+            status=Article.STATUS_PENDING,
+        )
+
+        res_reject = self.client.post(
+            "/api/articles/articles/bulk/reject/",
+            {"slugs": [a1.slug, a2.slug], "reason": "Não atende a política"},
+            format="json",
+        )
+        self.assertEqual(res_reject.status_code, status.HTTP_200_OK)
+        a1.refresh_from_db()
+        a2.refresh_from_db()
+        self.assertEqual(a1.status, Article.STATUS_REJECTED)
+        self.assertEqual(a2.status, Article.STATUS_REJECTED)
+        self.assertTrue(a1.rejection_reason)
+        self.assertTrue(a2.rejection_reason)
+
+        a3 = Article.objects.create(
+            company=self.company,
+            title="A3",
+            slug="a3",
+            content="x",
+            status=Article.STATUS_PENDING,
+        )
+        a4 = Article.objects.create(
+            company=self.company,
+            title="A4",
+            slug="a4",
+            content="x",
+            status=Article.STATUS_PENDING,
+        )
+
+        res_publish = self.client.post(
+            "/api/articles/articles/bulk/publish/",
+            {"slugs": [a3.slug, a4.slug]},
+            format="json",
+        )
+        self.assertEqual(res_publish.status_code, status.HTTP_200_OK)
+        a3.refresh_from_db()
+        a4.refresh_from_db()
+        self.assertEqual(a3.status, Article.STATUS_PUBLISHED)
+        self.assertEqual(a4.status, Article.STATUS_PUBLISHED)
+
+    def test_article_moderation_metrics_endpoint(self):
+        role, _ = Role.objects.get_or_create(
+            company=self.company,
+            name="Viewer",
+            defaults={"permissions": ["articles.article_view"]},
+        )
+        self.user.role = role
+        self.user.save(update_fields=["role"])
+
+        Article.objects.create(
+            company=self.company,
+            title="Pendente",
+            slug="pendente",
+            content="x",
+            status=Article.STATUS_PENDING,
+        )
+
+        res = self.client.get("/api/articles/articles/moderation_metrics/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data.get("pending_articles"), 1)
+
 
 class PublicArticlesAPITest(APITestCase):
     def setUp(self):

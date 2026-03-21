@@ -1,70 +1,33 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { api } from "@/lib/axios"
 import { Page } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useEffect, useMemo, useState } from "react"
+import { usePublicCompanySlug } from "@/hooks/use-public-company-slug"
 
 type PublicPage = Pick<Page, "title" | "slug" | "content" | "meta_title" | "meta_description" | "meta_keywords">
 
 export default function PublicPageContent({ slug }: { slug: string }) {
     const router = useRouter()
-    const searchParams = useSearchParams()
-
-    const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG || null
-    const companySlugFromQuery = useMemo(() => (searchParams.get("company_slug") || "").trim() || null, [searchParams])
-
-    const [effectiveCompanySlug, setEffectiveCompanySlug] = useState<string | null>(() => {
-        if (companySlugFromQuery) return companySlugFromQuery
-        const saved = typeof window !== "undefined" ? localStorage.getItem("companySlug") : null
-        return (saved || envCompany || null)
-    })
-
-    useEffect(() => {
-        if (companySlugFromQuery && companySlugFromQuery !== effectiveCompanySlug) {
-            setEffectiveCompanySlug(companySlugFromQuery)
-        }
-    }, [companySlugFromQuery, effectiveCompanySlug])
-
-    useEffect(() => {
-        let active = true
-        const resolveCompany = async () => {
-            if (effectiveCompanySlug) return
-            try {
-                const res = await api.get<{ slug: string }[]>("/api/core/companies/public_list/")
-                const list = Array.isArray(res.data) ? res.data : []
-                const picked = list[0]?.slug
-                if (!picked) return
-                if (!active) return
-                localStorage.setItem("companySlug", picked)
-                setEffectiveCompanySlug(picked)
-            } catch {
-                // ignore
-            }
-        }
-        resolveCompany()
-        return () => {
-            active = false
-        }
-    }, [effectiveCompanySlug])
+    const { companySlug, isResolving } = usePublicCompanySlug()
 
     const { data: page, isLoading } = useQuery({
-        queryKey: ['public-page', slug, effectiveCompanySlug],
+        queryKey: ['public-page', slug, companySlug],
         queryFn: async ({ signal }) => {
-            const qs = `&company_slug=${encodeURIComponent(effectiveCompanySlug as string)}`
+            const qs = `&company_slug=${encodeURIComponent(companySlug as string)}`
             const res = await api.get<PublicPage[]>(`/api/pages/public/pages/?slug=${slug}${qs}`, {
-                headers: { 'X-Company-Slug': effectiveCompanySlug as string },
+                headers: { 'X-Company-Slug': companySlug as string },
                 signal,
             })
             return res.data[0] || null
         },
-        enabled: !!slug && !!effectiveCompanySlug
+        enabled: !!slug && !!companySlug
     })
 
-    if (isLoading) {
+    if (isLoading || isResolving) {
         return (
             <div className="max-w-4xl mx-auto space-y-8 py-12" role="status" aria-live="polite" aria-label="Carregando conteúdo da página">
                 <Skeleton className="h-12 w-2/3" />
@@ -77,7 +40,7 @@ export default function PublicPageContent({ slug }: { slug: string }) {
         )
     }
 
-    if (!effectiveCompanySlug) {
+    if (!companySlug) {
         return (
             <div className="text-center py-24" role="alert" aria-live="assertive">
                 <h2 className="text-3xl font-bold mb-4">Empresa não selecionada</h2>

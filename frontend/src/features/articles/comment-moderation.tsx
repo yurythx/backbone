@@ -84,6 +84,7 @@ export function CommentModeration() {
   const [bulkIncludeReplies, setBulkIncludeReplies] = React.useState(true)
   const [focusCommentId, setFocusCommentId] = React.useState<number | null>(null)
   const [highlightCommentId, setHighlightCommentId] = React.useState<number | null>(null)
+  const highlightTimeoutRef = React.useRef<number | null>(null)
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set())
   const [articleId, setArticleId] = React.useState<string>("")
   const [fromDate, setFromDate] = React.useState<string>("")
@@ -144,8 +145,8 @@ export function CommentModeration() {
     if (!el) return
     el.scrollIntoView({ behavior: "smooth", block: "start" })
     setHighlightCommentId(focusCommentId)
-    window.clearTimeout((window as any).__bb_moderation_highlight_timeout)
-    ;(window as any).__bb_moderation_highlight_timeout = window.setTimeout(() => {
+    if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current)
+    highlightTimeoutRef.current = window.setTimeout(() => {
       setHighlightCommentId(null)
     }, 2500)
   }, [comments.length, focusCommentId])

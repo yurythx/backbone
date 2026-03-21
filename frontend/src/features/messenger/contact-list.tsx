@@ -46,7 +46,7 @@ interface DisplayItem {
   unreadCount: number
   isPinned: boolean
   isMuted: boolean
-  lastMessage: any | null
+  lastMessage: Conversation["last_message"] | null
   contact: Contact
   avatarUrl?: string | null
   status: 'online' | 'busy' | 'offline'
@@ -156,9 +156,8 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
   }, [contactList])
 
   // ── Build display list ─────────────────────────────────────────────────────
-  const conversations = Array.isArray(conversationsRaw) ? conversationsRaw : []
-
   const displayList = useMemo<DisplayItem[]>(() => {
+    const conversations = Array.isArray(conversationsRaw) ? conversationsRaw : []
     return conversations
       .map((conv) => {
         const isPinned = !!conv.preference?.is_pinned
@@ -209,10 +208,14 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
           status: "offline",
         }
 
-        const effectiveStatus: 'online' | 'busy' | 'offline' =
-          otherContact?.id && userStatuses.has(otherContact.id)
-            ? (userStatuses.get(otherContact.id) ?? 'offline')
-            : ((otherContact?.status as any) ?? 'offline')
+        const effectiveStatus: 'online' | 'busy' | 'offline' = (() => {
+          if (otherContact?.id && userStatuses.has(otherContact.id)) {
+            return userStatuses.get(otherContact.id) ?? 'offline'
+          }
+          const s = otherContact?.status
+          if (s === 'online' || s === 'busy' || s === 'offline') return s
+          return 'offline'
+        })()
 
         return {
           convId: conv.id,
@@ -230,7 +233,7 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
         } as DisplayItem
       })
       .filter((item): item is DisplayItem => item !== null)
-  }, [conversations, contactByUsername, currentUser?.username, userStatuses])
+  }, [conversationsRaw, contactByUsername, currentUser?.username, userStatuses])
 
   // ── Filter + sort ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {

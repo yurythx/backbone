@@ -10,6 +10,7 @@ import { H3, P } from "@/components/ui/typography"
 type UserNotificationPreference = {
   notify_moderation_comment_pending: boolean
   notify_moderation_reply_pending: boolean
+  notify_moderation_article_pending: boolean
   notify_reply_approved_single: boolean
   notify_reply_approved_thread: boolean
 }
@@ -62,6 +63,20 @@ export function UserNotificationPreferences() {
       </div>
 
       <div className="space-y-4">
+        <div className="flex items-start justify-between gap-6 rounded-2xl border border-border/50 bg-muted/20 p-4">
+          <div className="min-w-0">
+            <div className="font-medium">Artigos pendentes</div>
+            <div className="text-sm text-muted-foreground">
+              Notificar quando houver artigos pendentes de aprovação.
+            </div>
+          </div>
+          <Switch
+            checked={data.notify_moderation_article_pending}
+            onCheckedChange={(checked) => updateMutation.mutate({ notify_moderation_article_pending: checked })}
+            disabled={updateMutation.isPending}
+          />
+        </div>
+
         <div className="flex items-start justify-between gap-6 rounded-2xl border border-border/50 bg-muted/20 p-4">
           <div className="min-w-0">
             <div className="font-medium">Comentários pendentes</div>

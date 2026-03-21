@@ -3,13 +3,12 @@
 import { useState } from "react"
 import { PageHeader } from "@/components/ui/page-header"
 import { ModuleGuard } from "@/components/module-guard"
-import { useCRM, Pipeline } from "./use-crm"
+import { useCRM } from "./use-crm"
 import { KanbanBoard } from "./kanban-board"
 import { CreateDealModal } from "./create-deal-modal"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
-import { LayoutGrid, List, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { LayoutGrid, List } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function CRMPage() {
@@ -59,7 +58,7 @@ export default function CRMPage() {
           </div>
         </div>
 
-        <Tabs value={view} onValueChange={(v) => setView(v as any)} className="w-full">
+        <Tabs value={view} onValueChange={(v) => setView(v as "kanban" | "list")} className="w-full">
           <div className="flex items-center justify-between mb-4">
             <TabsList className="glass p-1">
               <TabsTrigger value="kanban" className="flex items-center gap-2">

@@ -75,7 +75,7 @@ class ArticleService:
         return article
 
     @staticmethod
-    def update_article(user, article, data, image=None):
+    def update_article(user, article, data, image=None, revision_comment: str | None = None):
         """
         Updates an article and logs the change.
         """
@@ -119,7 +119,7 @@ class ArticleService:
             article.save()
 
             reversion.set_user(user)
-            reversion.set_comment(f"Updated by {user.username}")
+            reversion.set_comment(revision_comment or f"Updated by {user.username}")
 
         from types import SimpleNamespace
 
@@ -146,7 +146,9 @@ class ArticleService:
         if article.status != Article.STATUS_DRAFT:
             raise ValueError("Only drafts can be submitted for review")
 
-        return ArticleService.update_article(user, article, {"status": Article.STATUS_PENDING})
+        return ArticleService.update_article(
+            user, article, {"status": Article.STATUS_PENDING}, revision_comment="Submitted for review"
+        )
 
     @staticmethod
     def publish_article(user, article):
@@ -164,7 +166,7 @@ class ArticleService:
         if not article.published_at:
             update_data["published_at"] = timezone.now()
 
-        article = ArticleService.update_article(user, article, update_data)
+        article = ArticleService.update_article(user, article, update_data, revision_comment="Published")
 
         trigger_webhooks(
             article.company,
@@ -192,7 +194,11 @@ class ArticleService:
         update_data = {"status": Article.STATUS_REJECTED}
         if reason:
             update_data["rejection_reason"] = reason
-        return ArticleService.update_article(user, article, update_data)
+        msg = "Rejected"
+        if reason:
+            clipped = str(reason).strip().replace("\n", " ")
+            msg = f"Rejected: {clipped[:120]}"
+        return ArticleService.update_article(user, article, update_data, revision_comment=msg)
 
     @staticmethod
     def delete_article(user, article):

@@ -4,7 +4,6 @@ import * as React from "react"
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react"
 import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from "next-themes"
 import { api } from "@/lib/axios"
-import axios from "axios"
 import { usePathname } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 

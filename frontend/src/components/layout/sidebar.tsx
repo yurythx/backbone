@@ -168,20 +168,33 @@ export function Sidebar() {
   }
 
   const canModerateComments = hasPermission("articles.comment_moderate") && isModuleActive("articles")
-  const pendingCountQuery = useQuery({
-    queryKey: ["articles-comments-pending-count"],
+  const canModerateArticles =
+    hasPermission("articles.article_publish") && hasPermission("articles.article_view") && isModuleActive("articles")
+  const canReadModerationMetrics =
+    isModuleActive("articles") &&
+    (hasPermission("articles.article_view") ||
+      hasPermission("articles.comment_moderate") ||
+      hasPermission("articles.article_publish"))
+
+  const moderationMetricsQuery = useQuery({
+    queryKey: ["articles-moderation-metrics"],
     queryFn: async ({ signal }) => {
-      const res = await api.get<{ count?: number }>("/api/articles/comments/", {
-        params: { is_approved: false, is_public: true, page_size: 1 },
-        signal,
-      })
-      const count = typeof res.data?.count === "number" ? res.data.count : 0
-      return count
+      const res = await api.get<{
+        pending_articles?: number
+        pending_comments?: number
+        pending_replies?: number
+        pending_total?: number
+      }>("/api/articles/articles/moderation_metrics/", { signal })
+      return res.data
     },
-    enabled: !!me && !!canModerateComments,
+    enabled: !!me && canReadModerationMetrics,
     refetchInterval: 30000,
   })
-  const pendingCount = pendingCountQuery.data ?? 0
+
+  const pendingArticlesCount =
+    canModerateArticles ? (moderationMetricsQuery.data?.pending_articles ?? 0) : 0
+  const pendingCount =
+    canModerateComments ? (moderationMetricsQuery.data?.pending_total ?? 0) : 0
 
   // Filter sections based on permissions
   const filteredSections = sidebarSections.map(section => {
@@ -328,6 +341,18 @@ export function Sidebar() {
                               aria-label={`${pendingCount} comentários pendentes`}
                             >
                               {pendingCount}
+                            </span>
+                          )}
+
+                          {item.href === "/artigos" && pendingArticlesCount > 0 && (
+                            <span
+                              className={cn(
+                                "ml-auto text-[10px] font-bold tabular-nums rounded-full px-2 py-0.5",
+                                isActive ? "bg-amber-500 text-white" : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                              )}
+                              aria-label={`${pendingArticlesCount} artigos pendentes`}
+                            >
+                              {pendingArticlesCount}
                             </span>
                           )}
 
