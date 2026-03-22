@@ -38,6 +38,7 @@ export function usePermission() {
         }
 
         const perms = normalizeStringArray(user.role_details.permissions)
+        if (perms.includes("*")) return true
         return perms.includes(permissionSlug)
     }
 

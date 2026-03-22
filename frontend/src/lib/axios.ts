@@ -45,6 +45,14 @@ const processQueue = (error: unknown, token: string | null = null) => {
 
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    const url = config.url || ''
+    const method = (config.method || 'get').toLowerCase()
+    const isPublicApiRequest =
+      url.includes('/api/articles/public/') ||
+      url.includes('/api/pages/public/') ||
+      url.includes('/api/core/companies/public_list/') ||
+      (url.includes('/api/modules/my-modules/') && (method === 'get' || method === 'head' || method === 'options'))
+
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null;
     const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG;
@@ -53,7 +61,7 @@ api.interceptors.request.use(
     const isAuthEndpoint = Boolean(config.url?.includes('/api/accounts/token/'));
     const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
 
-    if (!isAuthEndpoint && token && isJwtExpired(token) && refreshToken) {
+    if (!isPublicApiRequest && !isAuthEndpoint && token && isJwtExpired(token) && refreshToken) {
       if (isRefreshing) {
         const newToken = await new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -82,7 +90,7 @@ api.interceptors.request.use(
           isRefreshing = false;
         }
       }
-    } else if (token && !config.headers.Authorization) {
+    } else if (!isPublicApiRequest && token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 

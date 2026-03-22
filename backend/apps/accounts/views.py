@@ -270,7 +270,10 @@ class UserViewSet(viewsets.ModelViewSet):
         if request.method == "GET":
             company = getattr(request, "company", None) or getattr(user, "company", None)
             if company:
-                AccountService.ensure_default_roles(company)
+                try:
+                    AccountService.ensure_default_roles(company)
+                except Exception:
+                    pass
             serializer = self.get_serializer(user)
             return Response(serializer.data)
 

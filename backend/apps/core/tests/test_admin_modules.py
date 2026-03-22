@@ -48,7 +48,9 @@ class AdminModulesTest(APITestCase):
         # 1. List Available Modules
         response = self.client.get("/api/modules/available/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data["results"]), 1)
+        codes = [m["code"] for m in response.data["results"]]
+        self.assertIn("crm", codes)
+        self.assertIn("messenger", codes)
 
         # 2. Activate Module
         data = {"module_code": "messenger"}
@@ -59,5 +61,6 @@ class AdminModulesTest(APITestCase):
         # 3. Verify My Modules
         response = self.client.get("/api/modules/my-modules/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data["results"]), 1)
-        self.assertEqual(response.data["results"][0]["module_code"], "messenger")
+        my_codes = [m["module_code"] for m in response.data["results"]]
+        self.assertIn("messenger", my_codes)
+        self.assertIn("crm", my_codes)

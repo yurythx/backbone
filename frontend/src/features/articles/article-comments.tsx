@@ -56,6 +56,7 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
     // Bug 10: verifica permissão antes de exibir o formulário de criação
     const canManageComments = !!(
         user?.is_superuser ||
+        user?.role_details?.permissions?.includes('*') ||
         user?.role_details?.permissions?.includes('articles.comment_moderate')
     )
 

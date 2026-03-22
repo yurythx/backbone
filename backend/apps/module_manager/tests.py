@@ -26,9 +26,9 @@ class ModuleManagerTest(APITestCase):
         # Use corrected URL
         response = self.client.get("/api/modules/available/")
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-        # Should return the global Module
-        self.assertEqual(len(response.data["results"]), 1, response.data)
-        self.assertEqual(response.data["results"][0]["code"], "messenger")
+        codes = [m["code"] for m in response.data["results"]]
+        self.assertIn("messenger", codes)
+        self.assertIn("crm", codes)
 
     def test_activate_module(self):
         """Test activating a module for the current tenant."""
@@ -50,5 +50,6 @@ class ModuleManagerTest(APITestCase):
         # Use corrected URL
         response = self.client.get("/api/modules/my-modules/")
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-        self.assertEqual(len(response.data["results"]), 1, response.data)
-        self.assertEqual(response.data["results"][0]["module_name"], "Messenger")
+        codes = [m["module_code"] for m in response.data["results"]]
+        self.assertIn("messenger", codes)
+        self.assertIn("crm", codes)

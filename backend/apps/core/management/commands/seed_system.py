@@ -270,6 +270,18 @@ class Command(BaseCommand):
                 code=mod_data["code"],
                 defaults={"name": mod_data["name"], "description": mod_data["description"], "is_default": True},
             )
+            updated = False
+            if module.name != mod_data["name"]:
+                module.name = mod_data["name"]
+                updated = True
+            if module.description != mod_data["description"]:
+                module.description = mod_data["description"]
+                updated = True
+            if module.is_default is not True:
+                module.is_default = True
+                updated = True
+            if updated:
+                module.save(update_fields=["name", "description", "is_default"])
             # Enable for default tenant
             TenantModule.objects.get_or_create(company=company, module=module, defaults={"is_active": True})
             self.stdout.write(f"  [+] Module verified: {module.name}")

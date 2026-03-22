@@ -103,8 +103,12 @@ class HasRolePermission(permissions.BasePermission):
         if not hasattr(request.user, "role") or not request.user.role:
             return False
 
+        perms = request.user.role.permissions
+        if isinstance(perms, list) and "*" in perms:
+            return True
+
         # Verifica se o slug da permissão está na lista de permissões da role
-        return required_permission in request.user.role.permissions
+        return required_permission in perms
 
 
 class ActionRolePermission(permissions.BasePermission):
@@ -149,7 +153,11 @@ class ActionRolePermission(permissions.BasePermission):
         if not hasattr(request.user, "role") or not request.user.role:
             return False
 
-        return required in request.user.role.permissions
+        perms = request.user.role.permissions
+        if isinstance(perms, list) and "*" in perms:
+            return True
+
+        return required in perms
 
 
 class AnyRolePermission(permissions.BasePermission):
@@ -170,6 +178,9 @@ class AnyRolePermission(permissions.BasePermission):
         perms = request.user.role.permissions
         if not isinstance(perms, list):
             return False
+
+        if "*" in perms:
+            return True
 
         return any(p in perms for p in required_list)
 

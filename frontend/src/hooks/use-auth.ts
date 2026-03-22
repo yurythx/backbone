@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/axios'
-import { ensureHasSessionCookie } from '@/lib/session'
+import { clearClientSession, ensureHasSessionCookie } from '@/lib/session'
 import { User } from '@/types'
 
 export function useAuth() {
@@ -23,8 +23,14 @@ export function useAuth() {
             try {
                 const res = await api.get<User>('/api/accounts/users/me/')
                 return res.data
-            } catch {
-                // If 401, maybe clear token? For now just return null
+            } catch (e) {
+                const status =
+                    typeof e === 'object' && e !== null && 'response' in e
+                        ? (e as { response?: { status?: unknown } }).response?.status
+                        : undefined
+                if (status === 401 || status === 403) {
+                    clearClientSession()
+                }
                 return null
             }
         },

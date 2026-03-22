@@ -60,6 +60,14 @@ class AccountsAPITest(APITestCase):
         res_forbidden = self.client.delete(f"/api/accounts/roles/{sys_role.id}/")
         self.assertEqual(res_forbidden.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_wildcard_permission_allows_role_guarded_endpoints(self):
+        wild_role = Role.objects.create(company=self.company, name="Wild", permissions=["*"])
+        self.user.role = wild_role
+        self.user.save(update_fields=["role"])
+
+        res = self.client.get("/api/accounts/users/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content)
+
     def test_invitation_create_and_accept_flow(self):
         # Create role
         role = Role.objects.create(company=self.company, name="Member")

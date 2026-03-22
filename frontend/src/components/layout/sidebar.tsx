@@ -164,6 +164,7 @@ export function Sidebar() {
 
   const hasPermission = (permission: string) => {
     if (isSuperuser) return true
+    if (userPermissions.includes("*")) return true
     return userPermissions.includes(permission)
   }
 
