@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -10,56 +10,85 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useCRM } from "./use-crm"
+import { getPipelineColumns, Pipeline, useCRM } from "./use-crm"
 import { Plus } from "lucide-react"
 
 const dealSchema = z.object({
   title: z.string().min(1, "O título é obrigatório"),
   description: z.string().optional(),
   contact: z.string().min(1, "Selecione um contato"),
-  stage: z.string().min(1, "Selecione o estágio inicial"),
+  column: z.string().min(1, "Selecione a coluna inicial"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
   closing_date: z.string().optional(),
 })
 
 type DealFormValues = z.infer<typeof dealSchema>
 
-export function CreateDealModal() {
+interface CreateDealModalProps {
+  pipeline?: Pipeline
+}
+
+export function CreateDealModal({ pipeline }: CreateDealModalProps) {
   const [open, setOpen] = useState(false)
   const { contacts, pipelines, createDeal } = useCRM()
-  
-  // Pega o primeiro estágio do primeiro pipeline por padrão
-  const defaultStage = pipelines[0]?.stages[0]?.id.toString()
+
+  const availableColumns = useMemo(() => {
+    if (pipeline) return getPipelineColumns(pipeline)
+    return pipelines.flatMap((item) => getPipelineColumns(item))
+  }, [pipeline, pipelines])
+  const defaultColumn = availableColumns[0]?.id.toString() || ""
+  const defaultValues = useMemo<DealFormValues>(() => ({
+    title: "",
+    description: "",
+    contact: "",
+    priority: "MEDIUM",
+    column: defaultColumn,
+    closing_date: "",
+  }), [defaultColumn])
 
   const form = useForm<DealFormValues>({
     resolver: zodResolver(dealSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      priority: "MEDIUM",
-      stage: defaultStage || "",
-    }
+    defaultValues,
   })
+
+  useEffect(() => {
+    const currentColumnValue = form.getValues("column")
+    const columnStillAvailable = availableColumns.some((column) => column.id.toString() === currentColumnValue)
+
+    if ((!currentColumnValue || !columnStillAvailable) && defaultColumn) {
+      form.setValue("column", defaultColumn, { shouldValidate: true })
+    }
+  }, [availableColumns, defaultColumn, form])
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen)
+
+    if (!nextOpen) {
+      form.reset(defaultValues)
+    }
+  }
 
   const onSubmit = async (data: DealFormValues) => {
     try {
+      const selectedColumn = availableColumns.find((column) => column.id === parseInt(data.column))
+
       await createDeal.mutateAsync({
         title: data.title,
         description: data.description,
         contact: parseInt(data.contact),
-        stage: parseInt(data.stage),
+        column: selectedColumn?.id,
         priority: data.priority,
         closing_date: data.closing_date || undefined
       })
       setOpen(false)
-      form.reset()
+      form.reset(defaultValues)
     } catch {
        // Handled by hook
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button className="glass-primary shadow-lg shadow-primary/20">
           <Plus className="mr-2 h-4 w-4" /> Novo Card
@@ -96,7 +125,7 @@ export function CreateDealModal() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Cliente / Lead</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione..." />
@@ -119,7 +148,7 @@ export function CreateDealModal() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Prioridade</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione..." />
@@ -137,6 +166,31 @@ export function CreateDealModal() {
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+                name="column"
+              render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Coluna Inicial</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                          <SelectValue placeholder="Selecione uma coluna..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                        {availableColumns.map((column) => (
+                          <SelectItem key={column.id} value={column.id.toString()}>
+                            {column.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -167,7 +221,7 @@ export function CreateDealModal() {
             />
 
             <div className="flex justify-end gap-2 pt-4">
-               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
                <Button type="submit" disabled={createDeal.isPending}>
                  {createDeal.isPending ? "Criando..." : "Salvar Card"}
                </Button>

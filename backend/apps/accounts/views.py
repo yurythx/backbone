@@ -29,6 +29,10 @@ User = get_user_model()
 @extend_schema(tags=["Accounts - Auth"])
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+    
+    from rest_framework.throttling import ScopedRateThrottle
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login_attempt'
 
 
 @extend_schema(tags=["Accounts - Auth"], summary="Logout and invalidate refresh token")
@@ -62,7 +66,9 @@ class LogoutView(generics.GenericAPIView):
             # Token already blacklisted or invalid — treat as success (idempotent logout)
             pass
         except Exception as e:
-            return Response({"detail": f"Logout failed: {e!s}"}, status=status.HTTP_400_BAD_REQUEST)
+            import logging
+            logging.getLogger(__name__).error(f"Logout failed unexpectedly: {e}")
+            return Response({"detail": "Erro interno ao processar logout."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({"detail": "Logout successful."}, status=status.HTTP_200_OK)
 
@@ -100,7 +106,7 @@ class CustomTokenRefreshView(generics.GenericAPIView):
 
             # Get the user definitively (using global manager)
             try:
-                user = User.objects.get(id=user_id)
+                user = User.all_objects.get(id=user_id)
             except User.DoesNotExist:
                 return Response({"detail": "User not found"}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -132,6 +138,8 @@ class UserRegistrationView(generics.CreateAPIView):
 class PasswordResetRequestView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = PasswordResetRequestSerializer
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -148,6 +156,8 @@ class PasswordResetRequestView(generics.GenericAPIView):
 class PasswordResetConfirmView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = PasswordResetConfirmSerializer
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -198,7 +208,7 @@ class UserViewSet(viewsets.ModelViewSet):
             qs = User.all_objects.select_related("role", "company").all().order_by("username")
         else:
             # Regular tenant users use standard objects (which already filters by tenant)
-            qs = User.objects.select_related("role").all().order_by("username")
+            qs = User.objects.select_related("role", "company").all().order_by("username")
 
         role_id = self.request.query_params.get("role")
         q = self.request.query_params.get("q")
@@ -268,12 +278,6 @@ class UserViewSet(viewsets.ModelViewSet):
     def me(self, request):
         user = request.user
         if request.method == "GET":
-            company = getattr(request, "company", None) or getattr(user, "company", None)
-            if company:
-                try:
-                    AccountService.ensure_default_roles(company)
-                except Exception:
-                    pass
             serializer = self.get_serializer(user)
             return Response(serializer.data)
 

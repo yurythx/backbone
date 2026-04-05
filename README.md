@@ -40,17 +40,29 @@ Para detalhes sobre a configuração do Cloudflare Tunnel, veja o guia: [Manual 
 - **Temas Dinâmicos**: Troca de tema em tempo real.
 - **Integração Google Fonts**: Tipografia personalizada para cada empresa.
 
+### 🧩 Gestão de Módulos (Module Manager)
+- **Ativação Dinâmica**: Recursos são habilitados por tenant.
+- **Isolamento de API**: Permissões bloqueiam acesso a APIs de módulos inativos (`HasModuleAccess`).
+
 ### 📝 CMS (Sistema de Gestão de Conteúdo)
-- **Páginas & Artigos**: Editor rich text potente (Tiptap).
-- **Categorias & Tags**: Organização estruturada de conteúdo.
-- **Otimização SEO**: Meta tags, sitemaps e robots.txt automáticos.
-- **Gestão de Mídia**: Armazenamento via MinIO/S3.
-- **Sistema de Comentários**: Engajamento de usuários.
+- **Fluxo Editorial**: Status rigorosos (Rascunho, Pendente, Publicado, Rejeitado).
+- **Controle de Versão**: Histórico e rollback com `django-reversion`.
+- **Moderação**: Painel de aprovação/rejeição em lote com motivos de auditoria.
+- **Otimização SEO**: Meta tags, sitemaps e portal público.
+
+### 💼 CRM & Automação
+- **Gestão Visual**: Pipeline de vendas/tickets em Kanban.
+- **Automação de Calendário**: Sincronização automática de prazos de negócios com o módulo de calendário.
+- **Notificações**: Alertas para proprietários em mudanças de estágio.
+
+### 💰 Financeiro & Folha de Pagamento
+- **Controle Financeiro**: Gestão de receitas, despesas e relatórios.
+- **Folha de Pagamento (Payroll)**: Processamento de salários, cálculos de 13º e férias.
 
 ### 👥 Gestão de Usuários
-- **Autenticação JWT**: Tokens seguros para API e Frontend.
+- **Autenticação Segura**: JWT em cookies HttpOnly.
 - **Autenticação LDAP**: Integração corporativa multi-tenant.
-- **RBAC (Controle de Acesso)**: Permissões granulares por cargo.
+- **RBAC (Controle de Acesso)**: Permissões granulares baseadas em papéis, com suporte a wildcard (`*`).
 - **Onboarding**: Fluxo guiado para novas empresas.
 
 ### 💳 Licenciamento & Monetização

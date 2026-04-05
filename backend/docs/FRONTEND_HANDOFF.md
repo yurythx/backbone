@@ -174,9 +174,60 @@ Um arquivo completo da especificação da API foi gerado em `backend/docs/schema
 
 ---
 
-## 8. Exemplos Práticos para o Frontend
+## 8. CRM / Atendimento
 
-### 8.1 Interceptors com Axios
+### 8.1 Direção do Contrato
+- O CRM está em migração controlada de `stage` para `column`.
+- Para novos fluxos de frontend e integrações, trate `column` como conceito principal.
+- Campos legados de `stage` continuam existindo apenas para compatibilidade.
+
+### 8.2 Escrita Recomendada
+- **Criar card**: prefira enviar `column` em vez de `stage`.
+- **Atualizar card**: prefira PATCH com `column`.
+- O backend continua derivando `stage` quando necessário para compatibilidade interna.
+
+### 8.3 Leitura Recomendada
+- No payload de deal, priorize:
+  - `column`
+  - `column_id`
+  - `column_title`
+  - `column_data`
+- No payload padrao, os aliases `stage_legacy_*` ja nao sao mais expostos.
+- O campo `stage_name` tambem ja nao faz parte do payload padrao.
+- O campo `stage` tambem ja nao faz parte do payload padrao.
+- Para clientes legados que ainda precisem desse campo, use:
+  - `?include_legacy_stage_fields=1`
+- Considere o seguinte campo como legado:
+  - `stage`
+
+### 8.4 Pipeline Overview
+- O endpoint de overview do CRM expõe `columns` como fonte principal.
+- O campo `stages` nao faz mais parte do payload padrao.
+- Para clientes legados que ainda precisem desse alias, use:
+  - `?include_legacy_overview_stages=1`
+- O frontend deve consumir `overview.columns` como fonte principal.
+
+### 8.5 Sinais de Depreciação
+- A rota legada `/api/crm/stages/` foi removida.
+- Criação e edição devem ocorrer pelos endpoints de `columns`.
+- O endpoint de overview também inclui headers de depreciação ao expor o alias legado `stages`.
+
+### 8.6 Sync Card / Integrações
+- O endpoint `POST /api/v1/integration/sync-card/` já aceita `column_id` opcional como alvo principal.
+- Se `column_id` for omitido, o backend ainda usa a primeira coluna do pipeline como fallback.
+- O mesmo endpoint aceita `?include_legacy_stage_fields=1` para clientes legados que ainda precisem do campo `stage` na resposta.
+
+### 8.7 Guia de Migração
+- Para uma visão curta de adoção e remoção gradual do legado, consulte:
+  - [CRM_STAGE_TO_COLUMN_MIGRATION.md](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/backend/docs/CRM_STAGE_TO_COLUMN_MIGRATION.md)
+- Para um resumo executivo voltado a integradores, consulte:
+  - [CRM_API_CHANGELOG.md](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/backend/docs/CRM_API_CHANGELOG.md)
+
+---
+
+## 9. Exemplos Práticos para o Frontend
+
+### 9.1 Interceptors com Axios
 
 ```ts
 import axios from 'axios'
@@ -210,7 +261,7 @@ api.interceptors.response.use(
 )
 ```
 
-### 8.2 Uso dos Endpoints (Messenger)
+### 9.2 Uso dos Endpoints (Messenger)
 
 ```ts
 // listar conversas
@@ -229,7 +280,7 @@ const { data: messages } = await api.get(`/api/messenger/conversations/${convers
 await api.post(`/api/messenger/messages/${messageId}/mark_read/`)
 ```
 
-### 8.3 Conexão WebSocket (Chat)
+### 9.3 Conexão WebSocket (Chat)
 
 ```ts
 const token = localStorage.getItem('access_token')
@@ -250,7 +301,7 @@ ws.onclose = () => {
 }
 ```
 
-### 8.4 Gerando Cliente a partir do OpenAPI
+### 9.4 Gerando Cliente a partir do OpenAPI
 
 Opcional: usar `openapi-typescript-codegen` para gerar tipos e serviços.
 

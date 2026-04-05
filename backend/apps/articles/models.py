@@ -1,5 +1,6 @@
 import reversion
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
 from shared_kernel.models import BaseTenantModel
@@ -40,12 +41,14 @@ class Tag(BaseTenantModel):
 class Article(BaseTenantModel):
     STATUS_DRAFT = "draft"
     STATUS_PENDING = "pending"
+    STATUS_SCHEDULED = "scheduled"
     STATUS_PUBLISHED = "published"
     STATUS_REJECTED = "rejected"
 
     STATUS_CHOICES = [
         (STATUS_DRAFT, "Rascunho"),
-        (STATUS_PENDING, "Aguardando Aprovação"),
+        (STATUS_PENDING, "Aguardando Revisão"),
+        (STATUS_SCHEDULED, "Agendado"),
         (STATUS_PUBLISHED, "Publicado"),
         (STATUS_REJECTED, "Rejeitado"),
     ]
@@ -89,12 +92,11 @@ class Article(BaseTenantModel):
     class Meta:
         unique_together = ("company", "slug")
         indexes = [
-            # Otimização para listagem pública (artigos públicos ordenados por data)
             models.Index(fields=["is_public", "-published_at"], name="article_public_pub_idx"),
-            # Otimização para busca pública por slug
             models.Index(fields=["is_public", "slug"], name="article_public_slug_idx"),
-            # Otimização para filtro por tenant + visibilidade
             models.Index(fields=["company", "is_public", "-published_at"], name="article_tenant_pub_idx"),
+            GinIndex(name="article_title_gin", fields=["title"], opclasses=["gin_trgm_ops"]),
+            GinIndex(name="article_content_gin", fields=["content"], opclasses=["gin_trgm_ops"]),
         ]
 
     def clean(self):
@@ -137,8 +139,8 @@ class Comment(BaseTenantModel):
     email = models.EmailField(blank=True)
     content = models.TextField()
     is_public = models.BooleanField(default=False, db_index=True)
-    is_approved = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    is_approved = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]

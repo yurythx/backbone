@@ -222,65 +222,66 @@ class PayrollService:
         if existing.exists():
             return None
 
-        accruals = (
-            ThirteenthAccrual.all_objects.select_for_update()
-            .filter(
-                company=company,
-                year=year,
-                month__in=months,
-                status="accrued",
-            )
-            .order_by("user_id", "month")
-        )
-
-        by_user: dict[int, list[ThirteenthAccrual]] = {}
-        for a in accruals:
-            by_user.setdefault(a.user_id, []).append(a)
-
-        created_any = False
-        for user_id, items in by_user.items():
-            if ThirteenthPayout.all_objects.filter(
-                company=company,
-                user_id=user_id,
-                year=year,
-                installment=installment,
-            ).exists():
-                continue
-
-            total = sum((i.amount for i in items), start=Decimal("0.00")).quantize(Decimal("0.01"))
-            if total <= Decimal("0.00"):
-                continue
-
-            label = "13º Salário (1ª parcela)" if installment == 1 else "13º Salário (2ª parcela)"
-            breakdown = [{"label": label, "amount": total, "line_type": "earning"}]
-
-            event = EarningEvent.all_objects.create(
-                company=company,
-                kind="thirteenth",
-                user_id=user_id,
-                competence_date=pay_date,
-                amount=total,
-                breakdown=breakdown,
-                payout_mode="monthly",
-                status="pending",
+        with transaction.atomic():
+            accruals = (
+                ThirteenthAccrual.all_objects.select_for_update()
+                .filter(
+                    company=company,
+                    year=year,
+                    month__in=months,
+                    status="accrued",
+                )
+                .order_by("user_id", "month")
             )
 
-            payout = ThirteenthPayout.all_objects.create(
-                company=company,
-                user_id=user_id,
-                year=year,
-                installment=installment,
-                pay_date=pay_date,
-                amount=total,
-                event=event,
-            )
+            by_user: dict[int, list[ThirteenthAccrual]] = {}
+            for a in accruals:
+                by_user.setdefault(a.user_id, []).append(a)
 
-            ThirteenthAccrual.all_objects.filter(pk__in=[x.pk for x in items]).update(status="paid", payout=payout)
-            created_any = True
+            created_any = False
+            for user_id, items in by_user.items():
+                if ThirteenthPayout.all_objects.filter(
+                    company=company,
+                    user_id=user_id,
+                    year=year,
+                    installment=installment,
+                ).exists():
+                    continue
 
-        if not created_any:
-            return None
-        return ThirteenthPayout.all_objects.filter(company=company, year=year, installment=installment).first()
+                total = sum((i.amount for i in items), start=Decimal("0.00")).quantize(Decimal("0.01"))
+                if total <= Decimal("0.00"):
+                    continue
+
+                label = "13º Salário (1ª parcela)" if installment == 1 else "13º Salário (2ª parcela)"
+                breakdown = [{"label": label, "amount": total, "line_type": "earning"}]
+
+                event = EarningEvent.all_objects.create(
+                    company=company,
+                    kind="thirteenth",
+                    user_id=user_id,
+                    competence_date=pay_date,
+                    amount=total,
+                    breakdown=breakdown,
+                    payout_mode="monthly",
+                    status="pending",
+                )
+
+                payout = ThirteenthPayout.all_objects.create(
+                    company=company,
+                    user_id=user_id,
+                    year=year,
+                    installment=installment,
+                    pay_date=pay_date,
+                    amount=total,
+                    event=event,
+                )
+
+                ThirteenthAccrual.all_objects.filter(pk__in=[x.pk for x in items]).update(status="paid", payout=payout)
+                created_any = True
+
+            if not created_any:
+                return None
+            return ThirteenthPayout.all_objects.filter(company=company, year=year, installment=installment).first()
 
     @staticmethod
     def build_vacation_event_payload(*, salary_monthly: Decimal, vacation_days: int) -> tuple[Decimal, list[dict]]:

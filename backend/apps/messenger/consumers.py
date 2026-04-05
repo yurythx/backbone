@@ -366,7 +366,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def get_conversation(self, conversation_id, user):
         try:
             return Conversation.all_objects.select_related("company").get(id=int(conversation_id), participants=user)
-        except Conversation.DoesNotExist:
+        except (Conversation.DoesNotExist, ValueError):
             return None
 
     @database_sync_to_async

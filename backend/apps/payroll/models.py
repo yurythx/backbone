@@ -69,6 +69,10 @@ class PayrollRun(BaseTenantModel):
         null=True,
         related_name="created_payroll_runs",
     )
+    # Assinatura digital do funcionário no holerite
+    employee_signature_date = models.DateTimeField(null=True, blank=True)
+    employee_signature_ip = models.GenericIPAddressField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

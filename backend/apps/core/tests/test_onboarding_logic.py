@@ -1,7 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User
 from apps.core.models import AuditLog, Company
 
 
@@ -9,7 +9,8 @@ class OnboardingLogicTest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.company = Company.objects.create(name="New SaaS", slug="new-saas")
-        self.user = User.objects.create_user(username="admin", password="password", company=self.company, is_staff=True)
+        self.role = Role.objects.create(name="Admin", company=self.company, permissions=["admin.settings_manage"])
+        self.user = User.objects.create_user(username="admin", password="password", company=self.company, is_staff=True, role=self.role)
         self.client.force_authenticate(user=self.user)
 
     def test_initial_onboarding_state(self):

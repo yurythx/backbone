@@ -97,3 +97,42 @@ class Transaction(BaseTenantModel):
 
     def __str__(self):
         return f"{self.get_type_display()}: {self.description} ({self.amount})"
+
+
+class MonthClosing(BaseTenantModel):
+    """
+    Representa o fechamento financeiro de um mês específico.
+    Quando um mês está fechado, transações daquela competência não podem ser criadas, editadas ou excluídas.
+    """
+    month = models.PositiveSmallIntegerField()
+    year = models.PositiveIntegerField()
+    closed_at = models.DateTimeField(auto_now_add=True)
+    closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        verbose_name = "Month Closing"
+        verbose_name_plural = "Month Closings"
+        unique_together = ("company", "month", "year")
+        ordering = ["-year", "-month"]
+
+    def __str__(self):
+        return f"{self.month:02d}/{self.year} - {self.company.name}"
+
+
+class TransactionAttachment(BaseTenantModel):
+    """
+    Anexos (comprovantes, NFs) vinculados a uma transação financeira.
+    """
+    from shared_kernel.utils import tenant_upload_to
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="attachments")
+    file = models.FileField(upload_to=tenant_upload_to)
+    description = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        verbose_name = "Transaction Attachment"
+        verbose_name_plural = "Transaction Attachments"
+
+    def __str__(self):
+        return f"Attachment for {self.transaction.description}"

@@ -5,9 +5,13 @@ import * as useCRMHook from '../use-crm'
 import type { Deal, Pipeline } from '../use-crm'
 
 // Mock do hook useCRM
-vi.mock('../use-crm', () => ({
-  useCRM: vi.fn(),
-}))
+vi.mock('../use-crm', async () => {
+  const actual = await vi.importActual('../use-crm')
+  return {
+    ...actual,
+    useCRM: vi.fn(),
+  }
+})
 
 describe('KanbanBoard Component', () => {
   const mockPipeline: Pipeline = {
@@ -28,9 +32,12 @@ describe('KanbanBoard Component', () => {
       contact_name: 'Maria Financeiro',
       stage: 10,
       stage_name: 'Novo',
+      value: '1500.00',
       priority: 'URGENT',
       owner: 1,
       is_closed: false,
+      closing_date: '1970-04-02T10:00:00Z',
+      custom_fields: { progress_percentage: 75 },
     },
     {
        id: 2,
@@ -39,10 +46,12 @@ describe('KanbanBoard Component', () => {
        contact: 2,
        contact_name: 'Pedro Marketing',
        stage: 20,
-       stage_name: 'Em En Andamento',
+       stage_name: 'Em Andamento',
+       value: '300.00',
        priority: 'MEDIUM',
        owner: 1,
        is_closed: false,
+       custom_fields: { progress_percentage: 20 },
     }
   ]
 
@@ -82,5 +91,31 @@ describe('KanbanBoard Component', () => {
     render(<KanbanBoard pipeline={mockPipeline} />)
 
     expect(screen.getByText('URGENT')).toBeInTheDocument()
+  })
+
+  it('deve mostrar o progresso percentual nos cards', () => {
+    const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
+    mockedUseCRM.mockReturnValue({
+      deals: mockDeals,
+      updateDeal: { mutateAsync: vi.fn() },
+    } as never)
+
+    render(<KanbanBoard pipeline={mockPipeline} />)
+
+    expect(screen.getAllByText('75%').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('20%').length).toBeGreaterThan(0)
+  })
+
+  it('deve destacar quando o prazo está vencido', () => {
+    const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
+    mockedUseCRM.mockReturnValue({
+      deals: mockDeals,
+      updateDeal: { mutateAsync: vi.fn() },
+    } as never)
+
+    render(<KanbanBoard pipeline={mockPipeline} />)
+
+    expect(screen.getAllByText('Vencido').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Crítico').length).toBeGreaterThan(0)
   })
 })

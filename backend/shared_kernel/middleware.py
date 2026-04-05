@@ -47,13 +47,9 @@ class TenantMiddleware:
             data = cache.get(key)
             if not data:
                 return None
-            # P5: Return a real DB-backed instance to avoid AttributeError on
-            # FK traversals and method calls on a 'hollow' Company(id=..., slug=...) object.
-            # The PK lookup hits the DB only on cache miss.
             try:
-                return Company.objects.get(pk=data["id"])
+                return Company.objects.select_related("theme_branding").get(pk=data["id"])
             except Company.DoesNotExist:
-                # Cache entry is stale — evict it.
                 cache.delete(key)
                 return None
 
@@ -61,7 +57,7 @@ class TenantMiddleware:
             cache_key = f"company_slug:{slug}"
             company = get_company_from_cache(cache_key) if use_cache else None
             if not company:
-                company = Company.objects.filter(slug=slug).first()
+                company = Company.objects.select_related("theme_branding").filter(slug=slug).first()
                 if company and use_cache:
                     set_company_in_cache(company, cache_key)
 
@@ -70,33 +66,28 @@ class TenantMiddleware:
             cache_key_host = f"company_host:{host}"
             company = get_company_from_cache(cache_key_host) if use_cache else None
             if not company:
-                # Procura exato pelo domínio (ex: minhaempresa.com ou api.minhaempresa.com)
-                company = Company.objects.filter(models.Q(domain__iexact=host)).first()
+                company = Company.objects.select_related("theme_branding").filter(models.Q(domain__iexact=host)).first()
 
                 if not company:
-                    # Tenta remover prefixos conhecidos (api., app., www.) para achar o domínio base
                     parts = host.split(".")
                     if len(parts) >= 3:
-                        # Ex: api.projetoravenna.cloud -> projetoravenna.cloud
                         base_host = ".".join(parts[1:])
-                        company = Company.objects.filter(models.Q(domain__iexact=base_host)).first()
+                        company = Company.objects.select_related("theme_branding").filter(models.Q(domain__iexact=base_host)).first()
 
-                        # Se ainda não achou, tenta o slug percorrendo as partes (exceto prefixos comuns como 'api', 'app', 'www')
-                        prefixes = {"api", "app", "www", "dashboard", "admin"}
-                        for part in parts:
-                            if part.lower() not in prefixes and len(part) > 2:
-                                company = Company.objects.filter(slug=part).first()
-                                if company:
-                                    break
+                        if not company:
+                            prefixes = {"api", "app", "www", "dashboard", "admin"}
+                            for part in parts:
+                                if part.lower() not in prefixes and len(part) > 2:
+                                    company = Company.objects.select_related("theme_branding").filter(slug=part).first()
+                                    if company:
+                                        break
 
-                        # Fallback for localhost/local testing with ports
                         if not company and host == "localhost":
                             slug_query = request.GET.get("company_slug")
                             if slug_query:
-                                company = Company.objects.filter(slug=slug_query).first()
+                                company = Company.objects.select_related("theme_branding").filter(slug=slug_query).first()
                     elif len(parts) == 2:
-                        # Se for apenas 'dominio.com', tenta como slug
-                        company = Company.objects.filter(slug=parts[0]).first()
+                        company = Company.objects.select_related("theme_branding").filter(slug=parts[0]).first()
 
                 if company and use_cache:
                     set_company_in_cache(company, cache_key_host)

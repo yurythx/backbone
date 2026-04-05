@@ -1,9 +1,11 @@
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from apps.accounts.permissions import HasRolePermission
 from shared_kernel.audit import log_create, log_delete, log_update
 
-from .models import WebhookSubscription
+from .models import WebhookSubscription, WebhookDelivery
 from .serializers import WebhookSubscriptionSerializer
 
 
@@ -27,3 +29,26 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         log_delete(self.request.user, "WebhookSubscription", instance, request=self.request)
         instance.delete()
+
+    @action(detail=True, methods=['get'])
+    def deliveries(self, request, pk=None):
+        """
+        Retorna os logs de entrega (WebhookDelivery) para uma assinatura específica.
+        """
+        subscription = self.get_object()
+        deliveries = WebhookDelivery.objects.filter(subscription=subscription)[:50]
+        
+        data = [
+            {
+                "id": d.id,
+                "event_name": d.event_name,
+                "status_code": d.status_code,
+                "success": d.success,
+                "request_payload": d.request_payload,
+                "response_body": d.response_body,
+                "attempt_number": d.attempt_number,
+                "created_at": d.created_at
+            }
+            for d in deliveries
+        ]
+        return Response(data)

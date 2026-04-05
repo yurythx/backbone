@@ -41,3 +41,22 @@ class WebhookSubscription(BaseTenantModel):
         if not self.secret:
             self.secret = secrets.token_hex(32)
         super().save(*args, **kwargs)
+
+class WebhookDelivery(BaseTenantModel):
+    """
+    Log of webhook delivery attempts for auditing and retries.
+    """
+    subscription = models.ForeignKey(WebhookSubscription, on_delete=models.CASCADE, related_name="deliveries")
+    event_name = models.CharField(max_length=100)
+    status_code = models.IntegerField(null=True, blank=True)
+    success = models.BooleanField(default=False)
+    request_payload = models.JSONField()
+    response_body = models.TextField(blank=True, null=True)
+    attempt_number = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.event_name} -> {self.subscription.url} ({'OK' if self.success else 'FAIL'})"

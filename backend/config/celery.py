@@ -16,6 +16,14 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
 
+from celery.schedules import crontab
+
+app.conf.beat_schedule = {
+    'publish-scheduled-articles-every-5-minutes': {
+        'task': 'articles.publish_scheduled_articles',
+        'schedule': crontab(minute='*/5'),
+    },
+}
 
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):

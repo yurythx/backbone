@@ -75,6 +75,16 @@ class ArticleService:
         return article
 
     @staticmethod
+    def _invalidate_article_cache(article):
+        from django.core.cache import cache
+
+        c_slug = getattr(article.company, "slug", "")
+        if c_slug:
+            cache.delete(f"art_det:{c_slug}:{article.slug}")
+            cache.delete(f"article_pub_detail:{c_slug}:{article.slug}")
+            cache.delete(f"art_p_det:{c_slug}:{article.slug}")
+
+    @staticmethod
     def update_article(user, article, data, image=None, revision_comment: str | None = None):
         """
         Updates an article and logs the change.
@@ -132,12 +142,7 @@ class ArticleService:
         )
 
         # Invalida cache de leitura
-        from django.core.cache import cache
-
-        c_slug = article.company.slug
-        cache.delete(f"art_det:{c_slug}:{article.slug}")
-        cache.delete(f"article_pub_detail:{c_slug}:{article.slug}")
-        cache.delete(f"art_p_det:{c_slug}:{article.slug}")
+        ArticleService._invalidate_article_cache(article)
 
         return article
 
@@ -157,31 +162,42 @@ class ArticleService:
             # raise PermissionDenied("User does not have permission to publish")
             pass
 
-        if article.status not in [Article.STATUS_PENDING, Article.STATUS_DRAFT]:
-            raise ValueError("Only pending or draft articles can be published")
+        if article.status not in [Article.STATUS_PENDING, Article.STATUS_DRAFT, Article.STATUS_SCHEDULED]:
+            raise ValueError("Only pending, scheduled or draft articles can be published")
+
+        # Verifica se o artigo tem data de publicação futura (Agendamento)
+        now = timezone.now()
+        is_scheduled = article.published_at and article.published_at > now
 
         update_data = {
-            "status": Article.STATUS_PUBLISHED,
+            "status": Article.STATUS_SCHEDULED if is_scheduled else Article.STATUS_PUBLISHED,
         }
+        
         if not article.published_at:
-            update_data["published_at"] = timezone.now()
+            update_data["published_at"] = now
 
-        article = ArticleService.update_article(user, article, update_data, revision_comment="Published")
-
-        trigger_webhooks(
-            article.company,
-            "article.published",
-            {"id": str(article.id), "title": article.title, "slug": article.slug, "url": f"/artigos/{article.slug}"},
+        article = ArticleService.update_article(
+            user, 
+            article, 
+            update_data, 
+            revision_comment="Scheduled" if is_scheduled else "Published"
         )
 
-        # Bug 3: notificações push via Celery (não bloqueia o worker)
-        try:
-            from apps.articles.tasks import notify_article_published
+        if not is_scheduled:
+            trigger_webhooks(
+                article.company,
+                "article.published",
+                {"id": str(article.id), "title": article.title, "slug": article.slug, "url": f"/artigos/{article.slug}"},
+            )
 
-            notify_article_published.delay(article.id)
-        except Exception:
-            # Fallback síncrono se Celery não estiver disponível
-            _notify_users_sync(article)
+            # Bug 3: notificações push via Celery (não bloqueia o worker)
+            try:
+                from apps.articles.tasks import notify_article_published
+
+                notify_article_published.delay(article.id)
+            except Exception:
+                # Fallback síncrono se Celery não estiver disponível
+                _notify_users_sync(article)
 
         return article
 
@@ -209,6 +225,8 @@ class ArticleService:
 
         company = article.company
         article_data = {"id": str(article.id), "title": article.title}
+        
+        ArticleService._invalidate_article_cache(article)
 
         article.delete()
 
@@ -280,6 +298,9 @@ class ArticleService:
             request=SimpleNamespace(company=article.company),
             changes={"reverted_to_version": version_id},
         )
+        
+        ArticleService._invalidate_article_cache(article)
+
         return article
 
 

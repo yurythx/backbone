@@ -1,6 +1,24 @@
 from rest_framework import serializers
 
-from .models import Category, Transaction
+from .models import Category, Transaction, MonthClosing, TransactionAttachment
+
+
+class MonthClosingSerializer(serializers.ModelSerializer):
+    closed_by_name = serializers.CharField(source="closed_by.username", read_only=True)
+
+    class Meta:
+        model = MonthClosing
+        fields = "__all__"
+        read_only_fields = ["id", "company", "closed_at", "closed_by"]
+
+
+class TransactionAttachmentSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(source="uploaded_by.username", read_only=True)
+
+    class Meta:
+        model = TransactionAttachment
+        fields = "__all__"
+        read_only_fields = ["id", "company", "transaction", "uploaded_at", "uploaded_by"]
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -51,11 +69,24 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class TransactionSerializer(serializers.ModelSerializer):
     category_details = CategorySerializer(source="category", read_only=True)
+    attachments = TransactionAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Transaction
         fields = "__all__"
         read_only_fields = ["id", "company", "created_by", "created_at", "updated_at"]
+
+    def validate_competence_date(self, value):
+        request = self.context.get("request")
+        if request and hasattr(request, "company"):
+            is_closed = MonthClosing.objects.filter(
+                company=request.company,
+                month=value.month,
+                year=value.year
+            ).exists()
+            if is_closed:
+                raise serializers.ValidationError("Não é possível adicionar transações em um mês fechado.")
+        return value
 
     def validate_category(self, value):
         """

@@ -622,7 +622,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             read_by_count=Count("reads", distinct=True),
             delivered_by_me=Exists(MessageDelivery.objects.filter(message_id=OuterRef("pk"), user_id=request.user.id)),
             delivered_by_count=Count("deliveries", distinct=True),
-        )
+        ).prefetch_related("reactions", "reactions__user").select_related("sender")
         qs = qs.order_by("-created_at", "-id")
 
         cleared_at = (

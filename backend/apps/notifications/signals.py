@@ -31,22 +31,24 @@ def notify_new_message(sender, instance, created, **kwargs):
                 link=f"/messenger?conversation={conversation.id}&message_id={instance.id}&created_at={created_at_encoded}",
             )
 
+            from django.db import transaction
+
             # Send to WebSocket via Celery
-            send_websocket_notification.delay(
-                f"notifications_user_{participant.id}",
+            transaction.on_commit(lambda p=participant, n=notification: send_websocket_notification.delay(
+                f"notifications_user_{p.id}",
                 {
                     "type": "notification_message",
-                    "notification_id": str(notification.id),
-                    "notification_type": notification.notification_type,
-                    "title": notification.title,
-                    "message": notification.message,
-                    "link": notification.link,
+                    "notification_id": str(n.id),
+                    "notification_type": n.notification_type,
+                    "title": n.title,
+                    "message": n.message,
+                    "link": n.link,
                     "conversation_id": conversation.id,
                     "message_id": instance.id,
                     "message_created_at": instance.created_at.isoformat(),
-                    "created_at": notification.created_at.isoformat(),
+                    "created_at": n.created_at.isoformat(),
                 },
-            )
+            ))
 
 
 @receiver(pre_save, sender=Article)

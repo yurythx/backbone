@@ -16,7 +16,7 @@ class Media(BaseTenantModel):
     file_type = models.CharField(max_length=100, blank=True) # e.g., image/jpeg
     file_size = models.PositiveIntegerField(default=0) # in bytes
     
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -119,8 +119,11 @@ REST_FRAMEWORK = {
         # Scoped throttles
         "link_preview": "15/min",
         "public_articles": "60/min",
+        "public_comments": "10/min",
         # SECURITY: Strict limit on user registration to prevent bot account creation
         "user_registration": "5/hour",
+        "login_attempt": "10/minute",
+        "password_reset": "3/hour",
     },
 }
 
@@ -143,6 +146,21 @@ SIMPLE_JWT = {
 
 # Health check behavior in development
 HEALTH_IGNORE_REDIS = env.bool("HEALTH_IGNORE_REDIS", default=False)
+
+SENTRY_DSN = env("SENTRY_DSN", default="")
+if SENTRY_DSN and not TESTING:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration(), CeleryIntegration(), RedisIntegration()],
+        traces_sample_rate=env.float("SENTRY_TRACES_SAMPLE_RATE", default=0.1),
+        send_default_pii=True,
+        environment=env("DJANGO_ENV", default="production"),
+    )
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Backbone SaaS API",
@@ -480,6 +498,9 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
+
+# Password reset link timeout (in seconds). Default is 3 days, let's reduce to 1 hour for security.
+PASSWORD_RESET_TIMEOUT = 3600
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

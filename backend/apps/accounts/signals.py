@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
+from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
+from shared_kernel.audit import log_action
 
 from apps.core.models import AuditLog, Company
 
@@ -42,3 +44,16 @@ def user_post_save(sender, instance, created, **kwargs):
                 pass
 
         transaction.on_commit(_safe_send)
+
+@receiver(user_logged_in)
+def user_logged_in_audit_log(sender, request, user, **kwargs):
+    if request:
+        user_agent = request.META.get("HTTP_USER_AGENT", "<unknown>")
+        log_action(
+            user=user,
+            action="login",
+            resource="User",
+            resource_id=str(user.id),
+            details={"user_agent": user_agent},
+            request=request
+        )

@@ -57,6 +57,9 @@ class AccountService:
         """
         Creates an invitation and sends the invitation email.
         """
+        # Expira convites pendentes anteriores para o mesmo email/empresa
+        Invitation.objects.filter(company=company, email=email, status="pending").update(status="expired")
+
         invitation = Invitation.objects.create(company=company, invited_by=sender, email=email, role=role)
 
         invite_url = f"{settings.FRONTEND_URL}/accept-invite?token={invitation.token}"
@@ -75,41 +78,51 @@ class AccountService:
         Validates the invitation token and creates a new user.
         """
         try:
-            invite = Invitation.all_objects.get(token=token, status="pending")
+            from django.contrib.auth.password_validation import validate_password
+            from django.core.exceptions import ValidationError
+            from django.db import transaction
 
-            if invite.is_expired:
-                invite.status = "expired"
-                invite.save()
-                return None, "Este convite expirou."
+            with transaction.atomic():
+                invite = Invitation.all_objects.select_for_update().select_related("company", "role").get(token=token, status="pending")
 
-            # A6: gerar username único — email como username pode causar IntegrityError
-            # se o mesmo email for convidado por dois tenants diferentes
-            base_username = f"{invite.email.split('@')[0]}_{invite.company.slug}"
-            # Limita o comprimento (AbstractUser.username max_length=150)
-            base_username = base_username[:140]
-            username = base_username
-            counter = 1
-            while User.all_objects.filter(username=username).exists():
-                username = f"{base_username}_{counter}"
-                counter += 1
+                if invite.is_expired:
+                    invite.status = "expired"
+                    invite.save()
+                    return None, "Este convite expirou."
 
-            # Create user
-            user = User.objects.create_user(
-                company=invite.company,
-                username=username,
-                email=invite.email,
-                first_name=first_name,
-                last_name=last_name,
-                password=password,
-                role=invite.role,
-            )
+                try:
+                    validate_password(password)
+                except ValidationError as e:
+                    return None, e.messages[0]
 
-            # Update invitation status
-            invite.status = "accepted"
-            invite.accepted_at = timezone.now()
-            invite.save()
+                # A6: gerar username único — email como username pode causar IntegrityError
+                # se o mesmo email for convidado por dois tenants diferentes
+                base_username = f"{invite.email.split('@')[0]}_{invite.company.slug}"
+                # Limita o comprimento (AbstractUser.username max_length=150)
+                base_username = base_username[:140]
+                username = base_username
+                counter = 1
+                while User.all_objects.filter(username=username).exists():
+                    username = f"{base_username}_{counter}"
+                    counter += 1
 
-            return user, None
+                # Create user
+                user = User.objects.create_user(
+                    company=invite.company,
+                    username=username,
+                    email=invite.email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    password=password,
+                    role=invite.role,
+                )
+
+                # Update invitation status
+                invite.status = "accepted"
+                invite.accepted_at = timezone.now()
+                invite.save(update_fields=["status", "accepted_at"])
+
+                return user, None
 
         except Invitation.DoesNotExist:
             return None, "Convite inválido ou já utilizado."

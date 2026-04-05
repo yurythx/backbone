@@ -4,7 +4,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 
-from apps.accounts.permissions import HasRolePermission
+from apps.accounts.permissions import ActionRolePermission, HasRolePermission
 from apps.core.models import Company
 from apps.module_manager.permissions import HasModuleAccess
 
@@ -36,10 +36,6 @@ class PublicPageViewSet(viewsets.ReadOnlyModelViewSet):
         if company_slug:
             return qs.filter(company__slug=company_slug).order_by("title")
 
-        fallback = Company.objects.filter(slug="raiz").first() or Company.objects.first()
-        if fallback:
-            return qs.filter(company=fallback).order_by("title")
-
         return Page.all_objects.none()
 
 
@@ -57,8 +53,15 @@ class PageViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = PageSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, HasRolePermission]
-    required_permission = "pages.page_view"
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
+    action_permissions = {
+        'list': 'pages.page_view',
+        'retrieve': 'pages.page_view',
+        'create': 'pages.page_create',
+        'update': 'pages.page_edit',
+        'partial_update': 'pages.page_edit',
+        'destroy': 'pages.page_delete',
+    }
     module_code = "pages"
     from config.pagination import DefaultPagination
 
@@ -68,28 +71,7 @@ class PageViewSet(viewsets.ModelViewSet):
         return Page.objects.filter(company=self.request.company).order_by("title")
 
     def perform_create(self, serializer):
-        self.required_permission = "pages.page_create"
-        if not HasRolePermission().has_permission(self.request, self):
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("Sem permissão para criar páginas.")
         serializer.save(company=self.request.company)
-
-    def perform_update(self, serializer):
-        self.required_permission = "pages.page_edit"
-        if not HasRolePermission().has_permission(self.request, self):
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("Sem permissão para editar páginas.")
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        self.required_permission = "pages.page_delete"
-        if not HasRolePermission().has_permission(self.request, self):
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("Sem permissão para excluir páginas.")
-        instance.delete()
 
     def create(self, request, *args, **kwargs):
         try:

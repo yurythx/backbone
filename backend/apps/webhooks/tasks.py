@@ -53,6 +53,19 @@ def dispatch_webhook(self, subscription_id, event_name, payload):
 
         response = requests.post(safe_url, data=body, headers=headers, timeout=10, allow_redirects=True)
 
+        # Log delivery attempt
+        from .models import WebhookDelivery
+        WebhookDelivery.objects.create(
+            company=sub.company,
+            subscription=sub,
+            event_name=event_name,
+            status_code=response.status_code,
+            success=200 <= response.status_code < 300,
+            request_payload=payload,
+            response_body=response.text[:2000], # Limita o log a 2000 caracteres
+            attempt_number=self.request.retries + 1
+        )
+
         # Validate final URL after redirects
         final_url = response.url or safe_url
         final_parsed = urlparse(final_url)
@@ -71,6 +84,18 @@ def dispatch_webhook(self, subscription_id, event_name, payload):
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Error sending webhook to {sub.url}: {e}")
+        # Log falha total (ex: timeout, dns não resolvido)
+        from .models import WebhookDelivery
+        WebhookDelivery.objects.create(
+            company=sub.company,
+            subscription=sub,
+            event_name=event_name,
+            status_code=None,
+            success=False,
+            request_payload=payload,
+            response_body=str(e)[:2000],
+            attempt_number=self.request.retries + 1
+        )
         # Retry with exponential backoff
         raise self.retry(exc=e, countdown=2**self.request.retries * 60)
 
@@ -80,6 +105,11 @@ def trigger_webhooks(company, event_name, payload):
     Função utilitária para ser chamada em signals ou views.
     Encontra assinaturas ativas para o evento e empresa e dispara o Celery.
     """
+    # Verifica se o módulo de webhooks está ativo para a empresa
+    from apps.module_manager.models import TenantModule
+    if not TenantModule.objects.filter(company=company, module__code="webhooks", is_active=True).exists():
+        return
+
     qs = WebhookSubscription.objects.filter(company=company, is_active=True)
     for sub in qs:
         if event_name in (sub.events or []):

@@ -45,8 +45,34 @@ def notify_article_published(self, article_id):
         raise self.retry(exc=exc)
 
 
+@shared_task(name="articles.publish_scheduled_articles")
+def publish_scheduled_articles():
+    """
+    Periodic task to check for scheduled articles and publish them if their time has come.
+    """
+    from django.utils import timezone
+    from .models import Article
+    from .services import ArticleService
+    from apps.accounts.models import User
+    
+    now = timezone.now()
+    # Pega os artigos agendados que já passaram da hora
+    scheduled_articles = Article.all_objects.filter(
+        status=Article.STATUS_SCHEDULED,
+        published_at__lte=now
+    ).select_related("author", "company")
+
+    for article in scheduled_articles:
+        # Usa o autor original como usuário da ação, ou um admin caso falhe
+        user = article.author or User.all_objects.filter(company=article.company, is_superuser=True).first()
+        if user:
+            try:
+                ArticleService.publish_article(user, article)
+            except Exception as e:
+                logger.error(f"Failed to publish scheduled article {article.id}: {e}")
+
 @shared_task(
-    name="articles.record_article_view",
+    name="articles.record_article_view_async",
     ignore_result=True,
     # Low priority — losing a view count is acceptable; no retries needed.
     max_retries=0,

@@ -3,10 +3,9 @@
 import { PageHeader } from "@/components/ui/page-header"
 import { Suspense } from "react"
 import { Protected } from "@/components/auth/protected"
-import { Palette, User } from "lucide-react"
+import { Palette, User, Bell, Calendar as CalendarIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Bell } from "lucide-react"
 
 const ProfileForm = dynamic(
   () => import("@/features/settings/profile-form").then((m) => m.ProfileForm),
@@ -50,6 +49,18 @@ const UserNotificationPreferences = dynamic(
   }
 )
 
+const GoogleCalendarSync = dynamic(
+  () => import("@/features/calendar/google-calendar-sync").then((m) => m.GoogleCalendarSync),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4">
+        <Skeleton className="h-16 w-full rounded-xl" />
+      </div>
+    ),
+  }
+)
+
 function ProfileContent() {
   return (
     <div className="space-y-8 max-w-4xl mx-auto pb-20">
@@ -88,6 +99,17 @@ function ProfileContent() {
             Ajuste quais eventos geram notificações para o seu usuário.
           </p>
           <UserNotificationPreferences />
+        </div>
+
+        <div className="glass rounded-3xl p-6 md:p-10 border shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex items-center gap-2 mb-2 text-primary">
+            <CalendarIcon className="h-5 w-5" />
+            <h2 className="text-xl font-semibold">Integrações de Agenda</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-6">
+            Conecte seu calendário externo para sincronização bidirecional de eventos.
+          </p>
+          <GoogleCalendarSync />
         </div>
       </div>
     </div>

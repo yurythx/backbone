@@ -19,7 +19,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { RichEditor } from "@/components/ui/rich-editor"
+import dynamic from "next/dynamic"
+const RichEditor = dynamic(() => import("@/components/ui/rich-editor").then(m => m.RichEditor), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center border rounded-md"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div> })
 import { PreviewDialog } from "@/components/cms/preview-dialog"
 import { Loader2, ArrowLeft, Layout, Globe, Sparkles, CheckCircle2 } from "lucide-react"
 import { notify } from "@/lib/notifications"

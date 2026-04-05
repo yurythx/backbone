@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   ColumnDef,
   ColumnFiltersState,
+  OnChangeFn,
   SortingState,
   VisibilityState,
   flexRender,
@@ -38,6 +39,13 @@ interface DataTableProps<TData, TValue> {
   isLoading?: boolean
   searchKey?: string
   searchPlaceholder?: string
+  onRowClick?: (row: TData) => void
+  getRowClassName?: (row: TData) => string | undefined
+  getRowAriaLabel?: (row: TData) => string | undefined
+  sorting?: SortingState
+  onSortingChange?: OnChangeFn<SortingState>
+  columnVisibility?: VisibilityState
+  onColumnVisibilityChange?: OnChangeFn<VisibilityState>
 }
 
 function DataTableInner<TData, TValue>({
@@ -46,6 +54,13 @@ function DataTableInner<TData, TValue>({
   isLoading = false,
   searchKey,
   searchPlaceholder = "Filter...",
+  onRowClick,
+  getRowClassName,
+  getRowAriaLabel,
+  sorting: controlledSorting,
+  onSortingChange: controlledOnSortingChange,
+  columnVisibility: controlledColumnVisibility,
+  onColumnVisibilityChange: controlledOnColumnVisibilityChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -54,22 +69,46 @@ function DataTableInner<TData, TValue>({
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+  const resolvedSorting = controlledSorting ?? sorting
+  const resolvedColumnVisibility = controlledColumnVisibility ?? columnVisibility
+
+  const handleSortingChange = React.useCallback<OnChangeFn<SortingState>>(
+    (updater) => {
+      if (controlledOnSortingChange) {
+        controlledOnSortingChange(updater)
+        return
+      }
+      setSorting(updater)
+    },
+    [controlledOnSortingChange]
+  )
+
+  const handleColumnVisibilityChange = React.useCallback<OnChangeFn<VisibilityState>>(
+    (updater) => {
+      if (controlledOnColumnVisibilityChange) {
+        controlledOnColumnVisibilityChange(updater)
+        return
+      }
+      setColumnVisibility(updater)
+    },
+    [controlledOnColumnVisibilityChange]
+  )
 
   const table = useReactTable({
     data,
     columns,
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: handleColumnVisibilityChange,
     onRowSelectionChange: setRowSelection,
     state: {
-      sorting,
+      sorting: resolvedSorting,
       columnFilters,
-      columnVisibility,
+      columnVisibility: resolvedColumnVisibility,
       rowSelection,
     },
   })
@@ -174,6 +213,16 @@ function DataTableInner<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className={onRowClick ? `cursor-pointer ${getRowClassName?.(row.original) ?? ""}` : getRowClassName?.(row.original)}
+                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                  onKeyDown={onRowClick ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      onRowClick(row.original)
+                    }
+                  } : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  aria-label={getRowAriaLabel?.(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

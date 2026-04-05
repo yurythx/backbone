@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.db import transaction
 from django.db.models import Q
 from django.utils.dateparse import parse_date
 from rest_framework import permissions, viewsets
@@ -100,6 +101,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
                 raise ValidationError({"detail": "Você não pode tornar a categoria compartilhada."})
         serializer.save()
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         can_manage = _has_permission(self.request, "finance.manage_financial")
         if not can_manage:
@@ -133,6 +135,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
         qs = (
             Transaction.objects.select_related("category")
+            .prefetch_related("attachments", "attachments__uploaded_by")
             .filter(company=company)
             .order_by("-competence_date", "-due_date", "-id")
         )
@@ -154,6 +157,12 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         instance: Transaction = self.get_object()
+        
+        # Check if month is closed before update
+        from .models import MonthClosing
+        if MonthClosing.objects.filter(company=instance.company, month=instance.competence_date.month, year=instance.competence_date.year).exists():
+            raise ValidationError({"detail": "Mês fechado. Não é possível alterar esta transação."})
+
         if not _has_permission(self.request, "finance.manage_financial"):
             if instance.created_by_id != self.request.user.id:
                 raise ValidationError({"detail": "Você só pode alterar transações criadas por você."})
@@ -162,6 +171,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
+        # Check if month is closed before destroy
+        from .models import MonthClosing
+        if MonthClosing.objects.filter(company=instance.company, month=instance.competence_date.month, year=instance.competence_date.year).exists():
+            raise ValidationError({"detail": "Mês fechado. Não é possível excluir esta transação."})
+
         if not _has_permission(self.request, "finance.manage_financial"):
             if instance.created_by_id != self.request.user.id:
                 raise ValidationError({"detail": "Você só pode excluir transações criadas por você."})

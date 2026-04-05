@@ -2,8 +2,9 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { cookies } from "next/headers"
 
-export function PublicHeader() {
-  const hasSession = cookies().get("hasSession")?.value === "true"
+export async function PublicHeader() {
+  const cookieStore = await cookies()
+  const hasSession = cookieStore.get("hasSession")?.value === "true"
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">

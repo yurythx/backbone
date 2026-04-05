@@ -63,6 +63,7 @@ export function PublicArticleCard({ article, showVisibilityBadge = false, useDas
                             className={
                                 `text-[10px] font-bold ${
                                   article.status === 'published' ? 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300' :
+                                  article.status === 'scheduled' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300' :
                                   article.status === 'pending' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' :
                                   article.status === 'draft' ? 'bg-slate-500/20 text-slate-700 dark:text-slate-300' :
                                   'bg-rose-500/20 text-rose-700 dark:text-rose-300'
@@ -70,7 +71,8 @@ export function PublicArticleCard({ article, showVisibilityBadge = false, useDas
                             }
                         >
                             {article.status === 'published' ? 'Publicado' :
-                             article.status === 'pending' ? 'Agendado' :
+                             article.status === 'scheduled' ? 'Agendado' :
+                             article.status === 'pending' ? 'Em Revisão' :
                              article.status === 'draft' ? 'Rascunho' : 'Rejeitado'}
                         </Badge>
                     </div>

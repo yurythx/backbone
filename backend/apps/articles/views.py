@@ -91,9 +91,14 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
         """
         company = getattr(self.request, "company", None)
 
-        # Base query: apenas publicados
+        # Base query: apenas publicados e com data de publicação já alcançada
         # Usamos all_objects para poder filtrar manualmente o tenant se necessário (ex: acesso via slug público)
-        qs = Article.all_objects.filter(status=Article.STATUS_PUBLISHED, published_at__isnull=False)
+        from django.utils import timezone
+        qs = Article.all_objects.filter(
+            status=Article.STATUS_PUBLISHED, 
+            published_at__isnull=False,
+            published_at__lte=timezone.now()
+        )
 
         # Se usuário autenticado e no contexto da sua empresa, vê privados também
         user = self.request.user
@@ -1099,6 +1104,10 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
     """
     Endpoint público de comentários com moderação e rate limit básico.
     """
+
+    from rest_framework.throttling import ScopedRateThrottle
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'public_comments'
 
     serializer_class = PublicCommentSerializer
     permission_classes = [permissions.AllowAny]

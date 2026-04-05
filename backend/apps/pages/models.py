@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.indexes import GinIndex
 
 from shared_kernel.models import BaseTenantModel
 
@@ -32,6 +33,10 @@ class Page(BaseTenantModel):
 
     class Meta:
         unique_together = ("company", "slug")
+        indexes = [
+            GinIndex(name="page_title_gin", fields=["title"], opclasses=["gin_trgm_ops"]),
+            GinIndex(name="page_content_gin", fields=["content"], opclasses=["gin_trgm_ops"]),
+        ]
 
     def __str__(self):
         return f"{self.company.name} - {self.title}"

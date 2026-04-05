@@ -88,6 +88,10 @@ class CookieTokenObtainView(generics.GenericAPIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    
+    from rest_framework.throttling import ScopedRateThrottle
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login_attempt'
 
     def post(self, request):
         from .serializers import CustomTokenObtainPairSerializer
@@ -146,7 +150,7 @@ class CookieTokenRefreshView(generics.GenericAPIView):
         try:
             token = RefreshToken(refresh_token)
             user_id = token.get("user_id")
-            user = User.objects.get(id=user_id)
+            user = User.all_objects.get(id=user_id)
             new_token = CustomTokenObtainPairSerializer.get_token(user)
             access = str(new_token.access_token)
         except (TokenError, User.DoesNotExist) as e:

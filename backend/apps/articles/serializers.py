@@ -240,9 +240,10 @@ class PublicCommentSerializer(serializers.ModelSerializer):
     def get_replies(self, obj):
         replies = getattr(obj, "prefetched_replies", None)
         if replies is None:
-            replies = obj.replies.all()
-        if isinstance(replies, list):
-            replies = replies[:3]
+            replies = list(obj.replies.all())
+        
+        replies = replies[:3]
+        
         items = []
         for r in replies:
             items.append(

@@ -303,6 +303,23 @@ class LDAPConfig(models.Model):
         verbose_name = "Configuração LDAP"
         verbose_name_plural = "Configurações LDAP"
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.enabled:
+            if not self.server_uri:
+                raise ValidationError({"server_uri": "A URI do servidor é obrigatória se o LDAP estiver habilitado."})
+            if not self.server_uri.startswith(("ldap://", "ldaps://")):
+                raise ValidationError({"server_uri": "A URI deve começar com ldap:// ou ldaps://."})
+            if not self.bind_dn:
+                raise ValidationError({"bind_dn": "Bind DN é obrigatório se o LDAP estiver habilitado."})
+            if not self.user_search_base:
+                raise ValidationError({"user_search_base": "A base de busca é obrigatória se o LDAP estiver habilitado."})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         status = "✓ Ativo" if self.enabled else "✗ Inativo"
         return f"LDAP {status} - {self.company.name}"

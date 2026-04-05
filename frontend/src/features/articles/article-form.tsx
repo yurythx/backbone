@@ -23,7 +23,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, ArrowLeft, Image as ImageIcon, X, Globe, MessageSquareQuote, Layout, CheckCircle2, XCircle, Send, Sparkles, Link as LinkIcon, Lock, Trash2 } from "lucide-react"
-import { RichEditor } from "@/components/ui/rich-editor"
+import dynamic from "next/dynamic"
+const RichEditor = dynamic(() => import("@/components/ui/rich-editor").then(m => m.RichEditor), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center border rounded-md"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div> })
 import { PreviewDialog } from "@/components/cms/preview-dialog"
 import { MediaDialog } from "@/features/media/media-dialog"
 import { notify } from "@/lib/notifications"
@@ -56,6 +57,7 @@ const formSchema = z.object({
   meta_description: z.string().max(160, "A descrição SEO deve ter menos de 160 caracteres.").optional(),
   meta_keywords: z.string().optional(),
   tags: z.array(z.number()),
+  published_at: z.string().optional().nullable(),
 })
 
 interface ArticleFormProps {
@@ -103,6 +105,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
       meta_description: initialData?.meta_description || "",
       meta_keywords: initialData?.meta_keywords || "",
       tags: initialData?.tags || [],
+      published_at: initialData?.published_at ? new Date(initialData.published_at).toISOString().slice(0, 16) : "",
     },
   })
 
@@ -273,7 +276,11 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
   }
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    mutation.mutate(values)
+    const payload = {
+      ...values,
+      published_at: values.published_at ? new Date(values.published_at).toISOString() : null
+    }
+    mutation.mutate(payload)
   }
 
   return (
@@ -524,6 +531,22 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
               </div>
 
               <div className="p-6 rounded-2xl bg-primary/5 border border-primary/10 space-y-6">
+                
+                <FormField
+                  control={form.control}
+                  name="published_at"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold">Agendar Publicação</FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" className="bg-background" {...field} value={field.value || ''} />
+                      </FormControl>
+                      <FormDescription className="text-xs">Deixe em branco para publicar imediatamente.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="rounded-2xl border bg-background/60 p-4 space-y-3">
                   <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     Checklist

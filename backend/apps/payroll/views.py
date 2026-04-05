@@ -241,7 +241,7 @@ class PayrollRunViewSet(viewsets.ReadOnlyModelViewSet):
         company = _get_company(self.request)
         if not company:
             return PayrollRun.objects.none()
-        qs = PayrollRun.objects.filter(company=company).order_by("-period_end", "-id")
+        qs = PayrollRun.objects.filter(company=company).prefetch_related("lines", "lines__user").order_by("-period_end", "-id")
         if not _has_permission(self.request, "finance.manage_financial"):
             qs = qs.filter(lines__user=self.request.user).distinct()
         return qs
@@ -289,6 +289,26 @@ class PayrollRunViewSet(viewsets.ReadOnlyModelViewSet):
         tx = PayrollService.post_run_to_finance(company=company, user=request.user, run=run)
         return Response({"transaction_id": tx.id}, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=["post"], url_path="sign")
+    def sign(self, request, pk=None):
+        """Permite que o funcionário assine digitalmente seu holerite."""
+        from django.utils import timezone
+        
+        run: PayrollRun = self.get_object()
+        
+        # Verificar se o usuário atual é o dono das linhas deste holerite
+        if not run.lines.filter(user=request.user).exists():
+            raise ValidationError({"detail": "Você não possui holerites neste fechamento."})
+            
+        if run.employee_signature_date:
+            raise ValidationError({"detail": "Este holerite já foi assinado."})
+
+        run.employee_signature_date = timezone.now()
+        run.employee_signature_ip = request.META.get("HTTP_X_FORWARDED_FOR") or request.META.get("REMOTE_ADDR")
+        run.save(update_fields=["employee_signature_date", "employee_signature_ip"])
+        
+        return Response({"detail": "Holerite assinado com sucesso."}, status=status.HTTP_200_OK)
+
 
 class ThirteenthAccrualViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ThirteenthAccrual.objects.all()
@@ -304,7 +324,7 @@ class ThirteenthAccrualViewSet(viewsets.ReadOnlyModelViewSet):
         company = _get_company(self.request)
         if not company:
             return ThirteenthAccrual.objects.none()
-        qs = ThirteenthAccrual.all_objects.filter(company=company).order_by("-year", "-month", "-id")
+        qs = ThirteenthAccrual.all_objects.select_related("user").filter(company=company).order_by("-year", "-month", "-id")
         if not _has_permission(self.request, "finance.manage_financial"):
             qs = qs.filter(user=self.request.user)
         year = self.request.query_params.get("year")
@@ -336,7 +356,7 @@ class ThirteenthPayoutViewSet(viewsets.ReadOnlyModelViewSet):
         company = _get_company(self.request)
         if not company:
             return ThirteenthPayout.objects.none()
-        qs = ThirteenthPayout.all_objects.filter(company=company).order_by("-year", "-installment", "-id")
+        qs = ThirteenthPayout.all_objects.select_related("user").filter(company=company).order_by("-year", "-installment", "-id")
         if not _has_permission(self.request, "finance.manage_financial"):
             qs = qs.filter(user=self.request.user)
         year = self.request.query_params.get("year")

@@ -23,4 +23,8 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     async def notification_message(self, event):
         # Send message to WebSocket
-        await self.send(text_data=json.dumps(event))
+        try:
+            await self.send(text_data=json.dumps(event))
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error sending WebSocket notification: {e}")

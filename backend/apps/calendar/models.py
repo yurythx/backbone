@@ -32,6 +32,10 @@ class Event(BaseTenantModel):
     location = models.CharField(max_length=255, blank=True, null=True)
     meeting_url = models.URLField(blank=True, null=True)
 
+    # Google Calendar Sync Fields
+    google_event_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    google_etag = models.CharField(max_length=255, blank=True, null=True)
+
     class Meta:
         verbose_name = "Event"
         verbose_name_plural = "Events"
@@ -42,3 +46,21 @@ class Event(BaseTenantModel):
 
     def __str__(self):
         return f"{self.title} ({self.start_datetime})"
+
+class GoogleCalendarSync(BaseTenantModel):
+    """
+    Configurações de sincronização do Google Calendar por usuário.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="google_calendar_sync")
+    access_token = models.TextField()
+    refresh_token = models.TextField()
+    token_expiry = models.DateTimeField()
+    sync_token = models.CharField(max_length=255, blank=True, null=True, help_text="Token para sincronização incremental")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Google Calendar Sync"
+        verbose_name_plural = "Google Calendar Syncs"
+
+    def __str__(self):
+        return f"GCal Sync: {self.user.username}"

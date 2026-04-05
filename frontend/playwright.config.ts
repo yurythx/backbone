@@ -1,82 +1,62 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test';
+import path from 'path';
 
 /**
- * Playwright E2E configuration for Backbone.
- * Tests run against a locally running dev server (npm run dev).
- *
- * To run:
- *   npx playwright test
- *   npx playwright test --ui          (interactive mode)
- *   npx playwright test --project=chromium
- *   npx playwright codegen localhost:3005   (record new test)
+ * Read environment variables from file.
+ * https://github.com/motdotla/dotenv
+ */
+// require('dotenv').config();
+
+/**
+ * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
   testDir: './e2e',
-  outputDir: './playwright-results',
-  testIgnore: ['**/e2e/results/**', '**/e2e/report/**'],
-  fullyParallel: true,
+  /* Maximum time one test can run for. */
+  timeout: 30 * 1000,
+  expect: {
+    /**
+     * Maximum time expect() should wait for the condition to be met.
+     * For example in `await expect(locator).toHaveText();`
+     */
+    timeout: 5000
+  },
+  /* Run tests in files in parallel */
+  fullyParallel: false, // Set to false to avoid database collision during E2E tests
+  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  // Retry failed tests once on CI to reduce flakiness
+  /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: [
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['list'],
-  ],
-
+  /* Opt out of parallel tests on CI. */
+  workers: 1, // Run sequentially
+  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  reporter: 'html',
+  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:3005',
-    // Keep traces on first retry — very helpful for debugging CI failures
+    /* Base URL to use in actions like `await page.goto('/')`. */
+    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3005',
+
+    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    // Viewport matching most dashboard users
-    viewport: { width: 1280, height: 800 },
-    // Sensible timeouts
-    actionTimeout: 10_000,
-    navigationTimeout: 30_000,
+    
+    // Aumentar significativamente o timeout de navegação para o build inicial do Next.js local
+    navigationTimeout: 45000,
+    actionTimeout: 15000,
   },
 
+  /* Configure projects for major browsers */
   projects: [
-    // Setup project to log in once and reuse auth state (faster)
-    {
-      name: 'setup',
-      testMatch: /.*\.setup\.ts/,
-    },
     {
       name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        storageState: 'e2e/.auth/user.json',
-      },
-      dependencies: ['setup'],
-    },
-    // Unauthenticated tests (login page, public articles)
-    {
-      name: 'chromium-public',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /.*\.public\.spec\.ts/,
     },
+    // Removendo Firefox e Webkit por enquanto para focar no fluxo e ser mais rápido
   ],
 
-  // Start the dev server automatically if not already running
-  webServer: [
-    {
-      command:
-        'powershell -NoProfile -Command "python manage.py migrate; python manage.py seed_system; python manage.py runserver 8005"',
-      cwd: '../backend',
-      url: 'http://localhost:8005/api/core/companies/public_list/',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-    },
-    {
-      command: 'npm run dev',
-      url: 'http://localhost:3005/api/health',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-      env: {
-        NEXT_PUBLIC_API_URL: 'http://localhost:8005',
-      },
-    },
-  ],
-})
+  /* Run your local dev server before starting the tests */
+  // webServer: {
+  //   command: 'npm run dev',
+  //   port: 3005,
+  //   reuseExistingServer: !process.env.CI,
+  // },
+});

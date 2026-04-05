@@ -12,6 +12,19 @@ User = get_user_model()
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        from django.contrib.auth.signals import user_logged_in
+        
+        data = super().validate(attrs)
+        
+        # Dispara o sinal para que o log de auditoria capture o evento
+        user_logged_in.send(
+            sender=self.user.__class__, 
+            request=self.context.get("request"), 
+            user=self.user
+        )
+        return data
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -70,26 +83,29 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        from django.db import transaction
+
         company = validated_data.pop("company_slug")
         password = validated_data.pop("password")
 
-        # O BaseTenantModel requer que 'company' seja passado na criação
-        user = User.objects.create_user(company=company, password=password, **validated_data)
+        with transaction.atomic():
+            # O BaseTenantModel requer que 'company' seja passado na criação
+            user = User.objects.create_user(company=company, password=password, **validated_data)
 
-        # Se for o primeiro usuário da empresa, atribui papel de Administrador
-        user_count = User.all_objects.filter(company=company).count()
-        if user_count == 1:
-            from .models import Role
-            from .services import AccountService
+            # Se for o primeiro usuário da empresa, atribui papel de Administrador
+            user_count = User.all_objects.filter(company=company).count()
+            if user_count == 1:
+                from .models import Role
+                from .services import AccountService
 
-            # Garante que as roles existam
-            AccountService.ensure_default_roles(company)
-            try:
-                admin_role = Role.all_objects.get(name="Administrador", company=company)
-                user.role = admin_role
-                user.save(update_fields=["role"])
-            except Role.DoesNotExist:
-                pass
+                # Garante que as roles existam
+                AccountService.ensure_default_roles(company)
+                try:
+                    admin_role = Role.all_objects.get(name="Administrador", company=company)
+                    user.role = admin_role
+                    user.save(update_fields=["role"])
+                except Role.DoesNotExist:
+                    pass
 
         return user
 
@@ -151,8 +167,11 @@ class UserSerializer(serializers.ModelSerializer):
                 company = request.user.company
             try:
                 if request and request.user.is_superuser:
-                    # Superusuário pode atribuir qualquer role
+                    # Superusuário pode atribuir role globalmente, mas deve ser da mesma empresa do alvo
                     role = Role.all_objects.get(pk=role_id)
+                    target_company = result.get("company") or (self.instance.company if self.instance else None)
+                    if target_company and role.company_id != getattr(target_company, "id", target_company):
+                        raise serializers.ValidationError({"role": "O papel não pertence à mesma empresa do usuário."})
                 elif company:
                     # Usuários normais só podem atribuir roles do seu tenant
                     role = Role.objects.filter(company=company).get(pk=role_id)

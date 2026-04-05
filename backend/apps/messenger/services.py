@@ -5,6 +5,7 @@ from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.db.models import Count
 from django.utils import timezone
+from django.db import transaction
 
 from apps.notifications.tasks import notify_user_push
 
@@ -96,6 +97,7 @@ class MessengerService:
             return conversation
 
     @staticmethod
+    @transaction.atomic
     def send_message(
         user, company, conversation, content=None, file_obj=None, request=None, reply_to_id=None, client_id=None
     ):
@@ -143,19 +145,23 @@ class MessengerService:
         # Web Push Notification
         # Respect Mute settings: only notify participants who haven't muted this conversation
         # Also exclude the sender (user)
-        muted_user_ids = ConversationPreference.objects.filter(conversation=conversation, is_muted=True).values_list(
+        muted_user_ids = list(ConversationPreference.objects.filter(conversation=conversation, is_muted=True).values_list(
             "user_id", flat=True
-        )
+        ))
 
-        recipients = conversation.participants.exclude(id=user.id).exclude(id__in=muted_user_ids)
+        recipients = list(conversation.participants.exclude(id=user.id).exclude(id__in=muted_user_ids))
 
-        for participant in recipients:
-            notify_user_push(
-                participant,
-                title=f"{user.first_name or user.username}",
-                message=content[:100] if content else "Enviou um arquivo.",
-                link=f"/messenger?conversation={conversation.id}&message_id={message.id}",
-            )
+        def send_notifications():
+            MessengerService.broadcast_message(company, conversation, message, request)
+            for participant in recipients:
+                notify_user_push(
+                    participant,
+                    title=f"{user.first_name or user.username}",
+                    message=content[:100] if content else "Enviou um arquivo.",
+                    link=f"/messenger?conversation={conversation.id}&message_id={message.id}",
+                )
+
+        transaction.on_commit(send_notifications)
 
         return message
 

@@ -6,10 +6,12 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 
 from apps.core.health import health_check
 from apps.core.media_proxy import MediaProxyView
+from apps.crm.views import IntegrationSyncCardAPIView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("health/", health_check, name="health_check"),
+    path("api/health/", health_check, name="health_check"),
+    path("health/", health_check, name="health_check_legacy"),
     # Media Proxy (para servir arquivos do MinIO/S3 via API)
     path("media/<path:path>", MediaProxyView.as_view(), name="media_proxy"),
     # Core APIs
@@ -18,7 +20,6 @@ urlpatterns = [
     path("api/licensing/", include("apps.licensing.urls")),
     path("api/modules/", include("apps.module_manager.urls")),
     path("api/messenger/", include("apps.messenger.urls")),
-    path("api/media/", include("apps.media.urls")),
     path("api/pages/", include("apps.pages.urls")),
     path("api/articles/", include("apps.articles.urls")),
     path("api/notifications/", include("apps.notifications.urls")),
@@ -27,7 +28,9 @@ urlpatterns = [
     path("api/finance/", include("apps.finance.urls")),
     path("api/calendar/", include("apps.calendar.urls")),
     path("api/payroll/", include("apps.payroll.urls")),
+    path("api/media/", include("apps.media.urls")),
     path("api/crm/", include("apps.crm.urls")),
+    path("api/v1/integration/sync-card/", IntegrationSyncCardAPIView.as_view(), name="crm-sync-card"),
     # Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

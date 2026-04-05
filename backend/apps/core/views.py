@@ -126,6 +126,15 @@ class CompanyViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def complete_onboarding(self, request):
         """Marca o onboarding como concluído para a empresa atual."""
+        # Apenas administradores do tenant (ou superuser) podem concluir o onboarding
+        if not request.user.is_superuser:
+            role = getattr(request.user, "role", None)
+            if not role:
+                return Response({"detail": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
+            perms = role.permissions if isinstance(role.permissions, list) else []
+            if "*" not in perms and "admin.settings_manage" not in perms:
+                return Response({"detail": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
+
         company = request.company
         if not company:
             return Response({"detail": "No tenant context found."}, status=status.HTTP_404_NOT_FOUND)
@@ -243,8 +252,11 @@ class DashboardStatsView(generics.GenericAPIView):
                 from apps.messenger.models import Message
 
                 total_messages = Message.objects.filter(conversation__company=company).count()
-            except (ImportError, Exception):
+            except ImportError:
                 pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error fetching messenger stats: {e}")
 
             # 2. Atividade Recente (Audit Logs)
             try:
@@ -265,7 +277,9 @@ class DashboardStatsView(generics.GenericAPIView):
                             },
                         }
                     )
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error fetching audit logs for dashboard: {e}")
                 recent_activity_data = []
 
             # 3. Visualizações por data (Últimos 30 dias)
@@ -356,8 +370,8 @@ class SitemapView(generics.GenericAPIView):
         # Artigos Publicados
         from apps.articles.models import Article
 
-        articles_qs = Article.objects.filter(company=company, status="published")
-        for art in articles_qs:
+        articles_qs = Article.objects.filter(company=company, status="published").only("slug", "updated_at")
+        for art in articles_qs.iterator(chunk_size=1000):
             pages.append(
                 {"url": f"{base_url}/artigos/{art.slug}", "lastmod": art.updated_at.isoformat(), "priority": 0.8}
             )
@@ -365,8 +379,8 @@ class SitemapView(generics.GenericAPIView):
         # Páginas do CMS
         from apps.pages.models import Page
 
-        pages_qs = Page.objects.filter(company=company)
-        for p in pages_qs:
+        pages_qs = Page.objects.filter(company=company, status="published").only("slug", "updated_at")
+        for p in pages_qs.iterator(chunk_size=1000):
             pages.append({"url": f"{base_url}/{p.slug}", "lastmod": p.updated_at.isoformat(), "priority": 0.5})
 
 

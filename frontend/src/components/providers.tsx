@@ -1,9 +1,22 @@
 "use client"
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClient } from "@tanstack/react-query"
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client"
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister"
 import { ThemeProvider } from "./theme-provider"
 import { useState, useEffect } from "react"
 import { Toaster } from "sonner"
+
+const noopStorage: Storage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+  clear: () => undefined,
+  key: () => null,
+  get length() {
+    return 0
+  },
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -31,8 +44,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }))
 
+  const [persister] = useState(() =>
+    createSyncStoragePersister({
+      storage: typeof window !== 'undefined' ? window.localStorage : noopStorage,
+    })
+  )
+
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider 
+      client={queryClient}
+      persistOptions={{ persister }}
+    >
       <ThemeProvider
         attribute="class"
         defaultTheme="system"
@@ -54,6 +76,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
           }}
         />
       </ThemeProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   )
 }
