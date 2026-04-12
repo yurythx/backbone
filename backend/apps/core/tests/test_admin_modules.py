@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.accounts.models import Role
 from apps.core.models import Company
 from apps.licensing.models import Feature, Plan
 from apps.module_manager.models import Module
@@ -15,8 +16,9 @@ class AdminModulesTest(APITestCase):
         self.company = Company.objects.create(name="Tech Corp", slug="tech-corp")
 
         # Create User
+        role = Role.all_objects.create(company=self.company, name="Admin", permissions=["admin.settings_manage"])
         self.user = User.objects.create_user(
-            username="admin", email="admin@tech.com", password="password123", company=self.company
+            username="admin", email="admin@tech.com", password="password123", company=self.company, role=role
         )
         self.client.force_authenticate(user=self.user)
         # Set tenant context header for all requests

@@ -3,13 +3,13 @@ import logging
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
-from django.db import transaction
 
 from apps.notifications.tasks import notify_user_push
 
-from .models import Conversation, ConversationPreference, Message
+from .models import ContactBlock, Conversation, ConversationPreference, Message
 from .serializers import MessageSerializer
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,15 @@ class MessengerService:
         logger.debug(
             f"[Messenger] Sending message: user={user.username}, conversation={conversation.id}, has_file={bool(file_obj)}"
         )
+
+        if not conversation.is_group:
+            other = conversation.participants.exclude(id=user.id).only("id").first()
+            if other and ContactBlock.all_objects.filter(
+                company=company, blocker_id__in=[user.id, other.id], blocked_id__in=[user.id, other.id]
+            ).exists():
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied("Não é possível enviar mensagem para este contato.")
 
         message_data = {
             "company": company,

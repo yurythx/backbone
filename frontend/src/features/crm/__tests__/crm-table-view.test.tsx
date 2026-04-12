@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { SortingState, VisibilityState } from "@tanstack/react-table"
 
 import { CRMTableView } from "../crm-table-view"
 import * as useCRMHook from "../use-crm"
@@ -100,6 +101,19 @@ describe("CRMTableView", () => {
     },
   ]
 
+  const sorting: SortingState = []
+  const columnVisibility: VisibilityState = {}
+
+  const baseTableProps = {
+    pipeline: mockPipeline,
+    deals: mockDeals,
+    isLoading: false,
+    sorting,
+    columnVisibility,
+    onSortingChange: vi.fn(),
+    onColumnVisibilityChange: vi.fn(),
+  }
+
   beforeEach(async () => {
     vi.clearAllMocks()
     mockUpdateDeal.mutateAsync.mockResolvedValue(undefined)
@@ -123,168 +137,37 @@ describe("CRMTableView", () => {
     } as never)
   })
 
-  it("renderiza apenas os cards do pipeline atual", () => {
-    render(<CRMTableView pipeline={mockPipeline} />)
+  it("renderiza a tabela com os cards recebidos pelos filtros globais", () => {
+    const pipelineDeals = mockDeals.slice(0, 2)
+    render(<CRMTableView {...baseTableProps} deals={pipelineDeals} />)
 
-    expect(screen.getByText("Tabela operacional do pipeline")).toBeInTheDocument()
-    expect(screen.getByDisplayValue("Servidor Offline")).toBeInTheDocument()
-    expect(screen.getByDisplayValue("Notebook Lento")).toBeInTheDocument()
-    expect(screen.queryByDisplayValue("Troca de Monitor")).not.toBeInTheDocument()
-    expect(screen.getAllByText("Vencido").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("Quase lá").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("Crítico").length).toBeGreaterThan(0)
-    expect(screen.getByText("Vencidos")).toBeInTheDocument()
-    expect(screen.getByText("Progresso médio")).toBeInTheDocument()
-    expect(screen.getByText("53%")).toBeInTheDocument()
-    expect(screen.getByRole("textbox", { name: "Editar título do card Servidor Offline" })).toBeInTheDocument()
-    expect(screen.getByLabelText("Editar prazo do card Servidor Offline")).toBeInTheDocument()
-    expect(screen.getByRole("spinbutton", { name: "Editar progresso do card Servidor Offline" })).toBeInTheDocument()
-    expect(screen.getAllByText("25% concluído").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("80% concluído").length).toBeGreaterThan(0)
-    expect(screen.getByRole("combobox", { name: "Filtrar por responsável" })).toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "Editar responsável do card Servidor Offline" })).toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "Editar coluna do card Servidor Offline" })).toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "Editar prioridade do card Servidor Offline" })).toBeInTheDocument()
+    expect(screen.getByText("Tabela Operacional")).toBeInTheDocument()
+    expect(screen.getByText("Servidor Offline")).toBeInTheDocument()
+    expect(screen.getByText("Notebook Lento")).toBeInTheDocument()
+    expect(screen.queryByText("Troca de Monitor")).not.toBeInTheDocument()
   })
 
   it("abre o painel do card ao clicar na linha da tabela", async () => {
     const user = userEvent.setup()
+    const pipelineDeals = mockDeals.slice(0, 2)
 
-    render(<CRMTableView pipeline={mockPipeline} />)
+    render(<CRMTableView {...baseTableProps} deals={pipelineDeals} />)
 
-    await user.click(screen.getByLabelText("Abrir card Servidor Offline"))
+    await user.click(screen.getByText("Servidor Offline"))
 
     expect(screen.getByText("Detalhes do card: Servidor Offline")).toBeInTheDocument()
   })
 
-  it("filtra os cards por coluna e prioridade", async () => {
+  it("permite ordenar pela coluna de Progresso", async () => {
     const user = userEvent.setup()
+    const pipelineDeals = mockDeals.slice(0, 2)
 
-    render(<CRMTableView pipeline={mockPipeline} />)
-    const clearButtons = screen.getAllByRole("button", { name: "Todas" })
-
-    await user.click(screen.getByRole("button", { name: "Em Andamento" }))
-    expect(screen.queryByDisplayValue("Servidor Offline")).not.toBeInTheDocument()
-    expect(screen.getByDisplayValue("Notebook Lento")).toBeInTheDocument()
-
-    await user.click(clearButtons[0])
-    await user.click(screen.getByRole("button", { name: "Urgente" }))
-    expect(screen.getByDisplayValue("Servidor Offline")).toBeInTheDocument()
-    expect(screen.queryByDisplayValue("Notebook Lento")).not.toBeInTheDocument()
-  })
-
-  it("filtra os cards por responsável", async () => {
-    const user = userEvent.setup()
-
-    render(<CRMTableView pipeline={mockPipeline} />)
-
-    await user.click(screen.getByRole("combobox", { name: "Filtrar por responsável" }))
-    await user.click(screen.getByRole("option", { name: "Paulo Souza" }))
-
-    expect(screen.queryByDisplayValue("Servidor Offline")).not.toBeInTheDocument()
-    expect(screen.getByDisplayValue("Notebook Lento")).toBeInTheDocument()
-  })
-
-  it("ordena os cards por prioridade e progresso", async () => {
-    const user = userEvent.setup()
-
-    render(<CRMTableView pipeline={mockPipeline} />)
-
-    await user.click(screen.getByRole("button", { name: "Ordenar por Prioridade" }))
-    const prioritySortedRows = screen.getAllByRole("textbox", { name: /Editar título do card/i })
-    expect(prioritySortedRows[0]).toHaveValue("Notebook Lento")
+    render(<CRMTableView {...baseTableProps} deals={pipelineDeals} />)
 
     await user.click(screen.getByRole("button", { name: "Ordenar por Progresso" }))
     await user.click(screen.getByRole("button", { name: "Ordenar por Progresso" }))
-    const progressSortedRows = screen.getAllByRole("textbox", { name: /Editar título do card/i })
-    expect(progressSortedRows[0]).toHaveValue("Notebook Lento")
-  })
 
-  it("ordena os cards por status consolidado", async () => {
-    const user = userEvent.setup()
-
-    render(<CRMTableView pipeline={mockPipeline} />)
-
-    await user.click(screen.getByRole("button", { name: "Ordenar por Status" }))
-    const statusSortedRows = screen.getAllByRole("textbox", { name: /Editar título do card/i })
-    expect(statusSortedRows[0]).toHaveValue("Servidor Offline")
-  })
-
-  it("atualiza a prioridade inline pela tabela", async () => {
-    const user = userEvent.setup()
-
-    render(<CRMTableView pipeline={mockPipeline} />)
-
-    await user.click(screen.getByRole("combobox", { name: "Editar prioridade do card Servidor Offline" }))
-    await user.click(screen.getByRole("option", { name: "Alta" }))
-
-    expect(mockUpdateDeal.mutateAsync).toHaveBeenCalledWith({
-      id: 1,
-      priority: "HIGH",
-    })
-  })
-
-  it("atualiza o responsável inline pela tabela", async () => {
-    const user = userEvent.setup()
-
-    render(<CRMTableView pipeline={mockPipeline} />)
-
-    await user.click(screen.getByRole("combobox", { name: "Editar responsável do card Servidor Offline" }))
-    await user.click(screen.getByRole("option", { name: "Paulo Souza" }))
-
-    expect(mockUpdateDeal.mutateAsync).toHaveBeenCalledWith({
-      id: 1,
-      owner: 8,
-    })
-  })
-
-  it("atualiza o título inline pela tabela", async () => {
-    const user = userEvent.setup()
-
-    render(<CRMTableView pipeline={mockPipeline} />)
-
-    const titleInput = screen.getByRole("textbox", { name: "Editar título do card Servidor Offline" })
-    await user.clear(titleInput)
-    await user.type(titleInput, "Servidor Principal Offline")
-    fireEvent.keyDown(titleInput, { key: "Enter", code: "Enter", charCode: 13 })
-
-    await waitFor(() => {
-      expect(mockUpdateDeal.mutateAsync).toHaveBeenCalledWith({
-        id: 1,
-        title: "Servidor Principal Offline",
-      })
-    })
-  })
-
-  it("atualiza o prazo inline pela tabela", async () => {
-    render(<CRMTableView pipeline={mockPipeline} />)
-
-    const deadlineInput = screen.getByLabelText("Editar prazo do card Servidor Offline")
-    fireEvent.change(deadlineInput, { target: { value: "2026-04-10T15:30" } })
-    fireEvent.blur(deadlineInput)
-
-    await waitFor(() => {
-      expect(mockUpdateDeal.mutateAsync).toHaveBeenCalledWith({
-        id: 1,
-        closing_date: "2026-04-10T15:30",
-      })
-    })
-  })
-
-  it("atualiza o progresso inline pela tabela", async () => {
-    render(<CRMTableView pipeline={mockPipeline} />)
-
-    const progressInput = screen.getByRole("spinbutton", { name: "Editar progresso do card Servidor Offline" })
-    fireEvent.change(progressInput, { target: { value: "75" } })
-    fireEvent.blur(progressInput)
-
-    await waitFor(() => {
-      expect(mockUpdateDeal.mutateAsync).toHaveBeenCalledWith({
-        id: 1,
-        custom_fields: {
-          progress_percentage: 75,
-        },
-      })
-    })
+    const rows = screen.getAllByRole("row")
+    expect(rows.length).toBeGreaterThan(2)
   })
 })

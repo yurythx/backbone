@@ -6,9 +6,19 @@ export function ThemeInitScript() {
       try {
         const tenantBranding = JSON.parse(localStorage.getItem('backbone_tenant_branding'));
         const userPreferences = JSON.parse(localStorage.getItem('backbone_user_preferences'));
-        const darkTheme = document.documentElement.classList.contains('dark') || 
-                         (localStorage.getItem('theme') === 'dark') ||
-                         (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        const modePref = userPreferences && userPreferences.dark_mode_preference ? userPreferences.dark_mode_preference : null;
+        const storedTheme = localStorage.getItem('theme');
+        const systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const desiredMode = modePref || storedTheme || 'system';
+        const shouldBeDark = desiredMode === 'dark' || (desiredMode === 'system' && systemDark);
+        if (shouldBeDark) {
+          document.documentElement.classList.add('dark');
+          if (desiredMode !== 'system') localStorage.setItem('theme', 'dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+          if (desiredMode === 'light') localStorage.setItem('theme', 'light');
+        }
+        const darkTheme = shouldBeDark;
         
         if (tenantBranding) {
           const root = document.documentElement;
@@ -22,6 +32,14 @@ export function ThemeInitScript() {
 
           // Only apply colors if NOT in dark mode (let tailwind handle dark mode)
           if (!darkTheme) {
+            const shouldUseTenantColors = !(userPreferences && userPreferences.use_tenant_theme === false);
+            if (!shouldUseTenantColors) {
+              root.style.removeProperty('--primary');
+              root.style.removeProperty('--primary-foreground');
+              root.style.removeProperty('--secondary');
+              root.style.removeProperty('--secondary-foreground');
+              root.style.removeProperty('--background');
+            } else {
             // Apply Primary Color
             const primaryHex = tenantBranding.primary_color;
             if (primaryHex) {
@@ -49,6 +67,7 @@ export function ThemeInitScript() {
             const bgHex = tenantBranding.background_color;
             if (bgHex) {
               root.style.setProperty('--background', bgHex);
+            }
             }
           }
 

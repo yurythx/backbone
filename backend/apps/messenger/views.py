@@ -11,6 +11,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
+from apps.accounts.permissions import ActionRolePermission
 from apps.module_manager.permissions import HasModuleAccess
 from shared_kernel.sanitization import sanitize_url
 
@@ -37,9 +38,13 @@ User = get_user_model()
 )
 class ContactViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ContactSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
-    required_permission = None
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
+    required_permission = "messenger.view"
     module_code = "messenger"
+    action_permissions = {
+        "list": "messenger.view",
+        "retrieve": "messenger.view",
+    }
 
     def get_queryset(self):
         user = self.request.user
@@ -88,8 +93,17 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
 )
 class ContactBlockViewSet(viewsets.ModelViewSet):
     serializer_class = ContactBlockSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
+    required_permission = "messenger.view"
     module_code = "messenger"
+    action_permissions = {
+        "list": "messenger.view",
+        "retrieve": "messenger.view",
+        "create": "messenger.view",
+        "destroy": "messenger.view",
+        "update": "messenger.view",
+        "partial_update": "messenger.view",
+    }
 
     def get_queryset(self):
         user = self.request.user
@@ -119,8 +133,33 @@ class ContactBlockViewSet(viewsets.ModelViewSet):
 )
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
+    required_permission = "messenger.view"
     module_code = "messenger"
+    action_permissions = {
+        "list": "messenger.view",
+        "retrieve": "messenger.view",
+        "create": "messenger.view",
+        "update": "messenger.view",
+        "partial_update": "messenger.view",
+        "destroy": "messenger.view",
+        "archived": "messenger.view",
+        "deleted": "messenger.view",
+        "find_by_participant": "messenger.view",
+        "mute": "messenger.view",
+        "unmute": "messenger.view",
+        "pin": "messenger.view",
+        "unpin": "messenger.view",
+        "delete_for_me": "messenger.view",
+        "restore_for_me": "messenger.view",
+        "archive_for_me": "messenger.view",
+        "unarchive_for_me": "messenger.view",
+        "clear_for_me": "messenger.view",
+        "unclear_for_me": "messenger.view",
+        "search": "messenger.view",
+        "send_message": "messenger.view",
+        "messages": "messenger.view",
+    }
 
     def create(self, request, *args, **kwargs):
         participant_usernames = request.data.get("participant_usernames", [])
@@ -676,9 +715,17 @@ class ConversationViewSet(viewsets.ModelViewSet):
 class MessageViewSet(mixins.DestroyModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
-    required_permission = None
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
+    required_permission = "messenger.view"
     module_code = "messenger"
+    action_permissions = {
+        "partial_update": "messenger.view",
+        "destroy": "messenger.view",
+        "link_preview": "messenger.view",
+        "reaction": "messenger.view",
+        "mark_read": "messenger.view",
+        "receipts": "messenger.view",
+    }
 
     def get_throttles(self):
         if getattr(self, "action", None) == "link_preview":

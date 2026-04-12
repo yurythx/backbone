@@ -30,10 +30,6 @@ async function getArticle(slug: string, companySlug?: string) {
             headers['X-Company-Slug'] = effectiveCompany
         }
 
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`[PublicArticle] Fetching article: ${apiUrl}/api/articles/public/articles/${cleanSlug}/ (Company: ${effectiveCompany})`)
-        }
-
         const qs = effectiveCompany ? `?company_slug=${encodeURIComponent(effectiveCompany)}` : ''
         const res = await fetch(`${apiUrl}/api/articles/public/articles/${cleanSlug}/${qs}`, {
             next: { revalidate: 300 }, // Cache for 5 minutes
@@ -43,26 +39,22 @@ async function getArticle(slug: string, companySlug?: string) {
         if (!res.ok) {
             // Se falhar com contexto, tenta sem contexto (caso seja um artigo global/compartilhado)
             if (res.status === 404 && effectiveCompany) {
-                console.warn(`[PublicArticle] Not found with tenant context: ${cleanSlug}. Retrying without context...`)
                 const retry = await fetch(`${apiUrl}/api/articles/public/articles/${cleanSlug}/`, {
                     next: { revalidate: 300 },
                     headers: { 'Content-Type': 'application/json' }
                 })
                 if (!retry.ok) {
-                    console.warn(`[PublicArticle] Not found globally: ${cleanSlug}`)
                     return null
                 }
                 const retryData = await retry.json()
                 return retryData || null
             }
-            console.error(`[PublicArticle] Failed to fetch article: ${res.status} ${res.statusText}`)
             return null
         }
 
         const data = await res.json()
         return data || null
-    } catch (e) {
-        console.error("Error fetching article for metadata:", e)
+    } catch {
         return null
     }
 }
@@ -87,8 +79,7 @@ export async function generateMetadata(
             const branding = await brandingRes.json()
             if (branding.icon_url) icon = branding.icon_url
         }
-    } catch (e) {
-        console.error("Error fetching branding for metadata:", e)
+    } catch {
     }
 
     const imageUrl = article.cover_image || article.image

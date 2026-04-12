@@ -33,6 +33,10 @@ export function middleware(request: NextRequest) {
     const hasSession = request.cookies.get('hasSession')?.value === 'true'
     const debug = process.env.NODE_ENV !== 'production'
 
+    if (pathname === "/@vite/client" || pathname.startsWith("/@vite/")) {
+        return new NextResponse("", { status: 200, headers: { "content-type": "application/javascript" } })
+    }
+
     // LOG PARA DEBUG (visível no terminal do dev server)
     if (debug) {
         console.log(`[Middleware] ${request.method} ${pathname} | hasSession: ${hasSession}`)

@@ -60,6 +60,8 @@ class User(AbstractUser, BaseTenantModel):
         help_text="Status de presença do usuário",
     )
 
+    crm_groups = models.ManyToManyField("crm.CRMGroup", blank=True, related_name="users")
+
     # Managers
     objects = TenantUserManager()  # Tenant-aware default manager
     all_objects = UserManager()  # Global manager for auth and cross-tenant ops
@@ -163,6 +165,7 @@ class Invitation(BaseTenantModel):
 
     email = models.EmailField(db_index=True)
     role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="invitations")
+    crm_groups = models.ManyToManyField("crm.CRMGroup", blank=True, related_name="invitations")
     token = models.CharField(max_length=64, unique=True, default=secrets.token_urlsafe)
     invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="sent_invitations")
     status = models.CharField(

@@ -110,16 +110,16 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
                     Comentários
                 </Button>
             </SheetTrigger>
-            <SheetContent className="w-[400px] sm:w-[540px]">
-                <SheetHeader>
+            <SheetContent side="right" className="w-[90vw] sm:w-[540px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr]">
+                <SheetHeader className="border-b bg-muted/30 px-4 py-4 text-left">
                     <SheetTitle>Comentários do Artigo</SheetTitle>
                     <SheetDescription>
                         Gerencie os comentários e interações deste artigo.
                     </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex flex-col h-full pb-20">
-                    <div className="mt-6 mb-4">
+                <div className="min-h-0 p-4 flex flex-col">
+                    <div className="mb-4">
                         {/* Bug 10: formulário visível apenas para quem tem permissão article_manage */}
                         {canManageComments ? (
                             <form onSubmit={handleSubmit} className="flex gap-2">
@@ -141,7 +141,7 @@ export function ArticleComments({ articleId }: ArticleCommentsProps) {
                         )}
                     </div>
 
-                    <ScrollArea className="flex-1 pr-4 -mr-4 h-full">
+                    <ScrollArea className="flex-1 pr-4 -mr-4">
                         {isLoading ? (
                             <div className="text-center py-4 text-muted-foreground" role="status" aria-live="polite">Carregando...</div>
                         ) : comments?.length === 0 ? (

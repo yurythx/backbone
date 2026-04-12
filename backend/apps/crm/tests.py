@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -5,10 +8,21 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
+from apps.accounts.models import Role
 from apps.api_keys.models import APIKey
 from apps.calendar.models import Event
 from apps.core.models import Company
-from apps.crm.models import CRMSavedView, Column, Contact, Deal, Pipeline, Stage
+from apps.crm.models import (
+    Column,
+    Contact,
+    CRMGroup,
+    CRMSavedView,
+    Deal,
+    IntegrationInboundEvent,
+    IntegrationInboundStatus,
+    Pipeline,
+    Stage,
+)
 from apps.module_manager.models import Module, TenantModule
 from apps.notifications.models import Notification
 
@@ -70,7 +84,17 @@ class CRMIntegrationTest(TestCase):
         pipeline = Pipeline.all_objects.create(company=self.company, name="Suporte TI")
         stage = Stage.all_objects.get(pipeline=pipeline, name="Novo")
 
-        deadline = timezone.now() + timezone.timedelta(days=2)
+        calendar_module, _ = Module.objects.get_or_create(
+            code="calendar",
+            defaults={"name": "Calendário", "description": "Agenda e eventos"},
+        )
+        TenantModule.objects.get_or_create(
+            company=self.company,
+            module=calendar_module,
+            defaults={"is_active": True},
+        )
+
+        scheduled_at = timezone.now() + timezone.timedelta(days=2)
 
         deal = Deal.all_objects.create(
             company=self.company,
@@ -78,11 +102,10 @@ class CRMIntegrationTest(TestCase):
             title="Manutenção Servidor",
             contact=self.contact,
             stage=stage,
-            closing_date=deadline,
+            data_agendamento=scheduled_at,
             priority="URGENT",
         )
 
-        # Verifica se o evento foi criado na agenda
         deal.refresh_from_db()
         self.assertIsNotNone(deal.column_id)
         self.assertEqual(deal.column.title, "Novo")
@@ -90,6 +113,7 @@ class CRMIntegrationTest(TestCase):
         event = Event.all_objects.get(id=deal.linked_event_id)
         self.assertEqual(event.title, "[URGENT] Manutenção Servidor")
         self.assertEqual(event.color_category, "red")
+        self.assertEqual(event.start_datetime, deal.data_agendamento)
 
     def test_notification_on_deal_movement(self):
         """Testa se mover o card gera uma notificação no sistema."""
@@ -101,10 +125,8 @@ class CRMIntegrationTest(TestCase):
             company=self.company, owner=self.user, title="Troca de Teclado", contact=self.contact, stage=novo
         )
 
-        # Limpa notificações iniciais de criação
         Notification.all_objects.all().delete()
 
-        # Move o card
         deal.stage = execucao
         deal.save(update_fields=["stage"])
         deal.refresh_from_db()
@@ -115,11 +137,100 @@ class CRMIntegrationTest(TestCase):
         self.assertIn("Em Andamento", notification.message)
 
 
+class CRMPipelineGroupAccessTest(APITestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="CRM Corp", slug="crm-corp")
+
+        crm_module, _ = Module.objects.get_or_create(
+            code="crm",
+            defaults={"name": "CRM", "description": "Gestão comercial e de cards"},
+        )
+        TenantModule.objects.get_or_create(company=self.company, module=crm_module, defaults={"is_active": True})
+
+        self.admin_role = Role.objects.create(company=self.company, name="Admin Local", permissions=["*"])
+        self.member_role = Role.objects.create(company=self.company, name="Member Local", permissions=["crm.deal_view"])
+
+        self.admin = User.all_objects.create_user(
+            username="admin",
+            email="admin@crm.corp",
+            password="pass",
+            company=self.company,
+            role=self.admin_role,
+        )
+        self.member = User.all_objects.create_user(
+            username="member",
+            email="member@crm.corp",
+            password="pass",
+            company=self.company,
+            role=self.member_role,
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
+
+    def test_create_pipeline_company_visibility_succeeds(self):
+        response = self.client.post(
+            "/api/crm/pipelines/",
+            {"name": "Comercial", "visibility": "company"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["name"], "Comercial")
+        self.assertEqual(response.data["visibility"], "company")
+
+    def test_create_pipeline_group_visibility_requires_groups(self):
+        response = self.client.post(
+            "/api/crm/pipelines/",
+            {"name": "Suporte", "visibility": "group"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("groups", response.data)
+
+    def test_group_visibility_isolated_by_user_group_membership(self):
+        group = CRMGroup.all_objects.create(company=self.company, name="Suporte", slug="suporte")
+
+        company_pipeline = Pipeline.all_objects.create(company=self.company, name="Empresa", visibility="company")
+        group_pipeline = Pipeline.all_objects.create(company=self.company, name="Somente Grupo", visibility="group")
+        group_pipeline.groups.add(group)
+
+        member_client = APIClient()
+        member_client.force_authenticate(user=self.member)
+        member_client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
+
+        res = member_client.get("/api/crm/pipelines/")
+        self.assertEqual(res.status_code, 200)
+        data = res.data.get("results", res.data)
+        returned_ids = {item["id"] for item in data}
+        self.assertIn(company_pipeline.id, returned_ids)
+        self.assertNotIn(group_pipeline.id, returned_ids)
+
+        self.member.crm_groups.add(group)
+        res = member_client.get("/api/crm/pipelines/")
+        self.assertEqual(res.status_code, 200)
+        data = res.data.get("results", res.data)
+        returned_ids = {item["id"] for item in data}
+        self.assertIn(company_pipeline.id, returned_ids)
+        self.assertIn(group_pipeline.id, returned_ids)
+
+    def test_create_pipeline_group_visibility_with_groups_succeeds(self):
+        group = CRMGroup.all_objects.create(company=self.company, name="Comercial", slug="comercial")
+        response = self.client.post(
+            "/api/crm/pipelines/",
+            {"name": "Pipeline Comercial", "visibility": "group", "groups": [group.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["visibility"], "group")
+        self.assertEqual(response.data["groups"], [group.id])
+
+
 class CRMDealApiUpdateTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="TI Solutions", slug="ti-solutions")
-        self.user = User.objects.create_user(username="tecnico", password="password", company=self.company)
-        self.second_user = User.objects.create_user(username="analista", password="password", company=self.company)
+        role = Role.all_objects.create(company=self.company, name="TestRole", permissions=["*"])
+        self.user = User.objects.create_user(username="tecnico", password="password", company=self.company, role=role)
+        self.second_user = User.objects.create_user(username="analista", password="password", company=self.company, role=role)
         self.outsider = User.objects.create_user(
             username="externo",
             password="password",
@@ -429,8 +540,10 @@ class CRMDealApiUpdateTest(APITestCase):
 class CRMPipelineOverviewApiTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="TI Solutions", slug="ti-solutions")
-        self.user = User.objects.create_user(username="tecnico", password="password", company=self.company)
+        role = Role.all_objects.create(company=self.company, name="TestRole", permissions=["*"])
+        self.user = User.objects.create_user(username="tecnico", password="password", company=self.company, role=role)
         self.client.force_authenticate(user=self.user)
+        self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
         self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
 
         self.crm_module, _ = Module.objects.get_or_create(
@@ -630,6 +743,7 @@ class CRMIntegrationSyncCardApiTest(APITestCase):
             name="Integração n8n",
             prefix="crmtestapikey001",
             hashed_key="",
+            scopes=["crm.sync_card", "crm.glpi_ticket"],
         )
         self.api_key.set_key(raw_key)
         self.api_key.save(update_fields=["hashed_key"])
@@ -716,7 +830,7 @@ class CRMIntegrationSyncCardApiTest(APITestCase):
         done_column = Column.all_objects.filter(company=self.company, pipeline=self.pipeline, title="Concluído").first()
 
         response = self.client.post(
-            f"/api/v1/integration/sync-card/?include_legacy_stage_fields=1",
+            "/api/v1/integration/sync-card/?include_legacy_stage_fields=1",
             {
                 "pipeline_id": self.pipeline.id,
                 "column_id": done_column.id,
@@ -738,11 +852,235 @@ class CRMIntegrationSyncCardApiTest(APITestCase):
         self.assertEqual(response.data["column_id"], done_column.id)
 
 
-class CRMSavedViewApiTest(APITestCase):
+class CRMIntegrationGLPITicketWebhookApiTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="TI Solutions", slug="ti-solutions")
         self.user = User.objects.create_user(username="tecnico", password="password", company=self.company)
-        self.other_user = User.objects.create_user(username="analista", password="password", company=self.company)
+        self.crm_module, _ = Module.objects.get_or_create(
+            code="crm",
+            defaults={"name": "CRM", "description": "Gestão comercial e de cards"},
+        )
+        self.tenant_module, _ = TenantModule.objects.get_or_create(
+            company=self.company,
+            module=self.crm_module,
+            defaults={"is_active": True},
+        )
+        self.pipeline = Pipeline.all_objects.create(company=self.company, name="Suporte TI")
+        self.first_column = Column.all_objects.filter(company=self.company, pipeline=self.pipeline).order_by("order", "id").first()
+        self.tenant_module.config = {"integration": {"glpi": {"pipeline_id": self.pipeline.id}}}
+        self.tenant_module.save(update_fields=["config"])
+
+        raw_key = APIKey.generate_raw_key()
+        self.api_key = APIKey.objects.create(
+            company=self.company,
+            name="Integração n8n GLPI",
+            prefix="crmtestapikeyglpi1",
+            hashed_key="",
+            scopes=["crm.sync_card", "crm.glpi_ticket"],
+        )
+        self.api_key.set_key(raw_key)
+        self.api_key.save(update_fields=["hashed_key"])
+        self.raw_api_key = f"{self.api_key.prefix}.{raw_key}"
+
+    @patch("apps.api_keys.tasks.update_api_key_last_used.delay")
+    def test_glpi_webhook_creates_card_using_module_config_pipeline(self, _update_last_used):
+        response = self.client.post(
+            "/api/v1/integration/glpi/tickets/",
+            {
+                "ticket_id": "123",
+                "title": "Chamado GLPI",
+                "description": "Descrição do chamado",
+                "priority_level": 4,
+                "requester": {"name": "Alice", "email": "alice@example.com"},
+            },
+            format="json",
+            HTTP_X_API_KEY=self.raw_api_key,
+            HTTP_X_COMPANY_SLUG=self.company.slug,
+        )
+
+        self.assertEqual(response.status_code, 201)
+        deal = Deal.all_objects.get(external_id="glpi:123")
+        self.assertEqual(deal.column, self.first_column)
+        self.assertEqual(deal.priority, "HIGH")
+        self.assertEqual(deal.integration_source, "glpi")
+        self.assertEqual(deal.contact.email, "alice@example.com")
+
+    @patch("apps.api_keys.tasks.update_api_key_last_used.delay")
+    def test_glpi_webhook_requires_signature_when_secret_is_configured_for_api_key(self, _update_last_used):
+        self.tenant_module.config = {"integration": {"glpi": {"pipeline_id": self.pipeline.id, "secret": "testsecret"}}}
+        self.tenant_module.save(update_fields=["config"])
+
+        payload = {
+            "ticket_id": "124",
+            "title": "Chamado GLPI Assinado",
+        }
+        raw_body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        signature = hmac.new(b"testsecret", msg=raw_body, digestmod=hashlib.sha256).hexdigest()
+
+        unauthorized = self.client.post(
+            "/api/v1/integration/glpi/tickets/",
+            payload,
+            format="json",
+            HTTP_X_API_KEY=self.raw_api_key,
+            HTTP_X_COMPANY_SLUG=self.company.slug,
+        )
+        self.assertEqual(unauthorized.status_code, 401)
+
+        ok = self.client.post(
+            "/api/v1/integration/glpi/tickets/",
+            raw_body,
+            content_type="application/json",
+            HTTP_X_API_KEY=self.raw_api_key,
+            HTTP_X_COMPANY_SLUG=self.company.slug,
+            HTTP_X_INTEGRATION_SIGNATURE=f"sha256={signature}",
+        )
+        self.assertIn(ok.status_code, (200, 201))
+
+    @patch("apps.api_keys.tasks.update_api_key_last_used.delay")
+    def test_glpi_webhook_is_idempotent_by_external_id(self, _update_last_used):
+        Deal.all_objects.create(
+            company=self.company,
+            owner=self.user,
+            contact=Contact.objects.create(company=self.company, name="Contato GLPI", email="alice@example.com"),
+            stage=self.first_column.legacy_stage,
+            column=self.first_column,
+            title="Antigo",
+            external_id="glpi:123",
+            integration_source="glpi",
+        )
+
+        response = self.client.post(
+            "/api/v1/integration/glpi/tickets/",
+            {
+                "ticket_id": "123",
+                "title": "Atualizado",
+                "priority": "URGENT",
+            },
+            format="json",
+            HTTP_X_API_KEY=self.raw_api_key,
+            HTTP_X_COMPANY_SLUG=self.company.slug,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        deal = Deal.all_objects.get(external_id="glpi:123")
+        self.assertEqual(deal.title, "Atualizado")
+        self.assertEqual(deal.priority, "URGENT")
+
+
+class CRMIntegrationOptionsApiTest(APITestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="TI Solutions", slug="ti-solutions")
+        role = Role.all_objects.create(company=self.company, name="Admin", permissions=["admin.settings_manage", "crm.deal_view"])
+        self.user = User.objects.create_user(username="admin", password="password", company=self.company, role=role)
+        self.crm_module, _ = Module.objects.get_or_create(
+            code="crm",
+            defaults={"name": "CRM", "description": "Gestão comercial e de cards"},
+        )
+        TenantModule.objects.get_or_create(
+            company=self.company,
+            module=self.crm_module,
+            defaults={"is_active": True},
+        )
+        self.client.force_authenticate(user=self.user)
+        self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
+
+        self.pipeline = Pipeline.all_objects.create(company=self.company, name="Suporte TI")
+        Column.all_objects.filter(company=self.company, pipeline=self.pipeline).order_by("order", "id").first()
+        Contact.objects.create(company=self.company, name="Contato", email="contato@example.com")
+
+    def test_integration_options_returns_lists(self):
+        response = self.client.get("/api/crm/integration/options/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("pipelines", response.data)
+        self.assertIn("columns", response.data)
+        self.assertIn("users", response.data)
+        self.assertIn("contacts", response.data)
+
+
+class CRMIntegrationInboundEventsApiTest(APITestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="TI Solutions", slug="ti-solutions")
+        role = Role.all_objects.create(company=self.company, name="Admin", permissions=["admin.settings_manage", "crm.deal_view"])
+        self.user = User.objects.create_user(username="admin", password="password", company=self.company, role=role)
+        self.crm_module, _ = Module.objects.get_or_create(
+            code="crm",
+            defaults={"name": "CRM", "description": "Gestão comercial e de cards"},
+        )
+        TenantModule.objects.get_or_create(
+            company=self.company,
+            module=self.crm_module,
+            defaults={"is_active": True},
+        )
+        self.client.force_authenticate(user=self.user)
+        self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
+
+    def test_inbound_events_lists_latest(self):
+        IntegrationInboundEvent.all_objects.create(
+            company=self.company,
+            source="glpi",
+            event_type="ticket.upsert",
+            external_id="glpi:123",
+            request_payload={"ticket_id": "123"},
+            status=IntegrationInboundStatus.PROCESSED,
+            response_status_code=201,
+        )
+
+        response = self.client.get("/api/crm/integration/inbound-events/?source=glpi")
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["external_id"], "glpi:123")
+
+
+class CRMIntegrationInboundEventReplayApiTest(APITestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="TI Solutions", slug="ti-solutions")
+        role = Role.all_objects.create(company=self.company, name="Admin", permissions=["admin.settings_manage", "crm.deal_view"])
+        self.user = User.objects.create_user(username="admin", password="password", company=self.company, role=role)
+        self.crm_module, _ = Module.objects.get_or_create(
+            code="crm",
+            defaults={"name": "CRM", "description": "Gestão comercial e de cards"},
+        )
+        self.tenant_module, _ = TenantModule.objects.get_or_create(
+            company=self.company,
+            module=self.crm_module,
+            defaults={"is_active": True},
+        )
+        self.pipeline = Pipeline.all_objects.create(company=self.company, name="Suporte TI")
+        self.first_column = Column.all_objects.filter(company=self.company, pipeline=self.pipeline).order_by("order", "id").first()
+        self.tenant_module.config = {"integration": {"glpi": {"pipeline_id": self.pipeline.id}}}
+        self.tenant_module.save(update_fields=["config"])
+
+        self.client.force_authenticate(user=self.user)
+        self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
+
+    def test_replay_creates_new_event_and_updates_deal(self):
+        original = IntegrationInboundEvent.all_objects.create(
+            company=self.company,
+            source="glpi",
+            event_type="ticket.upsert",
+            external_id="glpi:777",
+            request_payload={"ticket_id": "777", "title": "Replay Ticket"},
+            status=IntegrationInboundStatus.FAILED,
+            response_status_code=500,
+            error="Falha simulada",
+        )
+
+        response = self.client.post(f"/api/crm/integration/inbound-events/{original.id}/replay/")
+        self.assertIn(response.status_code, (200, 201))
+        self.assertEqual(response.data["external_id"], "glpi:777")
+        self.assertEqual(response.data["column_id"], self.first_column.id)
+
+        replay = IntegrationInboundEvent.all_objects.filter(company=self.company, replayed_from=original).order_by("-id").first()
+        self.assertIsNotNone(replay)
+        self.assertEqual(replay.status, IntegrationInboundStatus.PROCESSED)
+
+
+class CRMSavedViewApiTest(APITestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="TI Solutions", slug="ti-solutions")
+        role = Role.all_objects.create(company=self.company, name="TestRole", permissions=["*"])
+        self.user = User.objects.create_user(username="tecnico", password="password", company=self.company, role=role)
+        self.other_user = User.objects.create_user(username="analista", password="password", company=self.company, role=role)
         self.client.force_authenticate(user=self.user)
         self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
         self.crm_module, _ = Module.objects.get_or_create(

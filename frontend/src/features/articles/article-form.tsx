@@ -458,6 +458,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                             width={28}
                             height={28}
                             className="h-full w-full object-cover"
+                            unoptimized
                           />
                         ) : (
                           <Globe className="h-4 w-4" />
@@ -750,6 +751,7 @@ export function ArticleForm({ initialData, onSuccess, onCancel }: ArticleFormPro
                       alt="Preview"
                       fill
                       className="object-cover transition-transform group-hover:scale-105"
+                      unoptimized
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Button

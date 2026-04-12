@@ -53,7 +53,7 @@ class AccountService:
             return False
 
     @staticmethod
-    def create_invitation(sender, company, email, role):
+    def create_invitation(sender, company, email, role, crm_groups=None):
         """
         Creates an invitation and sends the invitation email.
         """
@@ -61,6 +61,8 @@ class AccountService:
         Invitation.objects.filter(company=company, email=email, status="pending").update(status="expired")
 
         invitation = Invitation.objects.create(company=company, invited_by=sender, email=email, role=role)
+        if crm_groups:
+            invitation.crm_groups.set(crm_groups)
 
         invite_url = f"{settings.FRONTEND_URL}/accept-invite?token={invitation.token}"
 
@@ -83,46 +85,60 @@ class AccountService:
             from django.db import transaction
 
             with transaction.atomic():
-                invite = Invitation.all_objects.select_for_update().select_related("company", "role").get(token=token, status="pending")
-
-                if invite.is_expired:
-                    invite.status = "expired"
-                    invite.save()
-                    return None, "Este convite expirou."
-
-                try:
-                    validate_password(password)
-                except ValidationError as e:
-                    return None, e.messages[0]
-
-                # A6: gerar username único — email como username pode causar IntegrityError
-                # se o mesmo email for convidado por dois tenants diferentes
-                base_username = f"{invite.email.split('@')[0]}_{invite.company.slug}"
-                # Limita o comprimento (AbstractUser.username max_length=150)
-                base_username = base_username[:140]
-                username = base_username
-                counter = 1
-                while User.all_objects.filter(username=username).exists():
-                    username = f"{base_username}_{counter}"
-                    counter += 1
-
-                # Create user
-                user = User.objects.create_user(
-                    company=invite.company,
-                    username=username,
-                    email=invite.email,
-                    first_name=first_name,
-                    last_name=last_name,
-                    password=password,
-                    role=invite.role,
+                invite = (
+                    Invitation.all_objects.select_for_update()
+                    .select_related("company", "role")
+                    .get(token=token, status="pending")
                 )
 
-                # Update invitation status
-                invite.status = "accepted"
-                invite.accepted_at = timezone.now()
-                invite.save(update_fields=["status", "accepted_at"])
+                from shared_kernel.tenant_context import get_current_company, set_current_company
 
-                return user, None
+                previous_company = get_current_company()
+                set_current_company(invite.company)
+                try:
+                    if invite.is_expired:
+                        invite.status = "expired"
+                        invite.save()
+                        return None, "Este convite expirou."
+
+                    try:
+                        validate_password(password)
+                    except ValidationError as e:
+                        return None, e.messages[0]
+
+                    # A6: gerar username único — email como username pode causar IntegrityError
+                    # se o mesmo email for convidado por dois tenants diferentes
+                    base_username = f"{invite.email.split('@')[0]}_{invite.company.slug}"
+                    # Limita o comprimento (AbstractUser.username max_length=150)
+                    base_username = base_username[:140]
+                    username = base_username
+                    counter = 1
+                    while User.all_objects.filter(username=username).exists():
+                        username = f"{base_username}_{counter}"
+                        counter += 1
+
+                    user = User.objects.create_user(
+                        company=invite.company,
+                        username=username,
+                        email=invite.email,
+                        first_name=first_name,
+                        last_name=last_name,
+                        password=password,
+                        role=invite.role,
+                    )
+                    group_ids = list(
+                        invite.crm_groups.through.objects.filter(invitation_id=invite.id).values_list("crmgroup_id", flat=True)
+                    )
+                    if group_ids:
+                        user.crm_groups.set(group_ids)
+
+                    invite.status = "accepted"
+                    invite.accepted_at = timezone.now()
+                    invite.save(update_fields=["status", "accepted_at"])
+
+                    return user, None
+                finally:
+                    set_current_company(previous_company)
 
         except Invitation.DoesNotExist:
             return None, "Convite inválido ou já utilizado."

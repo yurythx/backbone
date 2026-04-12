@@ -94,16 +94,18 @@ export function CreateDealModal({ pipeline }: CreateDealModalProps) {
           <Plus className="mr-2 h-4 w-4" /> Novo Card
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] glass overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[520px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 glass grid grid-rows-[auto_1fr]">
+        <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
           <DialogTitle>Novo Card no CRM</DialogTitle>
           <DialogDescription>
             Crie um novo chamado ou negócio no seu pipeline.
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+        <div className="min-h-0 overflow-y-auto">
+          <div className="p-4 sm:p-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="title"
@@ -118,7 +120,7 @@ export function CreateDealModal({ pipeline }: CreateDealModalProps) {
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="contact"
@@ -226,8 +228,10 @@ export function CreateDealModal({ pipeline }: CreateDealModalProps) {
                  {createDeal.isPending ? "Criando..." : "Salvar Card"}
                </Button>
             </div>
-          </form>
-        </Form>
+              </form>
+            </Form>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

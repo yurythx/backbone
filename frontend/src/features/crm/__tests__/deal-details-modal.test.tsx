@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import { DealDetailsModal } from "../deal-details-modal"
 import * as useCRMHook from "../use-crm"
@@ -49,6 +50,8 @@ vi.mock("@tanstack/react-query", async () => {
 describe("DealDetailsModal", () => {
   const mockUpdateDeal = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }
   const mockAddDealNote = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }
+  const mockAddDealAttachment = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }
+  const mockDeleteDealAttachment = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }
   const mockPipeline: Pipeline = {
     id: 1,
     name: "Operação",
@@ -130,6 +133,8 @@ describe("DealDetailsModal", () => {
       pipelines: [mockPipeline],
       updateDeal: mockUpdateDeal,
       addDealNote: mockAddDealNote,
+      addDealAttachment: mockAddDealAttachment,
+      deleteDealAttachment: mockDeleteDealAttachment,
     } as never)
 
     const reactQuery = await import("@tanstack/react-query")
@@ -140,11 +145,21 @@ describe("DealDetailsModal", () => {
     } as never)
   })
 
-  it("destaca o ultimo update manual e resume os filtros do historico", () => {
-    render(<DealDetailsModal deal={mockDeal} open onOpenChange={vi.fn()} />)
+  it("destaca o ultimo update manual e resume os filtros do historico", async () => {
+    const user = userEvent.setup()
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DealDetailsModal deal={mockDeal} open onOpenChange={vi.fn()} />
+      </QueryClientProvider>
+    )
 
+    await user.click(screen.getByRole("tab", { name: /Visão geral/i }))
+    await waitFor(() => expect(screen.getByText("Último update manual")).toBeInTheDocument())
     expect(screen.getByText("Último update manual")).toBeInTheDocument()
     expect(screen.getAllByText("Cliente confirmou a janela de manutenção para amanhã.").length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole("tab", { name: /Histórico/i }))
     expect(screen.getByRole("button", { name: "Updates (2)" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Movimentações (1)" })).toBeInTheDocument()
     expect(screen.getByText("Exibindo 4 registros para o filtro selecionado.")).toBeInTheDocument()
@@ -153,8 +168,14 @@ describe("DealDetailsModal", () => {
   it("filtra o historico por tipo de atividade e mostra estado vazio quando necessario", async () => {
     const user = userEvent.setup()
 
-    render(<DealDetailsModal deal={mockDeal} open onOpenChange={vi.fn()} />)
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DealDetailsModal deal={mockDeal} open onOpenChange={vi.fn()} />
+      </QueryClientProvider>
+    )
 
+    await user.click(screen.getByRole("tab", { name: /Histórico/i }))
     await user.click(screen.getByRole("button", { name: "Movimentações (1)" }))
 
     expect(screen.getByText("Exibindo 1 registro para o filtro selecionado.")).toBeInTheDocument()

@@ -99,7 +99,18 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
   const [lightboxIndex, setLightboxIndex] = React.useState(0)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
   const [isMuted, setIsMuted] = React.useState(false)
-  const [isBlocked, setIsBlocked] = React.useState(false)
+  type ContactBlock = { id: number; blocked: number }
+  const { data: blocks } = useQuery<ContactBlock[]>({
+    queryKey: ["messenger-blocks"],
+    queryFn: async () => {
+      const res = await api.get<{ results: ContactBlock[] } | ContactBlock[]>("/api/messenger/blocks/")
+      return Array.isArray(res.data) ? res.data : res.data?.results ?? []
+    },
+    staleTime: 30_000,
+    enabled: !!currentUser,
+  })
+  const blockedEntry = React.useMemo(() => (blocks ?? []).find((b) => b.blocked === contact.id) ?? null, [blocks, contact.id])
+  const isBlocked = !!blockedEntry
   const [isPinned, setIsPinned] = React.useState(false)
   const [seekingTarget, setSeekingTarget] = React.useState(false)
   const [highlightedMsgId, setHighlightedMsgId] = React.useState<number | null>(null)
@@ -136,29 +147,26 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     return candidate.phone || candidate.phone_number
   }, [profile])
 
-  React.useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('blockedContacts') : null
-      const arr = raw ? JSON.parse(raw) : []
-      setIsBlocked(Array.isArray(arr) && arr.includes(contact.id))
-    } catch {
-      setIsBlocked(false)
-    }
-  }, [contact.id])
+  const blockMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUser) return
+      if (blockedEntry) {
+        await api.delete(`/api/messenger/blocks/${blockedEntry.id}/`)
+        return
+      }
+      await api.post("/api/messenger/blocks/", { blocked: contact.id })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messenger-blocks"] })
+      toast.success(isBlocked ? "Contato desbloqueado" : "Contato bloqueado")
+    },
+    onError: () => {
+      toast.error("Erro ao atualizar bloqueio")
+    },
+  })
 
   const toggleBlock = () => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('blockedContacts') : null
-      let arr: number[] = []
-      if (raw) {
-        try { arr = JSON.parse(raw) } catch { arr = [] }
-      }
-      const exists = arr.includes(contact.id)
-      const next = exists ? arr.filter(id => id !== contact.id) : arr.concat(contact.id)
-      localStorage.setItem('blockedContacts', JSON.stringify(next))
-      setIsBlocked(!exists)
-      toast.success(!exists ? "Contato bloqueado" : "Contato desbloqueado")
-    } catch { }
+    blockMutation.mutate()
   }
 
   // #2 Fix: toggleMute/togglePin now call backend REST API and fall back gracefully
@@ -547,6 +555,10 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
       lastPayloadRef.current = null
       type MessagesPage = { results: Message[]; next: string | null }
       type MessagesData = { pages: MessagesPage[]; pageParams?: unknown[] }
+      const withLocalStatus = (message: Message, local_status: Message["local_status"]): Message => ({
+        ...message,
+        local_status,
+      })
       queryClient.setQueryData<MessagesData | undefined>(['messages', conversation?.id], (old) => {
         if (!old || !Array.isArray(old.pages)) return old
         const pages = old.pages.map((p) => ({
@@ -557,12 +569,12 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
         const pagesWithStatus = pages.map((p) => ({
           ...p,
           results: Array.isArray(p.results)
-            ? p.results.map((m) => (m.id === serverMessage.id ? { ...m, local_status: 'sent' } : m))
+            ? p.results.map((m) => (m.id === serverMessage.id ? withLocalStatus(m, "sent") : m))
             : p.results,
         }))
         if (alreadyExists) return { pages: pagesWithStatus, pageParams: old.pageParams ?? [] }
         const first = pagesWithStatus[0]
-        pagesWithStatus[0] = { ...first, results: [...(first.results ?? []), { ...serverMessage, local_status: 'sent' }] }
+        pagesWithStatus[0] = { ...first, results: [...first.results, withLocalStatus(serverMessage, "sent")] }
         return { pages: pagesWithStatus, pageParams: old.pageParams ?? [] }
       })
       if (conversation?.id) {
@@ -584,13 +596,17 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     onError: (_err, variables) => {
       type MessagesPage = { results: Message[]; next: string | null }
       type MessagesData = { pages: MessagesPage[]; pageParams?: unknown[] }
+      const withLocalStatus = (message: Message, local_status: Message["local_status"]): Message => ({
+        ...message,
+        local_status,
+      })
       queryClient.setQueryData<MessagesData | undefined>(['messages', conversation?.id], (old) => {
         if (!old || !Array.isArray(old.pages)) return old
         return {
           pages: old.pages.map((p) => ({
             ...p,
             results: Array.isArray(p.results)
-              ? p.results.map((m) => (m.client_id === variables.clientId ? { ...m, local_status: 'failed' } : m))
+              ? p.results.map((m) => (m.client_id === variables.clientId ? withLocalStatus(m, "failed") : m))
               : p.results,
           })),
           pageParams: old.pageParams ?? [],
@@ -767,9 +783,6 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
     lastPayloadRef.current = { content: messageInput, file: selectedFile, replyToId: replyingTo?.id, clientId, optimisticId }
     retryCountRef.current = 0
     setSendError(null)
-    if (process.env.NODE_ENV === 'development') {
-      console.log("[ChatWindow] Mutating sendMessageMutation with:", lastPayloadRef.current)
-    }
     sendMessageMutation.mutate(lastPayloadRef.current)
   }
 
@@ -1683,6 +1696,23 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
             </div>
           )}
 
+          {isBlocked && (
+            <div className="w-full flex items-center justify-between gap-3 text-sm bg-muted border rounded-xl p-3">
+              <div className="text-muted-foreground">
+                Você bloqueou este contato. Desbloqueie para enviar mensagens.
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={toggleBlock}
+                disabled={blockMutation.isPending}
+              >
+                Desbloquear
+              </Button>
+            </div>
+          )}
+
           <form onSubmit={handleSend} className="flex gap-2 items-end">
             <div className="flex-1 relative bg-muted rounded-xl border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
               <Input
@@ -1712,6 +1742,7 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-primary"
+                      disabled={isBlocked}
                     >
                       <SmilePlus className="h-4 w-4" />
                     </Button>
@@ -1854,8 +1885,8 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
         </AlertDialogContent>
       </AlertDialog>
       <Dialog open={!!messageToInspect} onOpenChange={(open) => { if (!open) setMessageToInspect(null) }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-md max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr]">
+          <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
             <DialogTitle>Informações da mensagem</DialogTitle>
             <DialogDescription>
               {messageToInspect?.content
@@ -1865,76 +1896,78 @@ export function ChatWindow({ contact, currentUser, onBack, conversationId }: Cha
                   : 'Mensagem'}
             </DialogDescription>
           </DialogHeader>
-          {isLoadingReceipts ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <div className="text-sm font-semibold">Entregue ({receipts?.delivered_count ?? 0})</div>
-                <ScrollArea className="h-36 rounded-md border p-2">
-                  <div className="grid gap-2">
-                    {receipts?.delivered?.length ? receipts.delivered.map((d) => (
-                      <div key={`${d.user_id}:${d.delivered_at}`} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="font-medium">{d.username}</span>
-                        <span className="text-muted-foreground">
-                          {new Date(d.delivered_at).toLocaleString()}
-                        </span>
-                      </div>
-                    )) : (
-                      <div className="text-sm text-muted-foreground">Ainda não entregue.</div>
-                    )}
-                  </div>
-                </ScrollArea>
+          <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+            {isLoadingReceipts ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
               </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-semibold">Não entregue ({receipts?.pending_delivered?.length ?? 0})</div>
-                <ScrollArea className="h-28 rounded-md border p-2">
-                  <div className="grid gap-2">
-                    {receipts?.pending_delivered?.length ? receipts.pending_delivered.map((u) => (
-                      <div key={u.user_id} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="font-medium">{u.username}</span>
-                      </div>
-                    )) : (
-                      <div className="text-sm text-muted-foreground">Entregue para todos.</div>
-                    )}
-                  </div>
-                </ScrollArea>
+            ) : (
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <div className="text-sm font-semibold">Entregue ({receipts?.delivered_count ?? 0})</div>
+                  <ScrollArea className="h-36 rounded-md border p-2">
+                    <div className="grid gap-2">
+                      {receipts?.delivered?.length ? receipts.delivered.map((d) => (
+                        <div key={`${d.user_id}:${d.delivered_at}`} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="font-medium">{d.username}</span>
+                          <span className="text-muted-foreground">
+                            {new Date(d.delivered_at).toLocaleString()}
+                          </span>
+                        </div>
+                      )) : (
+                        <div className="text-sm text-muted-foreground">Ainda não entregue.</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+                <div className="grid gap-2">
+                  <div className="text-sm font-semibold">Não entregue ({receipts?.pending_delivered?.length ?? 0})</div>
+                  <ScrollArea className="h-28 rounded-md border p-2">
+                    <div className="grid gap-2">
+                      {receipts?.pending_delivered?.length ? receipts.pending_delivered.map((u) => (
+                        <div key={u.user_id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="font-medium">{u.username}</span>
+                        </div>
+                      )) : (
+                        <div className="text-sm text-muted-foreground">Entregue para todos.</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+                <div className="grid gap-2">
+                  <div className="text-sm font-semibold">Lido ({receipts?.read_count ?? 0})</div>
+                  <ScrollArea className="h-36 rounded-md border p-2">
+                    <div className="grid gap-2">
+                      {receipts?.read?.length ? receipts.read.map((r) => (
+                        <div key={`${r.user_id}:${r.read_at}`} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="font-medium">{r.username}</span>
+                          <span className="text-muted-foreground">
+                            {new Date(r.read_at).toLocaleString()}
+                          </span>
+                        </div>
+                      )) : (
+                        <div className="text-sm text-muted-foreground">Ainda não lida.</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+                <div className="grid gap-2">
+                  <div className="text-sm font-semibold">Não lida ({receipts?.pending_read?.length ?? 0})</div>
+                  <ScrollArea className="h-28 rounded-md border p-2">
+                    <div className="grid gap-2">
+                      {receipts?.pending_read?.length ? receipts.pending_read.map((u) => (
+                        <div key={u.user_id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="font-medium">{u.username}</span>
+                        </div>
+                      )) : (
+                        <div className="text-sm text-muted-foreground">Lida por todos.</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
               </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-semibold">Lido ({receipts?.read_count ?? 0})</div>
-                <ScrollArea className="h-36 rounded-md border p-2">
-                  <div className="grid gap-2">
-                    {receipts?.read?.length ? receipts.read.map((r) => (
-                      <div key={`${r.user_id}:${r.read_at}`} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="font-medium">{r.username}</span>
-                        <span className="text-muted-foreground">
-                          {new Date(r.read_at).toLocaleString()}
-                        </span>
-                      </div>
-                    )) : (
-                      <div className="text-sm text-muted-foreground">Ainda não lida.</div>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-semibold">Não lida ({receipts?.pending_read?.length ?? 0})</div>
-                <ScrollArea className="h-28 rounded-md border p-2">
-                  <div className="grid gap-2">
-                    {receipts?.pending_read?.length ? receipts.pending_read.map((u) => (
-                      <div key={u.user_id} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="font-medium">{u.username}</span>
-                      </div>
-                    )) : (
-                      <div className="text-sm text-muted-foreground">Lida por todos.</div>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </DialogContent>
       </Dialog>
       <Lightbox

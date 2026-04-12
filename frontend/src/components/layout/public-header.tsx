@@ -17,6 +17,9 @@ export async function PublicHeader() {
             <Link href="/p/ecossistema-de-servicos">Serviços</Link>
           </Button>
           <Button asChild variant="ghost" className="rounded-xl">
+            <Link href="/p/sobre">Sobre</Link>
+          </Button>
+          <Button asChild variant="ghost" className="rounded-xl">
             <Link href={hasSession ? "/artigos" : "/p/artigos"}>Artigos</Link>
           </Button>
           {!hasSession && (

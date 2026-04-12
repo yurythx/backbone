@@ -43,7 +43,8 @@ describe('useCRM', () => {
     const mockPipelines = [{ id: 1, name: 'Vendas', stages: [], columns: [] }]
     const mockDeals = [{ id: 1, title: 'Negócio 1', stage: 1, column: 10, column_title: 'Novo' }]
     
-    ;(api.get as any).mockImplementation((url: string) => {
+    const mockGet = api.get as unknown as ReturnType<typeof vi.fn>
+    mockGet.mockImplementation((url: string) => {
       if (url === '/api/crm/pipelines/') return Promise.resolve({ data: mockPipelines })
       if (url === '/api/crm/deals/?omit_legacy_stage_fields=1') return Promise.resolve({ data: mockDeals })
       if (url === '/api/crm/contacts/') return Promise.resolve({ data: [] })
@@ -67,7 +68,8 @@ describe('useCRM', () => {
   it('should update deal optimistically', async () => {
     const { result } = renderHook(() => useCRM(), { wrapper: createWrapper() })
     
-    ;(api.patch as any).mockResolvedValueOnce({ data: { id: 1, column: 2 } })
+    const mockPatch = api.patch as unknown as ReturnType<typeof vi.fn>
+    mockPatch.mockResolvedValueOnce({ data: { id: 1, column: 2 } })
 
     // Call mutation
     result.current.updateDeal.mutate({ id: 1, column: 2 })
@@ -78,7 +80,6 @@ describe('useCRM', () => {
   })
 
   it('should publish a manual note update for a deal', async () => {
-    const wrapper = createWrapper()
     const client = new QueryClient()
     client.setQueryData(['crm-deals'], [{
       id: 1,
@@ -118,7 +119,7 @@ describe('useCRM', () => {
           },
         ],
       },
-    } as any)
+    } as unknown)
 
     await result.current.addDealNote.mutateAsync({
       dealId: 1,

@@ -78,16 +78,18 @@ class Command(BaseCommand):
         )
 
         # 6. SUPER ADMIN USER (suporte / suporte123)
-        user, created = User.all_objects.get_or_create(
-            username="suporte",
-            defaults={
-                "company": company,
-                "email": "suporte@backbone.com",
-                "is_staff": True,
-                "is_superuser": True,
-                "role": admin_role,
-            },
-        )
+        user = User.all_objects.filter(username="suporte").first()
+        created = False
+        if not user:
+            user = User.all_objects.create(
+                username="suporte",
+                email="suporte@backbone.com",
+                company=company,
+                is_staff=True,
+                is_superuser=True,
+                role=admin_role,
+            )
+            created = True
 
         if created:
             user.set_password("suporte123")
@@ -100,21 +102,28 @@ class Command(BaseCommand):
         colab_role, _ = Role.objects.get_or_create(
             company=company,
             name="Colaborador",
-            defaults={"permissions": ["articles.view_*", "articles.add_article", "messenger.*", "pages.view_page"]},
+            defaults={"permissions": ["articles.view_*", "articles.add_article", "messenger.*", "pages.view_page", "media.media_view", "media.media_upload"]},
         )
+        required_permissions = {"media.media_view", "media.media_upload"}
+        current_permissions = set(colab_role.permissions or [])
+        if not required_permissions.issubset(current_permissions):
+            colab_role.permissions = sorted(current_permissions | required_permissions)
+            colab_role.save(update_fields=["permissions"])
         self.stdout.write(f"  [+] Role {colab_role.name} verified")
 
         # 8. TEST USER (yuri / yuri123)
-        test_user, created = User.all_objects.get_or_create(
-            username="yuri",
-            defaults={
-                "company": company,
-                "email": "yuri@backbone.com",
-                "first_name": "Yuri",
-                "last_name": "Menezes",
-                "role": colab_role,
-            },
-        )
+        test_user = User.all_objects.filter(username="yuri").first()
+        created = False
+        if not test_user:
+            test_user = User.all_objects.create(
+                username="yuri",
+                email="yuri@backbone.com",
+                company=company,
+                first_name="Yuri",
+                last_name="Menezes",
+                role=colab_role,
+            )
+            created = True
 
         if created:
             test_user.set_password("yuri123")
@@ -125,13 +134,17 @@ class Command(BaseCommand):
         cats = ["Geral", "Notícias", "Tecnologia", "RH"]
         cat_objs = []
         for name in cats:
-            obj, _ = Category.objects.get_or_create(company=company, name=name, defaults={"slug": slugify(name)})
+            obj = Category.objects.filter(company=company, name=name).order_by("id").first()
+            if not obj:
+                obj = Category.objects.create(company=company, name=name, slug=slugify(name))
             cat_objs.append(obj)
 
         tags = ["Backbone", "Novidade", "Tutorial", "Destaque"]
         tag_objs = []
         for name in tags:
-            obj, _ = Tag.objects.get_or_create(company=company, name=name, defaults={"slug": slugify(name)})
+            obj = Tag.objects.filter(company=company, name=name).order_by("id").first()
+            if not obj:
+                obj = Tag.objects.create(company=company, name=name, slug=slugify(name))
             tag_objs.append(obj)
         self.stdout.write(self.style.SUCCESS("  [+] Categories and Tags created"))
 
@@ -263,6 +276,7 @@ class Command(BaseCommand):
             {"code": "pages", "name": "Páginas", "description": "Páginas institucionais"},
             {"code": "messenger", "name": "Mensagens", "description": "Chat interno"},
             {"code": "crm", "name": "CRM", "description": "Gestão de leads e chamados"},
+            {"code": "media", "name": "Mídia", "description": "Biblioteca de arquivos e uploads"},
         ]
 
         for mod_data in modules_data:

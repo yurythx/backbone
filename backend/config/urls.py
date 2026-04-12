@@ -6,7 +6,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 
 from apps.core.health import health_check
 from apps.core.media_proxy import MediaProxyView
-from apps.crm.views import IntegrationSyncCardAPIView
+from apps.crm.views import IntegrationGLPITicketWebhookAPIView, IntegrationSyncCardAPIView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -31,6 +31,7 @@ urlpatterns = [
     path("api/media/", include("apps.media.urls")),
     path("api/crm/", include("apps.crm.urls")),
     path("api/v1/integration/sync-card/", IntegrationSyncCardAPIView.as_view(), name="crm-sync-card"),
+    path("api/v1/integration/glpi/tickets/", IntegrationGLPITicketWebhookAPIView.as_view(), name="crm-glpi-ticket-webhook"),
     # Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

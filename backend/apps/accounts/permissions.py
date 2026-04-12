@@ -27,6 +27,20 @@ AVAILABLE_PERMISSIONS = {
     # Messenger
     "messenger.view": "Acesso ao Chat",
     "messenger.admin": "Administrar Grupos/Conversas",
+    # CRM
+    "crm.deal_view": "Visualizar CRM (cards)",
+    "crm.deal_edit": "Editar cards do CRM",
+    "crm.deal_delete": "Excluir cards do CRM",
+    "crm.deal_comment": "Publicar updates no CRM",
+    "crm.deal_attach": "Anexar imagens/arquivos no CRM",
+    "crm.deal_attach_delete": "Remover anexos no CRM",
+    "crm.saved_view_manage": "Gerenciar vistas salvas do CRM",
+    "crm.pipeline_manage": "Gerenciar pipelines do CRM",
+    "crm.column_manage": "Gerenciar colunas do CRM",
+    "crm.contact_manage": "Gerenciar contatos do CRM",
+    # Calendário
+    "calendar.event_view": "Visualizar Calendário",
+    "calendar.event_manage": "Criar/Editar eventos do Calendário",
     # Financeiro / Folha
     "finance.view_financial": "Visualizar Financeiro",
     "finance.manage_financial": "Gerenciar Financeiro",
@@ -35,6 +49,9 @@ AVAILABLE_PERMISSIONS = {
     "admin.smtp_manage": "Configurações de E-mail",
     "admin.view_dashboard": "Acessar Painel Administrativo",
     "admin.settings_manage": "Configurações da Empresa",
+    # Configurações (Admin)
+    "settings.api_keys_manage": "Gerenciar Chaves de API",
+    "settings.webhooks_manage": "Gerenciar Webhooks",
 }
 
 DEFAULT_ROLES = {
@@ -58,6 +75,14 @@ DEFAULT_ROLES = {
             "media.media_upload",
             "messenger.view",
             "finance.view_financial",
+            "crm.deal_view",
+            "crm.deal_edit",
+            "crm.deal_comment",
+            "crm.deal_attach",
+            "crm.deal_attach_delete",
+            "crm.saved_view_manage",
+            "calendar.event_view",
+            "calendar.event_manage",
             "admin.view_dashboard",
         ],
     },
@@ -69,6 +94,9 @@ DEFAULT_ROLES = {
             "media.media_view",
             "messenger.view",
             "finance.view_financial",
+            "crm.deal_view",
+            "crm.deal_comment",
+            "calendar.event_view",
         ],
     },
     "Colaborador": {
@@ -79,6 +107,12 @@ DEFAULT_ROLES = {
             "media.media_view",
             "messenger.view",
             "finance.view_financial",
+            "crm.deal_view",
+            "crm.deal_edit",
+            "crm.deal_comment",
+            "crm.deal_attach",
+            "crm.deal_attach_delete",
+            "calendar.event_view",
         ],
     },
 }
@@ -99,11 +133,24 @@ class HasRolePermission(permissions.BasePermission):
         if not required_permission:
             return True  # Se a view não exige permissão específica, passa
 
-        # Verifica se usuário tem role
-        if not hasattr(request.user, "role") or not request.user.role:
-            return False
+        role = getattr(request.user, "role", None)
+        perms = getattr(role, "permissions", None)
+        if not isinstance(perms, list):
+            role_id = getattr(request.user, "role_id", None)
+            if not role_id:
+                return False
+            from .models import Role
 
-        perms = request.user.role.permissions
+            company = getattr(request, "company", None) or getattr(request.user, "company", None)
+            try:
+                role = Role.all_objects.only("permissions", "company_id").get(id=role_id)
+            except Role.DoesNotExist:
+                return False
+            if company and getattr(role, "company_id", None) != company.id:
+                return False
+            perms = role.permissions
+        if not isinstance(perms, list):
+            return False
         if isinstance(perms, list) and "*" in perms:
             return True
 
@@ -150,10 +197,24 @@ class ActionRolePermission(permissions.BasePermission):
         if not required:
             return True
 
-        if not hasattr(request.user, "role") or not request.user.role:
-            return False
+        role = getattr(request.user, "role", None)
+        perms = getattr(role, "permissions", None)
+        if not isinstance(perms, list):
+            role_id = getattr(request.user, "role_id", None)
+            if not role_id:
+                return False
+            from .models import Role
 
-        perms = request.user.role.permissions
+            company = getattr(request, "company", None) or getattr(request.user, "company", None)
+            try:
+                role = Role.all_objects.only("permissions", "company_id").get(id=role_id)
+            except Role.DoesNotExist:
+                return False
+            if company and getattr(role, "company_id", None) != company.id:
+                return False
+            perms = role.permissions
+        if not isinstance(perms, list):
+            return False
         if isinstance(perms, list) and "*" in perms:
             return True
 
@@ -172,10 +233,22 @@ class AnyRolePermission(permissions.BasePermission):
         if not required_list:
             return True
 
-        if not hasattr(request.user, "role") or not request.user.role:
-            return False
+        role = getattr(request.user, "role", None)
+        perms = getattr(role, "permissions", None)
+        if not isinstance(perms, list):
+            role_id = getattr(request.user, "role_id", None)
+            if not role_id:
+                return False
+            from .models import Role
 
-        perms = request.user.role.permissions
+            company = getattr(request, "company", None) or getattr(request.user, "company", None)
+            try:
+                role = Role.all_objects.only("permissions", "company_id").get(id=role_id)
+            except Role.DoesNotExist:
+                return False
+            if company and getattr(role, "company_id", None) != company.id:
+                return False
+            perms = role.permissions
         if not isinstance(perms, list):
             return False
 

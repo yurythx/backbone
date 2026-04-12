@@ -36,7 +36,7 @@ export default function RegisterPage() {
         <div className="max-w-md space-y-6 relative z-10 text-center">
           <div className="flex justify-center mb-8">
             {logo ? (
-              <Image src={logo} alt={companyName || 'Logo'} width={64} height={64} className="object-contain" />
+              <Image src={logo} alt={companyName || 'Logo'} width={64} height={64} priority className="object-contain" />
             ) : (
               <div className="h-16 w-16 bg-primary rounded-2xl flex items-center justify-center text-primary-foreground font-bold text-2xl">
                 B
@@ -55,7 +55,7 @@ export default function RegisterPage() {
         <div className="w-full max-w-md space-y-8">
           <div className="md:hidden flex flex-col items-center gap-4 mb-8 text-center">
             {logo ? (
-              <Image src={logo} alt={companyName || 'Logo'} width={48} height={48} className="object-contain" />
+              <Image src={logo} alt={companyName || 'Logo'} width={48} height={48} priority className="object-contain" />
             ) : (
               <div className="h-12 w-12 bg-primary rounded-xl" />
             )}

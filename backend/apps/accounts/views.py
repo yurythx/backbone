@@ -29,7 +29,7 @@ User = get_user_model()
 @extend_schema(tags=["Accounts - Auth"])
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
-    
+
     from rest_framework.throttling import ScopedRateThrottle
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'login_attempt'
@@ -206,12 +206,17 @@ class UserViewSet(viewsets.ModelViewSet):
         # Se for superusuário, vê todos os usuários de todas as empresas
         if self.request.user.is_superuser:
             qs = User.all_objects.select_related("role", "company").all().order_by("username")
+            # Permite filtrar por empresa via query param para superusuarios
+            company_slug = self.request.query_params.get("company_slug")
+            if company_slug:
+                qs = qs.filter(company__slug=company_slug)
         else:
             # Regular tenant users use standard objects (which already filters by tenant)
             qs = User.objects.select_related("role", "company").all().order_by("username")
 
         role_id = self.request.query_params.get("role")
         q = self.request.query_params.get("q")
+        active = self.request.query_params.get("active")
 
         if role_id:
             qs = qs.filter(role_id=role_id)
@@ -224,6 +229,12 @@ class UserViewSet(viewsets.ModelViewSet):
                 | Q(first_name__icontains=q)
                 | Q(last_name__icontains=q)
             )
+        if active is not None:
+            normalized = str(active).strip().lower()
+            if normalized in {"1", "true", "yes", "y"}:
+                qs = qs.filter(is_active=True)
+            elif normalized in {"0", "false", "no", "n"}:
+                qs = qs.filter(is_active=False)
 
         return qs
 
@@ -430,6 +441,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             company=self.request.company,
             email=serializer.validated_data["email"],
             role=serializer.validated_data["role"],
+            crm_groups=serializer.validated_data.get("crm_groups") or [],
         )
 
     @action(detail=True, methods=["post"])

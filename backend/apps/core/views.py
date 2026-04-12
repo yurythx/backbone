@@ -8,12 +8,14 @@ from rest_framework import generics, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.accounts.permissions import HasRolePermission
 from apps.articles.models import Article, Category
 
 from .models import AuditLog, Company, LDAPConfig
 from .serializers import (
     AuditLogSerializer,
     CompanySerializer,
+    CompanyUpdateSerializer,
     DashboardStatsSerializer,
     LDAPConfigSerializer,
     RobotsSerializer,
@@ -103,11 +105,22 @@ class CompanyViewSet(viewsets.ModelViewSet):
             data.append({"name": c.name, "slug": c.slug, "logo": logo_url})
         return Response(data)
 
-    @action(detail=False, methods=["get"], permission_classes=[permissions.IsAuthenticated])
+    @action(detail=False, methods=["get", "patch"], permission_classes=[permissions.IsAuthenticated])
     def current(self, request):
         """Retorna os dados da empresa atual do usuário autenticado."""
         if not request.company:
             return Response({"detail": "No tenant context found."}, status=status.HTTP_404_NOT_FOUND)
+        if request.method == "PATCH":
+            if not request.user.is_superuser:
+                role = getattr(request.user, "role", None)
+                perms = role.permissions if isinstance(getattr(role, "permissions", None), list) else []
+                if "*" not in perms and "admin.settings_manage" not in perms:
+                    return Response({"detail": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
+            serializer = CompanyUpdateSerializer(request.company, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(CompanySerializer(request.company, context={"request": request}).data)
+
         serializer = self.get_serializer(request.company)
         return Response(serializer.data)
 
@@ -191,7 +204,8 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = AuditLogSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasRolePermission]
+    required_permission = "admin.view_dashboard"
 
     def get_queryset(self):
         queryset = AuditLog.objects.select_related("user").all().order_by("-created_at")
@@ -221,7 +235,8 @@ class DashboardStatsView(generics.GenericAPIView):
     Endpoint para retornar estatísticas ricas e comparativas para o dashboard.
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasRolePermission]
+    required_permission = "admin.view_dashboard"
     serializer_class = DashboardStatsSerializer
 
     @extend_schema(tags=["Core"], responses={200: DashboardStatsSerializer})
@@ -423,7 +438,8 @@ class LDAPConfigViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = LDAPConfigSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasRolePermission]
+    required_permission = "admin.settings_manage"
 
     def get_queryset(self):
         """Filtrar por tenant atual."""

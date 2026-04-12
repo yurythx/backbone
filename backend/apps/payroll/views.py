@@ -293,20 +293,20 @@ class PayrollRunViewSet(viewsets.ReadOnlyModelViewSet):
     def sign(self, request, pk=None):
         """Permite que o funcionário assine digitalmente seu holerite."""
         from django.utils import timezone
-        
+
         run: PayrollRun = self.get_object()
-        
+
         # Verificar se o usuário atual é o dono das linhas deste holerite
         if not run.lines.filter(user=request.user).exists():
             raise ValidationError({"detail": "Você não possui holerites neste fechamento."})
-            
+
         if run.employee_signature_date:
             raise ValidationError({"detail": "Este holerite já foi assinado."})
 
         run.employee_signature_date = timezone.now()
         run.employee_signature_ip = request.META.get("HTTP_X_FORWARDED_FOR") or request.META.get("REMOTE_ADDR")
         run.save(update_fields=["employee_signature_date", "employee_signature_ip"])
-        
+
         return Response({"detail": "Holerite assinado com sucesso."}, status=status.HTTP_200_OK)
 
 

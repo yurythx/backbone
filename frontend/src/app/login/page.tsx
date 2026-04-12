@@ -8,6 +8,9 @@ import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRouter, useSearchParams } from "next/navigation"
 import { notify } from "@/lib/notifications"
+import Link from "next/link"
+import { BookOpen } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 const LoginForm = dynamic(
   () => import("@/features/auth/login-form").then((m) => m.LoginForm),
@@ -37,6 +40,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row bg-background" role="main" aria-labelledby="login-title">
+      <div className="fixed top-4 right-4 z-50">
+        <Button asChild type="button" variant="outline" size="sm" className="rounded-xl gap-2">
+          <Link href="/" aria-label="Acessar área pública">
+            <BookOpen className="h-4 w-4" aria-hidden="true" />
+            Público
+          </Link>
+        </Button>
+      </div>
       {/* Visual Side - Hidden on mobile */}
       <div className="hidden md:flex md:w-1/2 bg-primary/5 items-center justify-center p-12 relative overflow-hidden">
         {/* Abstract background elements */}
@@ -53,6 +64,7 @@ export default function LoginPage() {
                     src={previewCompany.logo}
                     alt={previewCompany.name}
                     fill
+                    priority
                     className="object-contain transition-all duration-500 hover:scale-105"
                     sizes="96px"
                   />
@@ -94,7 +106,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm space-y-8">
           <div className="md:hidden flex flex-col items-center gap-4 mb-8 text-center transition-all animate-in fade-in slide-in-from-top-4">
             {previewCompany && previewCompany.logo ? (
-              <Image src={previewCompany.logo} alt={previewCompany.name} width={48} height={48} className="object-contain" />
+              <Image src={previewCompany.logo} alt={previewCompany.name} width={48} height={48} priority className="object-contain" />
             ) : (
               <div className="h-12 w-12 bg-primary rounded-xl hidden" />
             )}

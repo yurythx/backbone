@@ -30,16 +30,21 @@ class Command(BaseCommand):
                 try:
                     with transaction.atomic():
                         # Use get_or_create to atomically handle existence check and creation
-                        role, created = Role.objects.get_or_create(
+                        role, created = Role.all_objects.get_or_create(
                             company=company,
                             name=role_name,
-                            defaults={"description": role_data["description"], "permissions": role_data["permissions"]},
+                            defaults={
+                                "description": role_data["description"],
+                                "permissions": role_data["permissions"],
+                                "is_system_role": True,
+                            },
                         )
 
                         if not created:
                             # Update existing role permissions if it already existed
                             role.description = role_data["description"]
                             role.permissions = role_data["permissions"]
+                            role.is_system_role = True
                             role.save()
 
                         status = "Criado" if created else "Atualizado"

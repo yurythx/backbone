@@ -21,7 +21,7 @@ class TenantMiddleware:
         use_cache = not getattr(settings, "TESTING", False)
         cache = caches["tenants"] if use_cache else None
 
-        if request.path.startswith("/api/core/health/") or request.path.startswith("/health/"):
+        if request.path.startswith("/api/core/health/") or request.path.startswith("/api/health/") or request.path.startswith("/health/"):
             set_current_company(None)
             request.company = None
             return self.get_response(request)
@@ -175,9 +175,13 @@ class LicensingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        from django.conf import settings
         from django.http import JsonResponse
 
         from apps.licensing.utils import check_feature_permission
+
+        if not getattr(settings, "LICENSING_ENFORCE", False):
+            return self.get_response(request)
 
         # Pula se não houver empresa no contexto (ex: rotas administrativas ou de saúde)
         if not hasattr(request, "company") or not request.company:

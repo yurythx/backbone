@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { Menu, X, LayoutDashboard, MessageSquare, FileText, Settings, ShieldCheck, Box, LogOut, User, DollarSign, Calendar, Headset } from "lucide-react"
+import { BarChart3, Menu, X, LayoutDashboard, MessageSquare, FileText, Settings, ShieldCheck, Box, LogOut, User, DollarSign, Calendar, Headset } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useModules } from "@/hooks/use-modules"
@@ -32,6 +32,7 @@ const navItems: SidebarItem[] = [
     { title: "Páginas", href: "/cms", icon: ShieldCheck, module: "pages" },
     { title: "Artigos", href: "/artigos", icon: FileText, module: "articles" },
     { title: "CRM / Suporte", href: "/crm", icon: Headset, module: "crm" },
+    { title: "Pipelines CRM", href: "/crm/pipelines", icon: BarChart3, module: "crm" },
     { title: "Financeiro", href: "/finance", icon: DollarSign, module: "finance" },
     { title: "Agenda", href: "/calendar", icon: Calendar, module: "calendar" },
     { title: "Módulos", href: "/admin/modules", icon: Box, permission: "admin.settings_manage" },
@@ -43,7 +44,6 @@ export function MobileNav() {
     const [isLoggingOut, setIsLoggingOut] = React.useState(false)
     const setMobileNavOpen = useMobileNavStore((s) => s.setMobileNavOpen)
     const pathname = usePathname()
-    const router = useRouter()
     const { isModuleActive } = useModules()
     const { logo, companyName } = useTheme()
     const { user } = useAuth()
@@ -66,7 +66,7 @@ export function MobileNav() {
             // Logout is best-effort — proceed even if server call fails
         } finally {
             clearClientSession()
-            router.push('/?logged_out=1')
+            window.location.href = "/"
         }
     }
 

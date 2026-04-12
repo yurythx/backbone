@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
 import { revalidatePath } from 'next/cache'
 
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
 export async function POST(req: NextRequest) {
   try {
     const secretHeader = req.headers.get('x-revalidate-secret') || ''

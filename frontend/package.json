@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3005",
+    "dev:clean": "node scripts/clean-next-artifacts.mjs && next dev -p 3005",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

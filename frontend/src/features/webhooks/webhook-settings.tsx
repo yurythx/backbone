@@ -5,28 +5,42 @@ import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Loader2, Activity, CheckCircle2, XCircle } from "lucide-react"
+import { usePermission } from "@/hooks/use-permission"
 
 interface WebhookDelivery {
   id: number
   event_name: string
   status_code: number | null
   success: boolean
-  request_payload: any
+  request_payload: unknown
   response_body: string | null
   attempt_number: number
   created_at: string
 }
 
+interface WebhookSubscription {
+  id: number
+  url: string
+  is_active: boolean
+  events: string[]
+}
+
 export function WebhookSettings() {
-  const { data: subscriptions, isLoading } = useQuery({
+  const { hasPermission } = usePermission()
+  const canManageWebhooks = hasPermission("settings.webhooks_manage")
+
+  const { data: subscriptions, isLoading, isError } = useQuery<WebhookSubscription[]>({
     queryKey: ['webhook-subscriptions'],
     queryFn: async () => {
       const res = await api.get('/api/webhooks/subscriptions/')
       return res.data
-    }
+    },
+    enabled: canManageWebhooks,
+    retry: false,
   })
 
   if (isLoading) {
@@ -43,13 +57,37 @@ export function WebhookSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!subscriptions?.length ? (
+          {!canManageWebhooks ? (
+            <div className="text-center p-8 text-muted-foreground border rounded-lg">
+              Sem permissão para visualizar webhooks.
+              <div className="mt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (typeof window === "undefined") return
+                    window.dispatchEvent(
+                      new CustomEvent("app-unauthorized", {
+                        detail: { message: "Você não possui autorização para gerenciar webhooks. Conceda a permissão settings.webhooks_manage." },
+                      })
+                    )
+                  }}
+                >
+                  Ver detalhes
+                </Button>
+              </div>
+            </div>
+          ) : isError ? (
+            <div className="text-center p-8 text-muted-foreground border rounded-lg">
+              Não foi possível carregar os webhooks.
+            </div>
+          ) : !subscriptions?.length ? (
             <div className="text-center p-8 text-muted-foreground border rounded-lg">
               Nenhum webhook configurado.
             </div>
           ) : (
             <div className="space-y-4">
-              {subscriptions.map((sub: any) => (
+              {subscriptions.map((sub) => (
                 <WebhookDeliveryLogs key={sub.id} subscription={sub} />
               ))}
             </div>
@@ -60,7 +98,7 @@ export function WebhookSettings() {
   )
 }
 
-function WebhookDeliveryLogs({ subscription }: { subscription: any }) {
+function WebhookDeliveryLogs({ subscription }: { subscription: WebhookSubscription }) {
   const [isOpen, setIsOpen] = useState(false)
 
   const { data: deliveries, isLoading } = useQuery<WebhookDelivery[]>({
@@ -69,7 +107,8 @@ function WebhookDeliveryLogs({ subscription }: { subscription: any }) {
       const res = await api.get(`/api/webhooks/subscriptions/${subscription.id}/deliveries/`)
       return res.data
     },
-    enabled: isOpen
+    enabled: isOpen,
+    retry: false,
   })
 
   return (

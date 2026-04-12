@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
+from apps.accounts.permissions import HasRolePermission
 from config.pagination import DefaultPagination
 from shared_kernel.cache import invalidate_tenant_cache, tenant_cached
 
@@ -27,6 +28,7 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
 
     serializer_class = TenantModuleSerializer
     pagination_class = DefaultPagination
+    required_permission = "admin.settings_manage"
 
     def _get_company(self):
         company = getattr(self.request, "company", None)
@@ -75,7 +77,7 @@ class TenantModuleViewSet(viewsets.ModelViewSet):
         if method in ("GET", "HEAD", "OPTIONS") and path.startswith("/api/modules/my-modules"):
             # Permitir que visitantes vejam quais módulos estão ativos para o portal
             return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated(), HasRolePermission()]
 
     @tenant_cached(timeout=3600, key_prefix="modules_v2")
     def list(self, request, *args, **kwargs):

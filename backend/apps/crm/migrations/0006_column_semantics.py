@@ -1,5 +1,6 @@
-from django.db import migrations, models
 import unicodedata
+
+from django.db import migrations, models
 
 
 def normalize_text(value):

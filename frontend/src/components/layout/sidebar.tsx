@@ -5,7 +5,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useModules } from "@/hooks/use-modules"
-import { useTheme } from "@/components/theme-provider"
 import { useAuth } from "@/hooks/use-auth"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
@@ -32,7 +31,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import Image from "next/image"
 
 interface SidebarItem {
   title: string
@@ -156,7 +154,6 @@ export function Sidebar() {
   const pathname = usePathname()
   const { isModuleActive } = useModules()
   const { isSidebarCollapsed, toggleSidebar } = useUIStore()
-  const { logo, companyName } = useTheme()
   const { user: me } = useAuth()
 
   const userPermissions = me?.role_details?.permissions || []
@@ -230,51 +227,15 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "border-r h-screen fixed left-0 top-0 hidden md:flex flex-col transition-all duration-300 z-50 glass",
+        "border-r fixed left-0 top-20 hidden md:flex flex-col transition-all duration-300 z-40 glass h-[calc(100vh-5rem)]",
         isSidebarCollapsed ? "w-20" : "w-72"
       )}
     >
-      {/* Header / Logo Area */}
-      <div className={cn(
-        "h-16 flex items-center border-b border-border/50 transition-all duration-300",
-        isSidebarCollapsed ? "justify-center px-0" : "px-6"
-      )}>
-        <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap">
-          {/* Logo Wrapper */}
-          <div className={cn(
-            "flex-shrink-0 transition-all duration-300 flex items-center justify-center relative",
-            isSidebarCollapsed ? "h-10 w-10" : "h-8 w-8"
-          )}>
-            {logo ? (
-              <Image
-                src={logo}
-                alt={companyName || "Logo"}
-                width={isSidebarCollapsed ? 32 : 28}
-                height={isSidebarCollapsed ? 32 : 28}
-                className="object-contain"
-              />
-            ) : (
-              <div className="h-full w-full rounded-lg bg-primary/20 flex items-center justify-center">
-                <span className="text-lg">🦴</span>
-              </div>
-            )}
-          </div>
-
-          {/* Company Name (Hidden when collapsed) */}
-          <span className={cn(
-            "font-bold text-lg tracking-tight transition-all duration-300 opacity-100",
-            isSidebarCollapsed && "opacity-0 w-0 hidden"
-          )}>
-            {companyName || "Backbone"}
-          </span>
-        </div>
-      </div>
-
       {/* Toggle Button */}
       <button
         onClick={toggleSidebar}
         className={cn(
-          "absolute -right-3 top-20 bg-background border rounded-full p-1.5 shadow-md z-30 transition-transform duration-300 hover:bg-muted hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          "absolute -right-3 top-6 bg-background border rounded-full p-1.5 shadow-md z-30 transition-transform duration-300 hover:bg-muted hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
           !isSidebarCollapsed && "rotate-180"
         )}
         aria-label="Alternar barra lateral"
@@ -284,7 +245,7 @@ export function Sidebar() {
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-3 space-y-4 overflow-y-auto scrollbar-none hover:scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent transition-all" role="navigation" aria-label="Navegação principal">
+      <nav className="flex-1 py-6 px-3 space-y-4 overflow-y-auto scrollbar-none hover:scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent transition-all" role="navigation" aria-label="Navegação principal">
         <TooltipProvider delayDuration={0}>
           {filteredSections.map((section, sectionIndex) => (
             <div

@@ -1,11 +1,19 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { OnChangeFn, SortingState, VisibilityState } from "@tanstack/react-table"
+import { 
+  isBefore, 
+  isAfter, 
+  startOfDay, 
+  endOfDay, 
+  endOfWeek, 
+  endOfMonth,
+} from "date-fns"
 import { PageHeader } from "@/components/ui/page-header"
 import { ModuleGuard } from "@/components/module-guard"
-import { CRMSavedView, CRMViewMode, useCRM } from "./use-crm"
+import { CRMSavedView, CRMViewMode, getPipelineColumns, useCRM, CRMSavedViewFilters } from "./use-crm"
 import dynamic from "next/dynamic"
 import { KanbanSkeleton } from "./kanban-skeleton"
 
@@ -18,20 +26,27 @@ import { CreateDealModal } from "./create-deal-modal"
 import { ColumnGovernanceSheet } from "./column-governance-sheet"
 import { CRMTableView } from "./crm-table-view"
 import { CRMPipelineOverview, PipelineOverviewData } from "./crm-pipeline-overview"
+import { PipelineManagerModal } from "./pipeline-manager-modal"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
-import { LayoutGrid, List, PanelsTopLeft } from "lucide-react"
+import { BarChart3, ChevronDown, ChevronUp, LayoutGrid, List, PanelsTopLeft } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { api } from "@/lib/axios"
 import { toast } from "sonner"
+import { getUserDisplayName } from "./crm-utils"
+import { useCRMUsers } from "./use-crm-users"
+import { usePermission } from "@/hooks/use-permission"
 
-const DEFAULT_CRM_FILTERS = {
+const DEFAULT_CRM_FILTERS: CRMSavedViewFilters = {
   stageFilter: "all",
-  priorityFilter: "all" as const,
+  priorityFilter: "all",
   ownerFilter: "all",
   titleSearch: "",
+  dueFilter: "all",
 }
 
 function normalizeSavedViewSorting(sorting: CRMSavedView["sorting"] | undefined): SortingState {
@@ -57,24 +72,242 @@ function normalizeSavedViewsResponse(data: CRMSavedView[] | { results?: CRMSaved
   return []
 }
 
+function isCRMViewMode(value: unknown): value is CRMViewMode {
+  return value === "kanban" || value === "table" || value === "overview"
+}
+
 export default function CRMPage() {
   const { pipelines, deals, isLoading } = useCRM()
   const queryClient = useQueryClient()
+  const { hasPermission } = usePermission()
+  const canManagePipelines = hasPermission("crm.pipeline_manage")
+  const canDealEdit = hasPermission("crm.deal_edit")
+  const searchParams = useSearchParams()
   const [selectedPipelineId, setSelectedPipelineId] = useState<number | null>(null)
   const [view, setView] = useState<CRMViewMode>("kanban")
   const [selectedSavedViewId, setSelectedSavedViewId] = useState<number | null>(null)
   const [savedViewName, setSavedViewName] = useState("")
   const [stageFilter, setStageFilter] = useState(DEFAULT_CRM_FILTERS.stageFilter)
-  const [priorityFilter, setPriorityFilter] = useState<typeof DEFAULT_CRM_FILTERS.priorityFilter>(DEFAULT_CRM_FILTERS.priorityFilter)
+  const [priorityFilter, setPriorityFilter] = useState<CRMSavedViewFilters["priorityFilter"]>(DEFAULT_CRM_FILTERS.priorityFilter)
   const [ownerFilter, setOwnerFilter] = useState(DEFAULT_CRM_FILTERS.ownerFilter)
   const [titleSearch, setTitleSearch] = useState(DEFAULT_CRM_FILTERS.titleSearch)
-  const [tableSorting, setTableSorting] = useState<SortingState>([])
-  const [tableColumnVisibility, setTableColumnVisibility] = useState<VisibilityState>({})
+  const [dueFilter, setDueFilter] = useState<CRMSavedViewFilters["dueFilter"]>(DEFAULT_CRM_FILTERS.dueFilter)
+  const [controlsOpen, setControlsOpen] = useState(false)
+  const { data: users = [] } = useCRMUsers(controlsOpen)
 
   // Seleciona o primeiro pipeline por padrão
   const currentPipeline = selectedPipelineId 
     ? pipelines.find(p => p.id === selectedPipelineId) 
     : pipelines[0]
+
+  const currentColumns = useMemo(() => {
+    if (!currentPipeline) return []
+    return getPipelineColumns(currentPipeline)
+  }, [currentPipeline])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("crm-controls-open")
+      if (raw === "1") {
+        setControlsOpen(true)
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm-controls-open", controlsOpen ? "1" : "0")
+    } catch {}
+  }, [controlsOpen])
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0
+    if (titleSearch.trim()) count += 1
+    if (stageFilter !== "all") count += 1
+    if (priorityFilter !== "all") count += 1
+    if (ownerFilter !== "all") count += 1
+    if (dueFilter !== "all") count += 1
+    return count
+  }, [titleSearch, stageFilter, priorityFilter, ownerFilter, dueFilter])
+
+  useEffect(() => {
+    const fromUrl = searchParams.get("pipeline")
+    if (!fromUrl) return
+    const numericId = Number(fromUrl)
+    if (!Number.isFinite(numericId)) return
+    setSelectedPipelineId(numericId)
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!currentPipeline?.id) return
+    setControlsOpen(false)
+  }, [currentPipeline?.id])
+  const [tableSorting, setTableSorting] = useState<SortingState>([])
+  const [tableColumnVisibility, setTableColumnVisibility] = useState<VisibilityState>({})
+  const isRestoringUiStateRef = useRef(false)
+
+  useEffect(() => {
+    if (!currentPipeline?.id) return
+    const storageKey = `crm-ui-state:${currentPipeline.id}`
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as unknown
+      if (!parsed || typeof parsed !== "object") return
+      const value = parsed as Record<string, unknown>
+      if (value["version"] !== 1) return
+
+      isRestoringUiStateRef.current = true
+
+      const viewMode = value["view"]
+      if (isCRMViewMode(viewMode)) {
+        setView(viewMode)
+      }
+
+      const filters = value["filters"]
+      if (filters && typeof filters === "object") {
+        const f = filters as Record<string, unknown>
+        if (typeof f["stageFilter"] === "string") setStageFilter(f["stageFilter"])
+        if (typeof f["priorityFilter"] === "string") setPriorityFilter(f["priorityFilter"] as CRMSavedViewFilters["priorityFilter"])
+        if (typeof f["ownerFilter"] === "string") setOwnerFilter(f["ownerFilter"])
+        if (typeof f["titleSearch"] === "string") setTitleSearch(f["titleSearch"])
+        if (typeof f["dueFilter"] === "string") setDueFilter(f["dueFilter"] as CRMSavedViewFilters["dueFilter"])
+      }
+
+      const sorting = value["tableSorting"]
+      if (Array.isArray(sorting)) setTableSorting(sorting as SortingState)
+
+      const visibility = value["tableColumnVisibility"]
+      if (visibility && typeof visibility === "object") setTableColumnVisibility(visibility as VisibilityState)
+
+      const savedViewId = value["selectedSavedViewId"]
+      if (typeof savedViewId === "number") setSelectedSavedViewId(savedViewId)
+      if (typeof value["savedViewName"] === "string") setSavedViewName(value["savedViewName"])
+
+      const controls = value["controlsOpen"]
+      if (typeof controls === "boolean") setControlsOpen(controls)
+    } catch {
+    } finally {
+      queueMicrotask(() => {
+        isRestoringUiStateRef.current = false
+      })
+    }
+  }, [currentPipeline?.id])
+
+  useEffect(() => {
+    if (!currentPipeline?.id) return
+    if (isRestoringUiStateRef.current) return
+    const storageKey = `crm-ui-state:${currentPipeline.id}`
+    const payload = {
+      version: 1,
+      view,
+      filters: {
+        stageFilter,
+        priorityFilter,
+        ownerFilter,
+        titleSearch,
+        dueFilter,
+      },
+      tableSorting,
+      tableColumnVisibility,
+      selectedSavedViewId,
+      savedViewName,
+      controlsOpen,
+    }
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(payload))
+    } catch {}
+  }, [
+    currentPipeline?.id,
+    view,
+    stageFilter,
+    priorityFilter,
+    ownerFilter,
+    titleSearch,
+    dueFilter,
+    tableSorting,
+    tableColumnVisibility,
+    selectedSavedViewId,
+    savedViewName,
+    controlsOpen,
+  ])
+
+  // Filtros de busca e estado
+  const pipelineScopedDeals = useMemo(() => {
+    if (!currentPipeline) return deals
+    return deals.filter((deal) => {
+      if (deal.column_data?.pipeline) {
+        return deal.column_data.pipeline === currentPipeline.id
+      }
+      if (deal.stage) {
+        return currentPipeline.stages.some((stage) => stage.id === deal.stage)
+      }
+      return false
+    })
+  }, [currentPipeline, deals])
+
+  const filteredDeals = useMemo(() => {
+    const selectedStageId = stageFilter !== "all" ? Number(stageFilter) : null
+
+    return pipelineScopedDeals.filter(deal => {
+      // 0.5 Filtro por Coluna/Stage (se aplicavel)
+      if (selectedStageId) {
+        const matchesColumn = deal.column_data?.id === selectedStageId || deal.column === selectedStageId || deal.column_id === selectedStageId
+        if (matchesColumn) {
+          // ok
+        } else {
+          const targetColumn = currentColumns.find((c) => c.id === selectedStageId)
+          const matchesLegacy = targetColumn?.legacy_stage && deal.stage === targetColumn.legacy_stage
+          if (!matchesLegacy) return false
+        }
+      }
+
+      // 1. Busca por Titulo
+      if (titleSearch && !deal.title.toLowerCase().includes(titleSearch.toLowerCase())) {
+        return false
+      }
+
+      // 2. Filtro de Prioridade (Urgencia)
+      if (priorityFilter !== "all" && deal.priority !== priorityFilter) {
+        return false
+      }
+
+      // 3. Filtro de Responsavel
+      if (ownerFilter !== "all" && deal.owner.toString() !== ownerFilter) {
+        return false
+      }
+
+      // 4. Filtro de Data de Vencimento
+      if (dueFilter !== "all") {
+        if (!deal.closing_date) return false
+        
+        const closingDate = new Date(deal.closing_date)
+        const now = new Date()
+
+        if (dueFilter === "overdue") {
+          if (!isBefore(closingDate, startOfDay(now)) || deal.is_closed) return false
+        } else if (dueFilter === "today") {
+          if (!isAfter(closingDate, startOfDay(now)) || !isBefore(closingDate, endOfDay(now))) return false
+        } else if (dueFilter === "this_week") {
+          const weekEnd = endOfWeek(now, { weekStartsOn: 0 })
+          if (!isAfter(closingDate, startOfDay(now)) || !isBefore(closingDate, weekEnd)) return false
+        } else if (dueFilter === "this_month") {
+          const monthEnd = endOfMonth(now)
+          if (!isAfter(closingDate, startOfDay(now)) || !isBefore(closingDate, monthEnd)) return false
+        }
+      }
+
+      return true
+    })
+  }, [pipelineScopedDeals, titleSearch, priorityFilter, ownerFilter, dueFilter, stageFilter, currentColumns])
+
+  const ownerOptions = useMemo(() => {
+    const relevantOwnerIds = new Set(pipelineScopedDeals.map((deal) => deal.owner))
+    return users
+      .filter((user) => relevantOwnerIds.has(user.id))
+      .slice()
+      .sort((a, b) => getUserDisplayName(a).localeCompare(getUserDisplayName(b)))
+  }, [pipelineScopedDeals, users])
 
   const resetViewState = () => {
     setView("kanban")
@@ -82,6 +315,7 @@ export default function CRMPage() {
     setPriorityFilter(DEFAULT_CRM_FILTERS.priorityFilter)
     setOwnerFilter(DEFAULT_CRM_FILTERS.ownerFilter)
     setTitleSearch(DEFAULT_CRM_FILTERS.titleSearch)
+    setDueFilter(DEFAULT_CRM_FILTERS.dueFilter)
     setTableSorting([])
     setTableColumnVisibility({})
   }
@@ -91,9 +325,10 @@ export default function CRMPage() {
     setSavedViewName(savedView.name)
     setView(savedView.view_mode)
     setStageFilter(savedView.filters?.stageFilter || DEFAULT_CRM_FILTERS.stageFilter)
-    setPriorityFilter((savedView.filters?.priorityFilter as typeof DEFAULT_CRM_FILTERS.priorityFilter) || DEFAULT_CRM_FILTERS.priorityFilter)
+    setPriorityFilter((savedView.filters?.priorityFilter as CRMSavedViewFilters["priorityFilter"]) || DEFAULT_CRM_FILTERS.priorityFilter)
     setOwnerFilter(savedView.filters?.ownerFilter || DEFAULT_CRM_FILTERS.ownerFilter)
     setTitleSearch(savedView.filters?.titleSearch || DEFAULT_CRM_FILTERS.titleSearch)
+    setDueFilter((savedView.filters?.dueFilter as CRMSavedViewFilters["dueFilter"]) || DEFAULT_CRM_FILTERS.dueFilter)
     setTableSorting(normalizeSavedViewSorting(savedView.sorting))
     setTableColumnVisibility(normalizeSavedViewVisibility(savedView.column_visibility))
   }
@@ -107,6 +342,7 @@ export default function CRMPage() {
       priorityFilter,
       ownerFilter,
       titleSearch,
+      dueFilter,
     },
     sorting: tableSorting,
     column_visibility: tableColumnVisibility,
@@ -131,29 +367,39 @@ export default function CRMPage() {
   })
 
   useEffect(() => {
+    // Se nao temos pipeline, resetamos o estado apenas se houver algo selecionado
     if (!currentPipeline?.id) {
-      setSelectedSavedViewId(null)
-      setSavedViewName("")
-      resetViewState()
+      if (selectedSavedViewId !== null || savedViewName !== "") {
+        setSelectedSavedViewId(null)
+        setSavedViewName("")
+        resetViewState()
+      }
       return
     }
 
+    // Se temos um pipeline e uma vista selecionada, verificamos se ela ainda e valida
     const currentSelected = savedViews.find((item) => item.id === selectedSavedViewId)
     if (currentSelected) {
-      setSavedViewName(currentSelected.name)
+      if (savedViewName !== currentSelected.name) {
+        setSavedViewName(currentSelected.name)
+      }
       return
     }
 
+    // Se nao temos vista selecionada, tentamos aplicar a padrao do pipeline
     const defaultSavedView = savedViews.find((item) => item.is_default)
-    if (defaultSavedView) {
+    if (defaultSavedView && !selectedSavedViewId) {
       applySavedView(defaultSavedView)
       return
     }
 
-    setSelectedSavedViewId(null)
-    setSavedViewName("")
-    resetViewState()
-  }, [currentPipeline?.id, savedViews, selectedSavedViewId])
+    // Se nao houver vista padrao e houver algo selecionado que nao existe mais, limpamos
+    if (selectedSavedViewId !== null || savedViewName !== "") {
+      setSelectedSavedViewId(null)
+      setSavedViewName("")
+      resetViewState()
+    }
+  }, [currentPipeline?.id, savedViews, selectedSavedViewId, savedViewName])
 
   const createSavedView = useMutation({
     mutationFn: async () => {
@@ -249,12 +495,12 @@ export default function CRMPage() {
             description="Gerencie seus leads e chamados de TI em tempo real."
           />
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Select 
-              value={currentPipeline?.id.toString()} 
+              value={selectedPipelineId?.toString() || (pipelines[0]?.id.toString())} 
               onValueChange={(val) => setSelectedPipelineId(parseInt(val))}
             >
-              <SelectTrigger className="w-[200px] glass">
+              <SelectTrigger className="w-full sm:w-[240px] glass">
                 <SelectValue placeholder="Selecione o Fluxo" />
               </SelectTrigger>
               <SelectContent>
@@ -264,87 +510,213 @@ export default function CRMPage() {
               </SelectContent>
             </Select>
 
+            <Link href="/crm/pipelines" className="w-full sm:w-auto">
+              <Button variant="outline" className="glass w-full sm:w-auto">
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Visão Geral
+              </Button>
+            </Link>
+
+            {canManagePipelines ? <PipelineManagerModal /> : null}
             {currentPipeline ? <ColumnGovernanceSheet pipeline={currentPipeline} deals={deals} /> : null}
-            <CreateDealModal pipeline={currentPipeline} />
+            {canDealEdit ? <CreateDealModal pipeline={currentPipeline} /> : null}
           </div>
         </div>
 
         {currentPipeline && (
           <div className="rounded-3xl border bg-card p-4 shadow-sm">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Vistas salvas</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Salve combinacoes de aba, filtros, ordenacao e colunas visiveis por pipeline.
-                </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-1 items-center gap-2">
+                <Input
+                  placeholder="Buscar por título..."
+                  value={titleSearch}
+                  onChange={(e) => setTitleSearch(e.target.value)}
+                  className="glass"
+                />
               </div>
 
-              <div className="flex flex-1 flex-col gap-2 xl:max-w-4xl xl:flex-row xl:items-center xl:justify-end">
-                <Select
-                  value={selectedSavedViewId ? selectedSavedViewId.toString() : "none"}
-                  onValueChange={(value) => {
-                    if (value === "none") {
-                      setSelectedSavedViewId(null)
-                      setSavedViewName("")
-                      resetViewState()
-                      return
-                    }
+              <Button
+                type="button"
+                variant="outline"
+                className="glass w-full sm:w-auto"
+                aria-expanded={controlsOpen}
+                aria-controls="crm-controls-panel"
+                onClick={() => setControlsOpen((current) => !current)}
+              >
+                {controlsOpen ? (
+                  <>
+                    <ChevronUp className="mr-2 h-4 w-4" />
+                    Minimizar
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="mr-2 h-4 w-4" />
+                    Filtros & Vistas
+                  </>
+                )}
+                {activeFiltersCount > 0 ? (
+                  <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                    {activeFiltersCount}
+                  </span>
+                ) : null}
+              </Button>
+            </div>
 
-                    const savedView = savedViews.find((item) => item.id.toString() === value)
-                    if (savedView) {
-                      applySavedView(savedView)
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-full xl:w-[240px]">
-                    <SelectValue placeholder={isLoadingSavedViews ? "Carregando vistas..." : "Selecione uma vista"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem vista salva</SelectItem>
-                    {savedViews.map((savedView) => (
-                      <SelectItem key={savedView.id} value={savedView.id.toString()}>
-                        {savedView.is_default ? `${savedView.name} (padrão)` : savedView.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div
+              className={`mt-4 grid transition-[grid-template-rows] duration-200 ${controlsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+            >
+              <div className="overflow-hidden">
+                <div id="crm-controls-panel" className="grid gap-6 xl:grid-cols-2">
+                  <section className="rounded-2xl border bg-background/60 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filtros</h3>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={resetViewState}
+                        className="text-muted-foreground hover:text-primary"
+                      >
+                        Limpar
+                      </Button>
+                    </div>
 
-                <Input
-                  value={savedViewName}
-                  onChange={(event) => setSavedViewName(event.target.value)}
-                  placeholder="Nome da vista"
-                  className="w-full xl:w-[240px]"
-                />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Select value={stageFilter} onValueChange={setStageFilter}>
+                        <SelectTrigger className="w-full glass">
+                          <SelectValue placeholder="Coluna" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todas as colunas</SelectItem>
+                          {currentColumns.map((column) => (
+                            <SelectItem key={column.id} value={String(column.id)}>
+                              {column.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => createSavedView.mutate()}
-                    disabled={!currentPipeline || !savedViewName.trim() || createSavedView.isPending}
-                  >
-                    Salvar nova
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => updateSavedView.mutate()}
-                    disabled={!selectedSavedViewId || !savedViewName.trim() || updateSavedView.isPending}
-                  >
-                    Atualizar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => updateSavedView.mutate({ is_default: true })}
-                    disabled={!selectedSavedViewId || updateSavedView.isPending}
-                  >
-                    Definir padrão
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => deleteSavedView.mutate()}
-                    disabled={!selectedSavedViewId || deleteSavedView.isPending}
-                  >
-                    Remover
-                  </Button>
+                      <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter(v as CRMSavedViewFilters["priorityFilter"])}>
+                        <SelectTrigger className="w-full glass">
+                          <SelectValue placeholder="Urgência" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todas Urgências</SelectItem>
+                          <SelectItem value="LOW">Baixa</SelectItem>
+                          <SelectItem value="MEDIUM">Média</SelectItem>
+                          <SelectItem value="HIGH">Alta</SelectItem>
+                          <SelectItem value="URGENT">Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                        <SelectTrigger className="w-full glass">
+                          <SelectValue placeholder="Responsável" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos responsáveis</SelectItem>
+                          {ownerOptions.map((user) => (
+                            <SelectItem key={user.id} value={String(user.id)}>
+                              {getUserDisplayName(user)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={dueFilter} onValueChange={(v) => setDueFilter(v as CRMSavedViewFilters["dueFilter"])}>
+                        <SelectTrigger className="w-full glass">
+                          <SelectValue placeholder="Vencimento" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos os prazos</SelectItem>
+                          <SelectItem value="overdue">Vencidos</SelectItem>
+                          <SelectItem value="today">Vence Hoje</SelectItem>
+                          <SelectItem value="this_week">Esta Semana</SelectItem>
+                          <SelectItem value="this_month">Este Mês</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border bg-background/60 p-4">
+                    <div className="mb-3">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Vistas salvas</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Salve combinações de aba, filtros, ordenação e colunas por pipeline.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3">
+                      <Select
+                        value={selectedSavedViewId ? selectedSavedViewId.toString() : "none"}
+                        onValueChange={(value) => {
+                          if (value === "none") {
+                            setSelectedSavedViewId(null)
+                            setSavedViewName("")
+                            resetViewState()
+                            return
+                          }
+
+                          const savedView = savedViews.find((item) => item.id.toString() === value)
+                          if (savedView) {
+                            applySavedView(savedView)
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-full glass">
+                          <SelectValue placeholder={isLoadingSavedViews ? "Carregando vistas..." : "Selecione uma vista"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem vista salva</SelectItem>
+                          {savedViews.map((savedView) => (
+                            <SelectItem key={savedView.id} value={savedView.id.toString()}>
+                              {savedView.is_default ? `${savedView.name} (padrão)` : savedView.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                        <Input
+                          value={savedViewName}
+                          onChange={(event) => setSavedViewName(event.target.value)}
+                          placeholder="Nome da vista"
+                          className="w-full"
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={() => createSavedView.mutate()}
+                          disabled={!currentPipeline || !savedViewName.trim() || createSavedView.isPending}
+                          className="w-full sm:w-auto"
+                        >
+                          Salvar nova
+                        </Button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => updateSavedView.mutate({})}
+                          disabled={!selectedSavedViewId || !savedViewName.trim() || updateSavedView.isPending}
+                        >
+                          Atualizar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => updateSavedView.mutate({ is_default: true })}
+                          disabled={!selectedSavedViewId || updateSavedView.isPending}
+                        >
+                          Definir padrão
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => deleteSavedView.mutate()}
+                          disabled={!selectedSavedViewId || deleteSavedView.isPending}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </div>
             </div>
@@ -383,7 +755,7 @@ export default function CRMPage() {
 
           <TabsContent value="kanban" className="m-0">
             {currentPipeline ? (
-              <KanbanBoard pipeline={currentPipeline} />
+              <KanbanBoard pipeline={currentPipeline} deals={filteredDeals} />
             ) : (
               <div className="h-[400px] flex items-center justify-center border-2 border-dashed rounded-3xl opacity-50">
                 Nenhum pipeline configurado.
@@ -395,16 +767,10 @@ export default function CRMPage() {
             {currentPipeline ? (
               <CRMTableView
                 pipeline={currentPipeline}
-                stageFilter={stageFilter}
-                priorityFilter={priorityFilter}
-                ownerFilter={ownerFilter}
-                titleSearch={titleSearch}
+                deals={filteredDeals}
+                isLoading={isLoading}
                 sorting={tableSorting}
                 columnVisibility={tableColumnVisibility}
-                onStageFilterChange={setStageFilter}
-                onPriorityFilterChange={setPriorityFilter}
-                onOwnerFilterChange={setOwnerFilter}
-                onTitleSearchChange={setTitleSearch}
                 onSortingChange={handleTableSortingChange}
                 onColumnVisibilityChange={handleTableVisibilityChange}
               />

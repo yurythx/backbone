@@ -13,9 +13,15 @@ interface PublicArticleCardProps {
     showVisibilityBadge?: boolean
     useDashboardPreview?: boolean
     showStatusBadge?: boolean
+    priority?: boolean
 }
 
-export function PublicArticleCard({ article, showVisibilityBadge = false, useDashboardPreview = false, showStatusBadge = false }: PublicArticleCardProps) {
+export function PublicArticleCard({ article, showVisibilityBadge = false, useDashboardPreview = false, showStatusBadge = false, priority = false }: PublicArticleCardProps) {
+    const imageUrl = (() => {
+        const a = article as unknown as { cover_image?: string | null; image?: string | null }
+        return a.cover_image || a.image || null
+    })()
+
     const dateLabel = (() => {
         const raw = (article as unknown as { published_at?: string }).published_at || article.created_at
         if (!raw) return null
@@ -36,20 +42,21 @@ export function PublicArticleCard({ article, showVisibilityBadge = false, useDas
         >
             <Card className="h-full overflow-hidden hover:shadow-xl transition-all border border-primary/10 bg-background/95 backdrop-blur rounded-2xl relative">
                 <div className="aspect-video relative overflow-hidden bg-muted rounded-t-2xl">
-                    {article.image ? (
+                    {imageUrl ? (
                         <Image
-                            src={fixImageUrl(article.image) || ""}
+                            src={fixImageUrl(imageUrl) || ""}
                             alt={article.title || "Imagem do artigo"}
                             fill
                             className="object-cover hover:scale-105 transition-transform duration-300"
-                            sizes="(max-width: 768px) 100vw, 50vw"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                            priority={priority}
                         />
                     ) : (
                         <div className="flex items-center justify-center h-full text-muted-foreground bg-muted/50">
                             Sem Imagem
                         </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
                 </div>
                 {showVisibilityBadge && article.is_public === false && (
                     <div className="absolute top-3 left-3 z-10">

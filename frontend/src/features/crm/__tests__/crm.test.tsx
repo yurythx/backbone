@@ -13,13 +13,21 @@ vi.mock('../use-crm', async () => {
   }
 })
 
+vi.mock('../quick-transition-modal', () => ({
+  QuickTransitionModal: () => null,
+}))
+
 describe('KanbanBoard Component', () => {
+  type UseCRMReturn = ReturnType<typeof useCRMHook.useCRM>
+
   const mockPipeline: Pipeline = {
     id: 1,
     name: 'Suporte TI',
     stages: [
       { id: 10, name: 'Novo', order: 10, pipeline: 1 },
-      { id: 20, name: 'Em Andamento', order: 20, pipeline: 1 },
+      { id: 20, name: 'Planejado', order: 20, pipeline: 1 },
+      { id: 30, name: 'Em Andamento', order: 30, pipeline: 1 },
+      { id: 40, name: 'Concluído', order: 40, pipeline: 1 },
     ],
   }
 
@@ -45,7 +53,7 @@ describe('KanbanBoard Component', () => {
        title: 'Notebook Lento',
        contact: 2,
        contact_name: 'Pedro Marketing',
-       stage: 20,
+       stage: 30,
        stage_name: 'Em Andamento',
        value: '300.00',
        priority: 'MEDIUM',
@@ -58,11 +66,10 @@ describe('KanbanBoard Component', () => {
   it('deve renderizar as colunas do pipeline corretamente', () => {
     const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
     mockedUseCRM.mockReturnValue({
-      deals: mockDeals,
-      updateDeal: { mutateAsync: vi.fn() },
-    })
+      updateDeal: { mutateAsync: vi.fn(), isPending: false },
+    } as unknown as UseCRMReturn)
 
-    render(<KanbanBoard pipeline={mockPipeline} />)
+    render(<KanbanBoard pipeline={mockPipeline} deals={mockDeals} />)
 
     expect(screen.getByText('Novo')).toBeInTheDocument()
     expect(screen.getByText('Em Andamento')).toBeInTheDocument()
@@ -71,11 +78,10 @@ describe('KanbanBoard Component', () => {
   it('deve exibir os cards nas colunas corretas', () => {
     const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
     mockedUseCRM.mockReturnValue({
-      deals: mockDeals,
-      updateDeal: { mutateAsync: vi.fn() },
-    })
+      updateDeal: { mutateAsync: vi.fn(), isPending: false },
+    } as unknown as UseCRMReturn)
 
-    render(<KanbanBoard pipeline={mockPipeline} />)
+    render(<KanbanBoard pipeline={mockPipeline} deals={mockDeals} />)
 
     expect(screen.getByText('Servidor Offline')).toBeInTheDocument()
     expect(screen.getByText('Notebook Lento')).toBeInTheDocument()
@@ -84,11 +90,10 @@ describe('KanbanBoard Component', () => {
   it('deve mostrar a prioridade correta nos cards', () => {
     const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
     mockedUseCRM.mockReturnValue({
-      deals: mockDeals,
-      updateDeal: { mutateAsync: vi.fn() },
-    })
+      updateDeal: { mutateAsync: vi.fn(), isPending: false },
+    } as unknown as UseCRMReturn)
 
-    render(<KanbanBoard pipeline={mockPipeline} />)
+    render(<KanbanBoard pipeline={mockPipeline} deals={mockDeals} />)
 
     expect(screen.getByText('URGENT')).toBeInTheDocument()
   })
@@ -96,24 +101,22 @@ describe('KanbanBoard Component', () => {
   it('deve mostrar o progresso percentual nos cards', () => {
     const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
     mockedUseCRM.mockReturnValue({
-      deals: mockDeals,
-      updateDeal: { mutateAsync: vi.fn() },
-    } as never)
+      updateDeal: { mutateAsync: vi.fn(), isPending: false },
+    } as unknown as UseCRMReturn)
 
-    render(<KanbanBoard pipeline={mockPipeline} />)
+    render(<KanbanBoard pipeline={mockPipeline} deals={mockDeals} />)
 
-    expect(screen.getAllByText('75%').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('20%').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('0%').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('67%').length).toBeGreaterThan(0)
   })
 
   it('deve destacar quando o prazo está vencido', () => {
     const mockedUseCRM = vi.mocked(useCRMHook.useCRM)
     mockedUseCRM.mockReturnValue({
-      deals: mockDeals,
-      updateDeal: { mutateAsync: vi.fn() },
-    } as never)
+      updateDeal: { mutateAsync: vi.fn(), isPending: false },
+    } as unknown as UseCRMReturn)
 
-    render(<KanbanBoard pipeline={mockPipeline} />)
+    render(<KanbanBoard pipeline={mockPipeline} deals={mockDeals} />)
 
     expect(screen.getAllByText('Vencido').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Crítico').length).toBeGreaterThan(0)

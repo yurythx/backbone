@@ -332,14 +332,16 @@ export default function AuditPage() {
                     if (!open) setSelectedLog(null)
                 }}
             >
-                <DialogContent className="max-w-[92vw] sm:max-w-[720px] max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
+                <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[720px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr]">
+                    <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
                         <DialogTitle>Detalhes do Evento</DialogTitle>
                         <DialogDescription className="sr-only">Detalhes do log de auditoria.</DialogDescription>
                     </DialogHeader>
-                    <pre className="text-[11px] bg-card font-mono text-foreground/80 leading-relaxed overflow-auto rounded-xl border p-4">
-                        {selectedLog ? JSON.stringify(selectedLog.details, null, 2) : ""}
-                    </pre>
+                    <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+                        <pre className="text-[11px] bg-card font-mono text-foreground/80 leading-relaxed overflow-auto rounded-xl border p-4">
+                            {selectedLog ? JSON.stringify(selectedLog.details, null, 2) : ""}
+                        </pre>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

@@ -21,9 +21,9 @@ import { useAuth } from "@/hooks/use-auth"
 import { clearClientSession, ensureHasSessionCookie } from "@/lib/session"
 import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
-import { useUIStore } from "@/hooks/use-ui-store"
 import { useMobileNavStore } from "@/hooks/use-mobile-nav-store"
 import dynamic from "next/dynamic"
+import { CRMOfflineAttachmentsIndicator } from "@/features/crm/offline-attachments-indicator"
 
 const MobileNav = dynamic(() => import("@/components/layout/mobile-nav").then((m) => m.MobileNav), {
   ssr: false,
@@ -57,7 +57,6 @@ export function Header() {
   const [isClient, setIsClient] = React.useState(false)
   const { userStatuses, updateStatus } = usePresence()
   const { isModuleActive } = useModules()
-  const isSidebarCollapsed = useUIStore((s) => s.isSidebarCollapsed)
   const isMobileNavOpen = useMobileNavStore((s) => s.isMobileNavOpen)
 
   React.useEffect(() => {
@@ -65,13 +64,11 @@ export function Header() {
     ensureHasSessionCookie()
   }, [])
 
-  const { user: me } = useAuth()
-
-  // Removed unused companies query
+  const { user: me, isLoading: authLoading } = useAuth()
 
   const onLogout = () => {
     clearClientSession()
-    window.location.href = "/?logged_out=1"
+    window.location.href = "/"
   }
 
 
@@ -94,6 +91,9 @@ export function Header() {
     pathname.startsWith('/perfil') ||
     pathname.startsWith('/settings')
   )
+  const hasDesktopSidebar = Boolean(me && isDashboardArea)
+  const showDesktopNav = (!isDashboardArea && !me) || (Boolean(me) && !hasDesktopSidebar)
+  const showGuestAuthCta = !isDashboardArea
 
   return (
     <header className="h-20 sticky top-0 z-50 px-4 sm:px-6 lg:px-8 flex items-center justify-between border-b glass shadow-sm transition-all duration-500" role="banner" aria-label="Cabeçalho">
@@ -103,7 +103,6 @@ export function Header() {
             href="/"
             className={cn(
               "flex items-center gap-3 group",
-              me && isDashboardArea && !isSidebarCollapsed && "md:hidden",
               me && isMobileNavOpen && "hidden"
             )}
             aria-label="Ir para a página inicial"
@@ -116,6 +115,7 @@ export function Header() {
                     alt={companyName || "Logo"}
                     width={28}
                     height={28}
+                    priority
                     className="object-contain transition-transform duration-500 group-hover:scale-110"
                   />
                 ) : (
@@ -139,31 +139,40 @@ export function Header() {
           </Link>
         </div>
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-1" role="navigation" aria-label="Navegação do cabeçalho">
-          {(me ? navItems : guestNavItems).filter(item => !('module' in item) || isModuleActive(item.module as string)).map((item, index) => (
-            <div
-              key={item.href}
-              className="animate-in fade-in slide-in-from-bottom-1 duration-300"
-              style={{ animationDelay: `${(0.08 + index * 0.03).toFixed(2)}s` }}
-            >
-              <Button
-                variant="ghost"
-                asChild
-                className={cn(
-                  "px-4 font-medium transition-all relative group h-14 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-                  pathname === item.href ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Link href={item.href} aria-current={(pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))) ? "page" : undefined}>
-                  {item.label}
-                  {(pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))) && (
-                    <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
-                  )}
-                </Link>
-              </Button>
-            </div>
-          ))}
-        </nav>
+        {showDesktopNav ? (
+          <nav className="hidden md:flex items-center gap-1" role="navigation" aria-label="Navegação do cabeçalho">
+            {(me ? navItems : guestNavItems)
+              .filter((item) => !("module" in item) || isModuleActive(item.module as string))
+              .map((item, index) => (
+                <div
+                  key={item.href}
+                  className="animate-in fade-in slide-in-from-bottom-1 duration-300"
+                  style={{ animationDelay: `${(0.08 + index * 0.03).toFixed(2)}s` }}
+                >
+                  <Button
+                    variant="ghost"
+                    asChild
+                    className={cn(
+                      "px-4 font-medium transition-all relative group h-14 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                      pathname === item.href ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Link
+                      href={item.href}
+                      aria-current={
+                        pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href)) ? "page" : undefined
+                      }
+                    >
+                      {item.label}
+                      {(pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href))) && (
+                        <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
+                      )}
+                    </Link>
+                  </Button>
+                </div>
+              ))}
+          </nav>
+        ) : null}
         
       </div>
 
@@ -232,8 +241,11 @@ export function Header() {
 
         {/* Global Notifications Bell */}
         {me && <NotificationBell />}
+        {me && <CRMOfflineAttachmentsIndicator />}
 
-        {me ? (
+        {authLoading && isDashboardArea ? (
+          <div className="h-10 w-10 rounded-full border bg-muted/20" aria-hidden="true" />
+        ) : me ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative rounded-full h-10 w-10 border bg-muted/30 hover:bg-muted/50 transition-all shadow-sm p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" aria-label="Abrir menu do usuário">
@@ -323,12 +335,14 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button variant="ghost" size="icon" className="rounded-full" asChild>
-            <Link href="/login" title="Acessar Sistema">
-              <LogIn className="h-5 w-5" aria-hidden="true" />
-              <span className="sr-only">Acessar Sistema</span>
-            </Link>
-          </Button>
+          showGuestAuthCta ? (
+            <Button variant="ghost" size="icon" className="rounded-full" asChild>
+              <Link href="/login" title="Acessar Sistema">
+                <LogIn className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">Acessar Sistema</span>
+              </Link>
+            </Button>
+          ) : null
         )}
       </div>
     </header>

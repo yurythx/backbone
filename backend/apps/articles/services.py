@@ -10,29 +10,52 @@ from .models import Article
 
 class ArticleService:
     @staticmethod
+    def _normalize_image_path(url_or_path: str | None) -> str | None:
+        if not url_or_path:
+            return None
+        from urllib.parse import urlparse
+
+        from django.conf import settings
+
+        raw = str(url_or_path).strip()
+        if not raw:
+            return None
+
+        path = raw
+        if "://" in path:
+            try:
+                path = urlparse(path).path or ""
+            except Exception:
+                path = raw
+        path = path.strip()
+        if not path:
+            return None
+
+        media_url = getattr(settings, "MEDIA_URL", "/media/") or "/media/"
+        if not media_url.startswith("/"):
+            media_url = f"/{media_url}"
+        if not media_url.endswith("/"):
+            media_url = f"{media_url}/"
+
+        if path.startswith(media_url):
+            path = path[len(media_url) :]
+        path = path.lstrip("/")
+        if path.startswith("media/"):
+            path = path[len("media/") :]
+        return path or None
+
+    @staticmethod
     def create_article(user, company, data, image=None):
         """
         Creates an article with audit logging and automatic slug generation if missing.
         """
         import reversion
-        from django.conf import settings
 
         with reversion.create_revision():
             tags_data = data.pop("tags", [])
-            # Handle image as URL/path string in payload
             image_path = None
             if "image" in data and isinstance(data.get("image"), str):
-                url = (data.pop("image") or "").strip()
-                if url:
-                    media_url = getattr(settings, "MEDIA_URL", "/media/")
-                    if url.startswith(media_url):
-                        image_path = url[len(media_url) :].lstrip("/")
-                    elif "://" in url:
-                        idx = url.find("/media/")
-                        if idx != -1:
-                            image_path = url[idx + 1 :]  # 'media/...'
-                    else:
-                        image_path = url
+                image_path = ArticleService._normalize_image_path(data.pop("image"))
 
             # Auto-slug if not provided
             if not data.get("slug"):
@@ -90,24 +113,12 @@ class ArticleService:
         Updates an article and logs the change.
         """
         import reversion
-        from django.conf import settings
 
         with reversion.create_revision():
             tags_data = data.pop("tags", None)
-            # Normalize possible image URL/path provided in data
             image_path = None
             if "image" in data and isinstance(data.get("image"), str):
-                url = (data.pop("image") or "").strip()
-                if url:
-                    media_url = getattr(settings, "MEDIA_URL", "/media/")
-                    if url.startswith(media_url):
-                        image_path = url[len(media_url) :].lstrip("/")
-                    elif "://" in url:
-                        idx = url.find("/media/")
-                        if idx != -1:
-                            image_path = url[idx + 1 :]
-                    else:
-                        image_path = url
+                image_path = ArticleService._normalize_image_path(data.pop("image"))
 
             # If status is being updated, ensure valid transition
             new_status = data.get("status")
@@ -172,14 +183,14 @@ class ArticleService:
         update_data = {
             "status": Article.STATUS_SCHEDULED if is_scheduled else Article.STATUS_PUBLISHED,
         }
-        
+
         if not article.published_at:
             update_data["published_at"] = now
 
         article = ArticleService.update_article(
-            user, 
-            article, 
-            update_data, 
+            user,
+            article,
+            update_data,
             revision_comment="Scheduled" if is_scheduled else "Published"
         )
 
@@ -225,7 +236,7 @@ class ArticleService:
 
         company = article.company
         article_data = {"id": str(article.id), "title": article.title}
-        
+
         ArticleService._invalidate_article_cache(article)
 
         article.delete()
@@ -298,7 +309,7 @@ class ArticleService:
             request=SimpleNamespace(company=article.company),
             changes={"reverted_to_version": version_id},
         )
-        
+
         ArticleService._invalidate_article_cache(article)
 
         return article

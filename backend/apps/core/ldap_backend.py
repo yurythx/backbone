@@ -63,7 +63,7 @@ class TenantLDAPBackend(ModelBackend):
             if isinstance(e, LDAPBindError) and getattr(e, "result", {}).get("description") == "invalidCredentials":
                 logger.warning(f"LDAP bind failed (invalid credentials) for {username} @ {company.slug}")
                 return None
-                
+
             # Erros específicos do LDAP (timeout, server down, configuração errada)
             logger.error(f"LDAP server issue for {company.slug}: {e!s}. Marking as DOWN.")
             cache.set(down_key, True, timeout=120)  # 2 minutos de "pausa"
@@ -209,16 +209,16 @@ class TenantLDAPBackend(ModelBackend):
             user.email = email
             user.first_name = first_name
             user.last_name = last_name
-            
+
             update_fields = ["email", "first_name", "last_name"]
-            
+
             if is_admin_member and not user.is_staff:
                 user.is_staff = True
                 update_fields.append("is_staff")
             elif not is_admin_member and user.is_staff and not user.is_superuser:
                 user.is_staff = False
                 update_fields.append("is_staff")
-                
+
             user.save(update_fields=update_fields)
         logger.info(f"{'Created' if created else 'Updated'} user from LDAP: {username}")
         return user

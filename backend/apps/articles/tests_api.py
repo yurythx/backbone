@@ -31,6 +31,8 @@ class ArticlesAPITest(APITestCase):
 
     def test_read_endpoints_without_role(self):
         # Articles list requires 'articles.article_view' permission — 403 without role
+        self.user.role = None
+        self.user.save(update_fields=["role"])
         res = self.client.get("/api/articles/articles/")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 

@@ -34,9 +34,10 @@ export function usePublicCompanySlug() {
       try {
         const res = await api.get<{ slug: string }[]>("/api/core/companies/public_list/")
         const list = Array.isArray(res.data) ? res.data : []
+        if (!active) return
+        if (list.length !== 1) return
         const picked = list[0]?.slug
         if (!picked) return
-        if (!active) return
         localStorage.setItem("companySlug", picked)
         setCompanySlug(picked)
       } finally {
@@ -51,4 +52,3 @@ export function usePublicCompanySlug() {
 
   return { companySlug, isResolving }
 }
-

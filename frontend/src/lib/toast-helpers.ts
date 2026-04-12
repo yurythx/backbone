@@ -95,8 +95,9 @@ export function showApiError(err: unknown, fallbackMessage = 'Ocorreu um erro') 
         })
     }
 
-    // Always log for debugging
-    console.error('API Error:', err)
+    if (process.env.NEXT_PUBLIC_DEBUG === 'true') {
+        console.error('API Error:', err)
+    }
 }
 
 /**

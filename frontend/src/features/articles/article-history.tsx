@@ -87,15 +87,15 @@ export function ArticleHistory({ articleSlug }: ArticleHistoryProps) {
                         Histórico
                     </Button>
                 </SheetTrigger>
-                <SheetContent>
-                    <SheetHeader>
+                <SheetContent side="right" className="w-[90vw] sm:w-[520px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr]">
+                    <SheetHeader className="border-b bg-muted/30 px-4 py-4 text-left">
                         <SheetTitle>Histórico de Versões</SheetTitle>
                         <SheetDescription>
                             Visualize e restaure versões anteriores deste artigo.
                         </SheetDescription>
                     </SheetHeader>
 
-                    <ScrollArea className="h-[calc(100vh-120px)] mt-6 pr-4">
+                    <ScrollArea className="h-full px-4 py-4">
                         {isLoading ? (
                             <div className="text-center py-4 text-muted-foreground" role="status" aria-live="polite" aria-label="Carregando histórico do artigo">Carregando...</div>
                         ) : versions?.length === 0 ? (

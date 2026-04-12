@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import axios from "axios"
 import { useTheme } from "@/components/theme-provider"
 import { api } from "@/lib/axios"
 import { H3, P, Muted } from "@/components/ui/typography"
@@ -60,9 +59,7 @@ export function BrandingSettings({ isOnboarding }: BrandingSettingsProps) {
                     })
                     setSelectedPalette(res.data.theme_palette || currentPalette)
                 }
-            } catch (error) {
-                if (axios.isCancel(error)) return
-                console.error("Failed to fetch branding", error)
+            } catch {
             }
         }
         fetchBranding()

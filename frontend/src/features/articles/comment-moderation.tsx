@@ -139,18 +139,6 @@ export function CommentModeration() {
     if (commentIdParam && /^[0-9]+$/.test(commentIdParam)) setFocusCommentId(Number(commentIdParam))
   }, [searchParams])
 
-  React.useEffect(() => {
-    if (!focusCommentId) return
-    const el = document.getElementById(`comentario-${focusCommentId}`)
-    if (!el) return
-    el.scrollIntoView({ behavior: "smooth", block: "start" })
-    setHighlightCommentId(focusCommentId)
-    if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current)
-    highlightTimeoutRef.current = window.setTimeout(() => {
-      setHighlightCommentId(null)
-    }, 2500)
-  }, [comments.length, focusCommentId])
-
   const articlesQuery = useQuery({
     queryKey: ["articles-lite"],
     queryFn: async ({ signal }) => {
@@ -190,7 +178,13 @@ export function CommentModeration() {
     queryKey: ["articles-comments-moderation", status, debounced, articleId, createdAtGte, createdAtLte],
     initialPageParam: 1,
     queryFn: async ({ pageParam, signal }) => {
-      const params: Record<string, string | number | boolean> = { ordering: "-created_at", page: pageParam, page_size: 20, is_public: true }
+      const safePage = typeof pageParam === "number" ? pageParam : Number(pageParam)
+      const params: Record<string, string | number | boolean> = {
+        ordering: "-created_at",
+        page: Number.isFinite(safePage) && safePage > 0 ? safePage : 1,
+        page_size: 20,
+        is_public: true,
+      }
       if (status === "pending") params.is_approved = false
       if (status === "approved") params.is_approved = true
       if (debounced) params.search = debounced
@@ -208,6 +202,18 @@ export function CommentModeration() {
     const pages = commentsQuery.data?.pages ?? []
     return pages.flatMap((p) => p.results)
   }, [commentsQuery.data])
+
+  React.useEffect(() => {
+    if (!focusCommentId) return
+    const el = document.getElementById(`comentario-${focusCommentId}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: "smooth", block: "start" })
+    setHighlightCommentId(focusCommentId)
+    if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current)
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightCommentId(null)
+    }, 2500)
+  }, [comments.length, focusCommentId])
 
   const loadMoreReplies = async (parentId: number) => {
     const cur = repliesByParent[parentId]
@@ -351,7 +357,7 @@ export function CommentModeration() {
       await queryClient.invalidateQueries({ queryKey: ["articles-comments-moderation"] })
       toast.success(`Removidos: ${data.deleted}`)
       clearSelection()
-      setBulkDeleteFilteredOpen(false)
+      setBulkFilterConfirmOpen(false)
     },
     onError: () => {
       toast.error("Erro ao remover pelo filtro")

@@ -5,6 +5,7 @@ import { Moon, Sun, Monitor, Check } from "lucide-react"
 import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
+import { useBranding } from "@/components/theme-provider"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -14,6 +15,7 @@ import {
 
 export function ThemeToggle() {
     const { theme, setTheme } = useTheme()
+    const { isPublicRoute, updateDarkModePreference } = useBranding()
     const [mounted, setMounted] = React.useState(false)
 
     // Evitar erros de hidratação
@@ -48,7 +50,10 @@ export function ThemeToggle() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40 p-1 glass border-0">
                 <DropdownMenuItem
-                    onClick={() => setTheme("light")}
+                    onClick={() => {
+                        setTheme("light")
+                        if (!isPublicRoute) void updateDarkModePreference("light")
+                    }}
                     className="flex items-center justify-between cursor-pointer"
                 >
                     <div className="flex items-center gap-2">
@@ -58,7 +63,10 @@ export function ThemeToggle() {
                     {theme === "light" && <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                    onClick={() => setTheme("dark")}
+                    onClick={() => {
+                        setTheme("dark")
+                        if (!isPublicRoute) void updateDarkModePreference("dark")
+                    }}
                     className="flex items-center justify-between cursor-pointer"
                 >
                     <div className="flex items-center gap-2">
@@ -68,7 +76,10 @@ export function ThemeToggle() {
                     {theme === "dark" && <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                    onClick={() => setTheme("system")}
+                    onClick={() => {
+                        setTheme("system")
+                        if (!isPublicRoute) void updateDarkModePreference("system")
+                    }}
                     className="flex items-center justify-between cursor-pointer"
                 >
                     <div className="flex items-center gap-2">

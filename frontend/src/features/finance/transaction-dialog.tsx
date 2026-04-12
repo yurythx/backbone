@@ -116,15 +116,16 @@ export function TransactionDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[620px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr_auto]">
+          <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
             <DialogTitle>{transaction ? "Editar Transação" : "Nova Transação"}</DialogTitle>
             <DialogDescription className="sr-only">
               Formulário de criação e edição de transações financeiras.
             </DialogDescription>
           </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+            <Form {...form}>
+              <form id="transaction-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
                 name="description"
@@ -287,38 +288,37 @@ export function TransactionDialog({
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSaving}>
-                  Salvar
-                </Button>
-              </div>
             </form>
-          </Form>
+            </Form>
+          </div>
+          <div className="border-t bg-background/60 px-4 py-4 sm:px-6 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button type="submit" form="transaction-form" disabled={isSaving}>Salvar</Button>
+          </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[460px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr_auto]">
+          <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
             <DialogTitle>Nova categoria</DialogTitle>
             <DialogDescription className="sr-only">Criar categoria pessoal.</DialogDescription>
           </DialogHeader>
-          <form
-            className="space-y-4"
-            onSubmit={categoryForm.handleSubmit(async (values) => {
-              const name = values.name.trim()
-              if (!name) {
-                toast.error("Nome da categoria é obrigatório.")
-                return
-              }
-              const created = await onCreateCategory({ name, color: values.color })
-              form.setValue("category", String(created.id), { shouldDirty: true })
-              setIsCategoryDialogOpen(false)
-            })}
-          >
+          <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+            <form
+              id="category-form"
+              className="space-y-4"
+              onSubmit={categoryForm.handleSubmit(async (values) => {
+                const name = values.name.trim()
+                if (!name) {
+                  toast.error("Nome da categoria é obrigatório.")
+                  return
+                }
+                const created = await onCreateCategory({ name, color: values.color })
+                form.setValue("category", String(created.id), { shouldDirty: true })
+                setIsCategoryDialogOpen(false)
+              })}
+            >
             <div className="grid gap-2">
               <FormLabel>Nome</FormLabel>
               <Input {...categoryForm.register("name", { required: true })} placeholder="Ex: Pessoal" />
@@ -327,15 +327,12 @@ export function TransactionDialog({
               <FormLabel>Cor</FormLabel>
               <Input type="color" {...categoryForm.register("color", { required: true })} />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isCreatingCategory}>
-                Salvar
-              </Button>
-            </div>
           </form>
+          </div>
+          <div className="border-t bg-background/60 px-4 py-4 sm:px-6 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>Cancelar</Button>
+            <Button type="submit" form="category-form" disabled={isCreatingCategory}>Salvar</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

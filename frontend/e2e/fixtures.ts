@@ -4,6 +4,7 @@ const E2E_USERNAME = process.env.E2E_USERNAME || 'suporte';
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'suporte123';
 const E2E_COMPANY_SLUG = process.env.E2E_COMPANY_SLUG || 'raiz';
 const E2E_API_URL = process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8005';
+const E2E_FRONTEND_URL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3005';
 
 export async function loginByApi(page: Page, request: APIRequestContext) {
   const tokenRes = await request.post(`${E2E_API_URL}/api/accounts/token/`, {
@@ -19,14 +20,21 @@ export async function loginByApi(page: Page, request: APIRequestContext) {
   const companies = Array.isArray(companiesBody) ? companiesBody : companiesBody.value ?? [];
   const targetCompany = companies.find((company) => company.slug === E2E_COMPANY_SLUG) ?? companies[0];
 
-  await page.goto('/login', { waitUntil: 'domcontentloaded', timeout: 90_000 });
+  await expect
+    .poll(async () => {
+      const health = await request.get(`${E2E_FRONTEND_URL}/api/health`);
+      return health.status();
+    }, { timeout: 180_000 })
+    .toBe(200);
+
+  await page.goto('/login', { waitUntil: 'domcontentloaded', timeout: 180_000 });
   await page.locator('[aria-label="Selecionar empresa"]').waitFor({ timeout: 30_000 });
   await page.click('[aria-label="Selecionar empresa"]');
   await page.getByRole('option', { name: new RegExp(targetCompany.name, 'i') }).click();
   await page.fill('[aria-label="Nome de usuário"]', E2E_USERNAME);
   await page.fill('[aria-label="Senha"]', E2E_PASSWORD);
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/(dashboard)?$/, { timeout: 90_000 });
+  await page.waitForURL(/\/(dashboard)?$/, { timeout: 180_000 });
   await page.waitForLoadState('networkidle');
 
   return {

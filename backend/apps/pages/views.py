@@ -4,8 +4,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 
-from apps.accounts.permissions import ActionRolePermission, HasRolePermission
-from apps.core.models import Company
+from apps.accounts.permissions import ActionRolePermission
 from apps.module_manager.permissions import HasModuleAccess
 
 from .models import Page

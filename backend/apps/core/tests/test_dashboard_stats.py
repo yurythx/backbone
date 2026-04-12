@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.accounts.models import Role
 from apps.articles.models import Article, ArticleView
 from apps.core.models import Company
 
@@ -11,8 +12,9 @@ User = get_user_model()
 class DashboardStatsViewTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Dash Co", slug="dash-co")
+        role = Role.all_objects.create(company=self.company, name="Admin", permissions=["admin.view_dashboard"])
         self.user = User.objects.create_user(
-            username="dash", email="dash@co.com", password="pass", company=self.company, is_staff=True
+            username="dash", email="dash@co.com", password="pass", company=self.company, is_staff=True, role=role
         )
         self.client.force_authenticate(user=self.user)
         self.client.credentials(HTTP_X_COMPANY_SLUG="dash-co")

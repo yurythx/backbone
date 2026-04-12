@@ -45,6 +45,8 @@ class WebhookDispatchSecurityTest(TestCase):
         )
         mock_resp = Mock()
         mock_resp.url = "http://example.com/hook"
+        mock_resp.status_code = 200
+        mock_resp.text = "ok"
         mock_resp.raise_for_status.return_value = None
         mock_post.return_value = mock_resp
 

@@ -21,7 +21,7 @@ const RoleList = dynamic(
 
 export default function RolesPage() {
     return (
-        <Protected requiredPermissions={['admin.user_manage']}>
+        <Protected requiredPermissions={['admin.user_manage']} unauthorizedMode="modal">
             <div className="max-w-5xl mx-auto py-8">
                 <RoleList />
             </div>

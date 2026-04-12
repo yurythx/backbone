@@ -47,7 +47,10 @@ export function fixImageUrl(url: string | null | undefined): string {
   if (!url) return ''
   // Em desenvolvimento, corrige HTTPS local para HTTP para evitar timeouts no Next.js
   if (process.env.NODE_ENV === 'development' && typeof url === 'string' && url.startsWith('https://localhost:8005')) {
-    return url.replace('https://', 'http://')
+    url = url.replace('https://', 'http://')
   }
-  return url
+  if (url.startsWith('/media/media/')) {
+    url = url.replace('/media/media/', '/media/')
+  }
+  return encodeURI(url)
 }

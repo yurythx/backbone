@@ -6,13 +6,16 @@ from .models import APIKey
 class APIKeyAuthentication(authentication.BaseAuthentication):
     def authenticate(self, request):
         api_key_header = request.headers.get("X-API-Key")
-        auth_header = request.headers.get("Authorization")
 
         raw_api_key = None
         if api_key_header:
             raw_api_key = api_key_header
-        elif auth_header and auth_header.startswith("Bearer "):
-            raw_api_key = auth_header.split(" ")[1]
+        else:
+            auth_header = request.headers.get("Authorization") or ""
+            if auth_header.startswith("Api-Key "):
+                raw_api_key = auth_header.split(" ", 1)[1].strip()
+            elif auth_header.startswith("X-API-Key "):
+                raw_api_key = auth_header.split(" ", 1)[1].strip()
 
         if not raw_api_key:
             return None

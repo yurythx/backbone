@@ -17,6 +17,7 @@ const Checkbox = React.forwardRef<
     {...props}
   >
     <CheckboxPrimitive.Indicator
+      forceMount
       className={cn("flex items-center justify-center text-current")}
     >
       <Check className="h-4 w-4" />

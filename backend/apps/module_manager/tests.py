@@ -13,7 +13,7 @@ User = get_user_model()
 class ModuleManagerTest(APITestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Test Co", slug="test-co")
-        self.role = Role.objects.create(company=self.company, name="Admin", permissions=[])
+        self.role = Role.objects.create(company=self.company, name="Admin", permissions=["admin.settings_manage"])
         self.user = User.objects.create_user(username="admin", password="pwd", company=self.company, role=self.role)
         self.client.credentials(HTTP_X_COMPANY_SLUG=self.company.slug)
 

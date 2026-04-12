@@ -12,6 +12,7 @@ import Image from "next/image"
 import { fixImageUrl } from "@/lib/utils"
 import { AboutAuthor } from "@/components/articles/about-author"
 import { PublicArticleComments } from "@/components/articles/public-article-comments"
+import { useRouter, useSearchParams } from "next/navigation"
 
 interface Article {
     id: number
@@ -43,6 +44,8 @@ interface Props {
 }
 
 export function PublicArticleViewer({ initialArticle, slug }: Props) {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const [article, setArticle] = useState<Article | null>(initialArticle)
     const [loading, setLoading] = useState(!initialArticle)
     const [error, setError] = useState(false)
@@ -53,36 +56,66 @@ export function PublicArticleViewer({ initialArticle, slug }: Props) {
             return
         }
 
-        const fetchPrivate = async () => {
+        let cancelled = false
+
+        const run = async () => {
+            const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
+            const qsCompany = (searchParams.get("company_slug") || "").trim() || null
+
+            const tryFetchPublic = async (companySlug: string) => {
+                const res = await api.get(`/api/articles/public/articles/${encodeURIComponent(slug)}/`, {
+                    params: { company_slug: companySlug },
+                    headers: { "X-Company-Slug": companySlug },
+                })
+                if (cancelled) return
+                setArticle(res.data as Article)
+                router.replace(`/p/artigos/${slug}?company_slug=${encodeURIComponent(companySlug)}`)
+            }
+
             try {
-                // Verifica se tem token
-                const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-                
-                // Se não tiver artigo inicial e não tiver token, é 404
-                if (!token) {
-                    setError(true)
+                if (token) {
+                    const res = await api.get(`/api/articles/articles/`, { params: { slug } })
+                    const results = res.data.results || res.data
+                    if (Array.isArray(results) && results[0]) {
+                        if (!cancelled) setArticle(results[0])
+                        return
+                    }
+                    if (!cancelled) setError(true)
                     return
                 }
 
-                // Tenta buscar via API do dashboard (que retorna privados)
-                const res = await api.get(`/api/articles/articles/`, { params: { slug } })
-                const results = res.data.results || res.data
-                
-                if (results && Array.isArray(results) && results.length > 0) {
-                    setArticle(results[0])
-                } else {
-                    setError(true)
+                if (qsCompany) {
+                    await tryFetchPublic(qsCompany)
+                    return
                 }
-            } catch (err) {
-                console.error(err)
-                setError(true)
+
+                const listRes = await api.get<{ slug: string }[]>("/api/core/companies/public_list/")
+                const companies = Array.isArray(listRes.data) ? listRes.data : []
+                if (companies.length === 1 && companies[0]?.slug) {
+                    await tryFetchPublic(companies[0].slug)
+                    return
+                }
+                for (const c of companies) {
+                    if (!c?.slug) continue
+                    try {
+                        await tryFetchPublic(c.slug)
+                        return
+                    } catch {
+                    }
+                }
+                if (!cancelled) setError(true)
+            } catch {
+                if (!cancelled) setError(true)
             } finally {
-                setLoading(false)
+                if (!cancelled) setLoading(false)
             }
         }
 
-        fetchPrivate()
-    }, [article, slug])
+        run()
+        return () => {
+            cancelled = true
+        }
+    }, [article, router, searchParams, slug])
 
     if (loading) {
         return (

@@ -51,12 +51,13 @@ interface MediaItem {
 
 interface MediaManagerProps {
     onSelect?: (url: string) => void
+    onSelectItem?: (item: MediaItem) => void
     selectable?: boolean
 }
 
 type FilterType = "all" | "image" | "document"
 
-export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
+export function MediaManager({ onSelect, onSelectItem, selectable }: MediaManagerProps) {
     const queryClient = useQueryClient()
     const [searchTerm, setSearchTerm] = useState("")
     const [filterType, setFilterType] = useState<FilterType>("all")
@@ -168,7 +169,9 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
     }
 
     const handleItemClick = (item: MediaItem) => {
-        if (selectable && onSelect) {
+        if (selectable && onSelectItem) {
+            onSelectItem(item)
+        } else if (selectable && onSelect) {
             onSelect(fixImageUrl(item.file_url))
         } else {
             setSelectedItem(item)
@@ -275,6 +278,7 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                                                             className="object-cover transition-transform group-hover:scale-110 duration-500"
                                                             sizes="(max-width: 768px) 50vw, 25vw"
                                                             priority={false}
+                                                            unoptimized
                                                         />
                                                     </div>
                                                 ) : (
@@ -340,6 +344,7 @@ export function MediaManager({ onSelect, selectable }: MediaManagerProps) {
                                             fill
                                             className="object-contain rounded-lg shadow-lg border bg-background"
                                             sizes="(max-width: 768px) 100vw, 50vw"
+                                            unoptimized
                                         />
                                         <a
                                             href={fixImageUrl(selectedItem.file_url || '')}

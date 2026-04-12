@@ -5,6 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.core.models import Company
 from apps.core.serializers import CompanySerializer
+from apps.crm.models import CRMGroup
 
 from .models import Invitation, Role, UserNotificationPreference, UserThemePreference
 
@@ -14,13 +15,13 @@ User = get_user_model()
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         from django.contrib.auth.signals import user_logged_in
-        
+
         data = super().validate(attrs)
-        
+
         # Dispara o sinal para que o log de auditoria capture o evento
         user_logged_in.send(
-            sender=self.user.__class__, 
-            request=self.context.get("request"), 
+            sender=self.user.__class__,
+            request=self.context.get("request"),
             user=self.user
         )
         return data
@@ -113,13 +114,14 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     role_details = RoleSerializer(source="role", read_only=True)
     company_details = CompanySerializer(source="company", read_only=True)
-    password = serializers.CharField(write_only=True, required=False, min_length=6)
+    password = serializers.CharField(write_only=True, required=False, min_length=8)
     avatar_url = serializers.SerializerMethodField()
     company = serializers.PrimaryKeyRelatedField(queryset=Company.objects.all(), required=False)
     # A3: role filtrada pelo tenant do request — impede atribuir role de outro tenant
     role = serializers.SerializerMethodField(read_only=False)
     # Explicitly define avatar to handle file uploads properly
     avatar = serializers.ImageField(required=False, allow_null=True)
+    crm_groups = serializers.PrimaryKeyRelatedField(queryset=CRMGroup.all_objects.all(), many=True, required=False)
 
     class Meta:
         model = User
@@ -135,20 +137,70 @@ class UserSerializer(serializers.ModelSerializer):
             "company_details",
             "is_superuser",
             "is_staff",
+            "is_active",
             "avatar",
             "avatar_url",
             "password",
             "status",
             "bio",
+            "crm_groups",
+            "last_login",
+            "date_joined",
+            "last_seen",
         ]
         # I-A1: is_superuser e is_staff são read_only — não podem ser alterados via API
-        read_only_fields = ["id", "company_details", "role_details", "avatar_url", "is_superuser", "is_staff"]
+        read_only_fields = ["id", "company_details", "role_details", "avatar_url", "is_superuser", "is_staff", "last_login", "date_joined", "last_seen"]
         extra_kwargs = {
             "role": {"required": False},
             "company": {"required": False},
             "email": {"required": False},
             "username": {"required": False},
+            "is_active": {"required": False},
         }
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request and self.instance and "is_active" in attrs:
+            if self.instance.id == getattr(request.user, "id", None) and attrs.get("is_active") is False:
+                raise serializers.ValidationError({"is_active": "Você não pode desativar o próprio usuário."})
+
+        password = attrs.get("password")
+        if password:
+            from django.core.exceptions import ValidationError
+
+            context_user = self.instance or User(
+                username=attrs.get("username"),
+                email=attrs.get("email"),
+                first_name=attrs.get("first_name"),
+                last_name=attrs.get("last_name"),
+            )
+            try:
+                validate_password(password, user=context_user)
+            except ValidationError as e:
+                raise serializers.ValidationError({"password": e.messages[0]})
+
+        return attrs
+
+    def validate_crm_groups(self, groups):
+        request = self.context.get("request")
+        target_company = None
+
+        if self.instance and getattr(self.instance, "company_id", None):
+            target_company = self.instance.company
+        if not target_company and request and getattr(request, "company", None):
+            target_company = request.company
+        if not target_company and request and getattr(request, "user", None) and getattr(request.user, "company", None):
+            target_company = request.user.company
+
+        if not target_company:
+            if groups:
+                raise serializers.ValidationError("Contexto de empresa ausente para atribuir grupos do CRM.")
+            return groups
+
+        invalid = [group.id for group in groups if group.company_id != target_company.id]
+        if invalid:
+            raise serializers.ValidationError("Um ou mais grupos do CRM não pertencem a esta empresa.")
+        return groups
 
     def get_role(self, obj):
         """Retorna o ID da role atual do usuário (para leitura no get_role field)."""
@@ -190,16 +242,32 @@ class UserSerializer(serializers.ModelSerializer):
             return obj.avatar.url
         return None
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        company = getattr(request, "company", None) if request else None
+        if not company and request and getattr(request, "user", None) and getattr(request.user, "company", None):
+            company = request.user.company
+        if company is not None:
+            self.fields["crm_groups"].queryset = CRMGroup.all_objects.all()
+
     def create(self, validated_data):
+        crm_groups = validated_data.pop("crm_groups", [])
         password = validated_data.pop("password", None)
         user = User.objects.create_user(password=password, **validated_data)
+        if crm_groups:
+            user.crm_groups.set(crm_groups)
         return user
 
     def update(self, instance, validated_data):
+        crm_groups = validated_data.pop("crm_groups", None)
         password = validated_data.pop("password", None)
         # `role` is validated and resolved to a Role instance by to_internal_value().
         # super().update() handles assignment directly via the validated instance.
         user = super().update(instance, validated_data)
+
+        if crm_groups is not None:
+            user.crm_groups.set(crm_groups)
 
         if password:
             user.set_password(password)
@@ -268,11 +336,27 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 class InvitationSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source="role.name", read_only=True)
+    crm_groups = serializers.PrimaryKeyRelatedField(queryset=CRMGroup.all_objects.all(), many=True, required=False)
 
     class Meta:
         model = Invitation
-        fields = ["id", "email", "role", "role_name", "status", "expires_at", "created_at"]
+        fields = ["id", "email", "role", "role_name", "crm_groups", "status", "expires_at", "created_at"]
         read_only_fields = ["id", "status", "expires_at", "created_at"]
+
+    def validate_crm_groups(self, groups):
+        request = self.context.get("request")
+        company = getattr(request, "company", None) if request else None
+        if not company and request and getattr(request, "user", None) and getattr(request.user, "company", None):
+            company = request.user.company
+        if not company:
+            if groups:
+                raise serializers.ValidationError("Contexto de empresa ausente para atribuir grupos do CRM.")
+            return groups
+
+        invalid = [group.id for group in groups if group.company_id != company.id]
+        if invalid:
+            raise serializers.ValidationError("Um ou mais grupos do CRM não pertencem a esta empresa.")
+        return groups
 
 
 class AcceptInvitationSerializer(serializers.Serializer):

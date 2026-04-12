@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { toast } from "sonner"
+import { AxiosError } from "axios"
 
 export type CRMViewMode = "overview" | "kanban" | "list"
 
@@ -36,10 +37,51 @@ export interface CRMColumn {
   cards?: Deal[]
 }
 
+export function getProgressValue(deal: Deal) {
+  const rawValue = deal.custom_fields?.progress_percentage
+  const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue)
+
+  if (!Number.isFinite(numericValue)) {
+    return 0
+  }
+
+  return Math.max(0, Math.min(100, numericValue))
+}
+
+export function resolveDealProgress(deal: Deal, pipeline?: Pipeline) {
+  const rawValue = deal.custom_fields?.progress_percentage
+  if (rawValue !== undefined && rawValue !== null && rawValue !== "") {
+    return getProgressValue(deal)
+  }
+
+  if (!pipeline) {
+    return getProgressValue(deal)
+  }
+
+  const columns = getPipelineColumns(pipeline)
+  if (columns.length <= 1) return getProgressValue(deal)
+
+  const index = columns.findIndex((column) => {
+    const dealColumnId = deal.column ?? deal.column_id
+    if (typeof dealColumnId === "number") return dealColumnId === column.id
+    if (typeof deal.stage === "number" && typeof column.legacy_stage === "number") {
+      return deal.stage === column.legacy_stage
+    }
+    return false
+  })
+
+  if (index < 0) return getProgressValue(deal)
+  const column = columns[index]
+  if (column.marks_done || index === columns.length - 1) return 100
+  return Math.round((index / (columns.length - 1)) * 100)
+}
+
 export interface Pipeline {
   id: number
   name: string
   description?: string
+  visibility?: "company" | "group"
+  groups?: number[]
   stages: Stage[]
   columns?: CRMColumn[]
 }
@@ -49,6 +91,7 @@ export interface CRMSavedViewFilters {
   priorityFilter: Deal["priority"] | "all"
   ownerFilter: string
   titleSearch: string
+  dueFilter: "all" | "overdue" | "today" | "this_week" | "this_month"
 }
 
 export interface CRMSavedViewSortingItem {
@@ -75,13 +118,52 @@ export interface DealActivity {
   description: string;
   actor_name: string;
   created_at: string;
-  old_value?: any;
-  new_value?: any;
+  old_value?: unknown;
+  new_value?: unknown;
 }
 
 export interface DealNoteInput {
   dealId: number
   description: string
+}
+
+export interface DealAttachmentUploadInput {
+  dealId: number
+  file: File
+  kind?: "photo" | "file"
+  phase?: "before" | "during" | "after"
+  caption?: string
+  title?: string
+  alt_text?: string
+}
+
+export interface DealAttachmentLinkInput {
+  dealId: number
+  mediaId: string
+  kind?: "photo" | "file"
+  phase?: "before" | "during" | "after"
+  caption?: string
+}
+
+export interface DealAttachmentDeleteInput {
+  dealId: number
+  attachmentId: string
+}
+
+export interface DealAttachment {
+  id: string
+  deal: number
+  media: string
+  media_file_url: string
+  media_file_type: string
+  media_file_size: number
+  media_title: string
+  kind: "photo" | "file"
+  phase: "before" | "during" | "after"
+  caption: string
+  created_by: number | null
+  created_by_username: string
+  created_at: string
 }
 
 export interface Deal {
@@ -108,14 +190,38 @@ export interface Deal {
   integration_source?: string
   data_agendamento?: string
   tecnico_responsavel?: number | null
-  custom_fields?: Record<string, any>
+  custom_fields?: Record<string, unknown>
   activities?: DealActivity[]
+  attachments?: DealAttachment[]
+  messenger_conversation?: number | null
 }
 
 function normalizeListResponse<T>(data: T[] | { results?: T[] } | undefined): T[] {
   if (Array.isArray(data)) return data
   if (data && Array.isArray(data.results)) return data.results
   return []
+}
+
+function unwrapFirst(value: unknown) {
+  if (Array.isArray(value)) return value[0]
+  return value
+}
+
+function getResponseData(err: unknown) {
+  if (!err || typeof err !== "object") return null
+  if (!("response" in err)) return null
+  const response = (err as { response?: { data?: unknown } }).response
+  const data = response?.data
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null
+  return data as Record<string, unknown>
+}
+
+function isNetworkError(err: unknown) {
+  return err instanceof AxiosError && !err.response
+}
+
+export function isCRMNetworkError(err: unknown) {
+  return isNetworkError(err)
 }
 
 function mergeDealCache(currentDeals: Deal[] | undefined, updatedDeal: Deal) {
@@ -231,8 +337,8 @@ export function getDealColumnTitle(deal: Pick<Deal, "column_title" | "stage_name
   return deal.column_title || deal.stage_name || "Sem coluna"
 }
 
-export function getDealColumnId(deal: Pick<Deal, "column" | "stage">) {
-  return deal.column || deal.stage
+export function getDealColumnId(deal: Pick<Deal, "column" | "column_id" | "stage">) {
+  return deal.column ?? deal.column_id ?? deal.stage
 }
 
 export function isDealInColumn(
@@ -247,7 +353,7 @@ export function isDealInColumn(
 }
 
 export function getDealColumnMeta(
-  deal: Pick<Deal, "column" | "column_id" | "column_data" | "column_title" | "stage_name">,
+  deal: Partial<Deal>,
   pipelines?: Pipeline[]
 ) {
   if (deal.column_data) {
@@ -280,7 +386,7 @@ export function getDealColumnMeta(
 }
 
 export function isDealDone(
-  deal: Pick<Deal, "is_closed" | "custom_fields" | "column" | "column_id" | "column_data" | "column_title" | "stage_name">,
+  deal: Partial<Deal> & Pick<Deal, "is_closed">,
   pipelines?: Pipeline[]
 ) {
   const progress = typeof deal.custom_fields?.progress_percentage === "number"
@@ -292,13 +398,13 @@ export function isDealDone(
 
 export function getColumnOccupancy(
   columnId: number,
-  deals: Pick<Deal, "id" | "column" | "column_id" | "stage">[],
+  deals: Array<Partial<Deal> & Pick<Deal, "id">>,
   pipelines?: Pipeline[],
   ignoreDealId?: number
 ) {
   return deals.filter((deal) => {
     if (ignoreDealId && deal.id === ignoreDealId) return false
-    const dealColumnId = getDealColumnId(deal)
+    const dealColumnId = getDealColumnId(deal as Pick<Deal, "column" | "column_id" | "stage">)
     if (dealColumnId) return dealColumnId === columnId
 
     if (!pipelines) return false
@@ -310,16 +416,16 @@ export function getColumnOccupancy(
 }
 
 export function getColumnTransitionGuard(
-  deal: Pick<Deal, "id" | "column" | "column_id" | "column_data" | "column_title" | "stage" | "stage_name">,
+  deal: Partial<Deal>,
   targetColumn: Partial<CRMColumn> | null | undefined,
-  deals: Pick<Deal, "id" | "column" | "column_id" | "stage">[],
+  deals: Array<Partial<Deal> & Pick<Deal, "id">>,
   pipelines?: Pipeline[]
 ) {
   if (!targetColumn?.id) {
     return { allowed: false, reason: "Selecione uma coluna válida." }
   }
 
-  const sourceColumnId = getDealColumnId(deal)
+  const sourceColumnId = getDealColumnId(deal as Pick<Deal, "column" | "column_id" | "stage">)
   const semantics = resolveColumnSemantics(targetColumn)
   const pipelineColumns = pipelines?.flatMap((pipeline) => getPipelineColumns(pipeline)) ?? []
   const sourceColumn = sourceColumnId ? pipelineColumns.find((column) => column.id === sourceColumnId) : null
@@ -338,7 +444,8 @@ export function getColumnTransitionGuard(
     }
   }
 
-  const occupancy = semantics.wip_limit ? getColumnOccupancy(targetColumn.id, deals, pipelines, deal.id) : 0
+  const ignoreDealId = typeof deal.id === "number" ? deal.id : undefined
+  const occupancy = semantics.wip_limit ? getColumnOccupancy(targetColumn.id, deals, pipelines, ignoreDealId) : 0
   if (semantics.wip_limit && occupancy >= semantics.wip_limit) {
     return {
       allowed: false,
@@ -423,8 +530,24 @@ export function useCRM() {
       // 3. Atualiza o cache de forma otimista
       if (previousDeals) {
         queryClient.setQueryData<Deal[]>(['crm-deals'], (old) => {
-          return old?.map((deal) =>
-            deal.id === updatedDeal.id ? {
+          return old?.map((deal) => {
+            if (deal.id !== updatedDeal.id) return deal;
+
+            // Calcula progresso otimista
+            let optimisticProgress = getProgressValue(deal);
+            if (targetColumn && targetPipeline) {
+              const allColumns = getPipelineColumns(targetPipeline);
+              const currentIndex = allColumns.findIndex(c => c.id === targetColumn.id);
+              if (currentIndex !== -1) {
+                if (targetColumn.marks_done || currentIndex === allColumns.length - 1) {
+                  optimisticProgress = 100;
+                } else {
+                  optimisticProgress = Math.round((currentIndex / (allColumns.length - 1)) * 100);
+                }
+              }
+            }
+
+            return {
               ...deal,
               ...updatedDeal,
               stage: updatedDeal.stage ?? targetStage?.id ?? deal.stage,
@@ -434,25 +557,35 @@ export function useCRM() {
               column_data: targetColumn
                 ? { ...targetColumn, ...resolveColumnSemantics(targetColumn) }
                 : deal.column_data,
-              is_closed: targetColumn ? resolveColumnSemantics(targetColumn).marks_done : deal.is_closed,
-            } : deal
-          )
+              is_closed: targetColumn
+                ? (() => {
+                    if (!targetPipeline) return resolveColumnSemantics(targetColumn).marks_done
+                    const allColumns = getPipelineColumns(targetPipeline)
+                    const currentIndex = allColumns.findIndex((c) => c.id === targetColumn.id)
+                    return resolveColumnSemantics(targetColumn).marks_done || currentIndex === allColumns.length - 1
+                  })()
+                : deal.is_closed,
+              custom_fields: {
+                ...(deal.custom_fields || {}),
+                ...(updatedDeal.custom_fields || {}),
+                progress_percentage: optimisticProgress
+              }
+            };
+          })
         })
       }
 
       // Retorna o contexto com o snapshot
       return { previousDeals }
     },
-    onError: (err: any, _updatedDeal, context) => {
+    onError: (err: unknown, _updatedDeal, context) => {
       // Se a mutação falhar, reverte para o estado anterior
       if (context?.previousDeals) {
         queryClient.setQueryData(['crm-deals'], context.previousDeals)
       }
-      const columnErrors = err?.response?.data?.column
-      const message =
-        (Array.isArray(columnErrors) ? columnErrors[0] : columnErrors) ||
-        err?.response?.data?.detail ||
-        "Erro ao mover card."
+      const data = getResponseData(err)
+      const columnErrors = data?.column
+      const message = unwrapFirst(columnErrors) || data?.detail || "Erro ao mover card."
       toast.error(String(message))
     },
     onSuccess: (savedDeal) => {
@@ -476,17 +609,71 @@ export function useCRM() {
       queryClient.setQueryData<Deal[]>(['crm-deals'], (old) => mergeDealCache(old, savedDeal))
       toast.success("Atualização publicada!")
     },
-    onError: (err: any) => {
-      const detail = err?.response?.data?.description
-      const message =
-        (Array.isArray(detail) ? detail[0] : detail) ||
-        err?.response?.data?.detail ||
-        "Não foi possível publicar a atualização."
+    onError: (err: unknown) => {
+      const data = getResponseData(err)
+      const detail = data?.description
+      const message = unwrapFirst(detail) || data?.detail || "Não foi possível publicar a atualização."
       toast.error(String(message))
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    }
+  })
+
+  const addDealAttachment = useMutation({
+    mutationFn: async (input: DealAttachmentUploadInput | DealAttachmentLinkInput) => {
+      const formData = new FormData()
+      const kind = input.kind || "photo"
+      const phase = input.phase || "during"
+      formData.append("kind", kind)
+      formData.append("phase", phase)
+      if (input.caption) formData.append("caption", input.caption)
+
+      if ("file" in input) {
+        formData.append("file", input.file)
+        if (input.title) formData.append("title", input.title)
+        if (input.alt_text) formData.append("alt_text", input.alt_text)
+      } else {
+        formData.append("media_id", input.mediaId)
+      }
+
+      const response = await api.post<Deal>(`/api/crm/deals/${input.dealId}/attachments/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
+      return response.data
+    },
+    onSuccess: (savedDeal) => {
+      queryClient.setQueryData<Deal[]>(['crm-deals'], (old) => mergeDealCache(old, savedDeal))
+      toast.success("Anexo adicionado!")
+    },
+    onError: (err: unknown) => {
+      if (isNetworkError(err)) return
+      const data = getResponseData(err)
+      const message = data?.detail || "Não foi possível anexar o arquivo."
+      toast.error(String(message))
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] })
+    }
+  })
+
+  const deleteDealAttachment = useMutation({
+    mutationFn: async ({ dealId, attachmentId }: DealAttachmentDeleteInput) => {
+      const response = await api.delete<Deal>(`/api/crm/deals/${dealId}/attachments/${attachmentId}/`)
+      return response.data
+    },
+    onSuccess: (savedDeal) => {
+      queryClient.setQueryData<Deal[]>(['crm-deals'], (old) => mergeDealCache(old, savedDeal))
+      toast.success("Anexo removido.")
+    },
+    onError: (err: unknown) => {
+      const data = getResponseData(err)
+      const message = data?.detail || "Não foi possível remover o anexo."
+      toast.error(String(message))
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] })
     }
   })
 
@@ -497,6 +684,8 @@ export function useCRM() {
     isLoading: isLoadingPipelines || isLoadingDeals,
     createDeal,
     updateDeal,
-    addDealNote
+    addDealNote,
+    addDealAttachment,
+    deleteDealAttachment
   }
 }

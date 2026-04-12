@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Registrar mimetypes comuns que podem faltar em algumas distros
 mimetypes.add_type("image/webp", ".webp")
 mimetypes.add_type("image/svg+xml", ".svg")
+mimetypes.add_type("image/jpeg", ".jfif")
 
 
 class MediaProxyView(APIView):
@@ -29,7 +30,7 @@ class MediaProxyView(APIView):
         path = self.kwargs.get("path", "")
 
         # Lista de extensões de imagem públicas
-        public_extensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico"]
+        public_extensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".jfif"]
         is_image = any(path.lower().endswith(ext) for ext in public_extensions)
 
         if "branding/" in path or "public/" in path or is_image:
@@ -46,7 +47,7 @@ class MediaProxyView(APIView):
         logger.debug(f"[MediaProxy] Request path: {path}")
 
         # Recalcular se é imagem pública (mesma lógica do get_permissions)
-        public_extensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico"]
+        public_extensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".jfif"]
         is_image_public = any(path.lower().endswith(ext) for ext in public_extensions)
 
         # Verificação de Segurança de Tenant

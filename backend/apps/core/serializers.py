@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from shared_kernel.sanitization import sanitize_url
+
 from .models import AuditLog, Company, LDAPConfig, TenantBranding
 
 
@@ -28,7 +30,6 @@ class TenantBrandingSerializer(serializers.ModelSerializer):
             "font_family",
             "theme_palette",
             "custom_css",
-            "custom_js",
             "footer_text",
             "facebook_url",
             "instagram_url",
@@ -38,6 +39,26 @@ class TenantBrandingSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "company"]
+
+    def _validate_social_url(self, value: str | None):
+        if value in ("", None):
+            return ""
+        sanitized = sanitize_url(str(value), allowed_protocols=["http", "https"])
+        if not sanitized:
+            raise serializers.ValidationError("URL inválida.")
+        return sanitized
+
+    def validate_facebook_url(self, value):
+        return self._validate_social_url(value)
+
+    def validate_instagram_url(self, value):
+        return self._validate_social_url(value)
+
+    def validate_linkedin_url(self, value):
+        return self._validate_social_url(value)
+
+    def validate_twitter_url(self, value):
+        return self._validate_social_url(value)
 
     def get_logo_url(self, obj):
         if obj.logo:
@@ -73,6 +94,12 @@ class CompanySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class CompanyUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = ["name", "domain"]
 
 
 class TenantEmailConfigSerializer(serializers.ModelSerializer):

@@ -5,6 +5,7 @@ import { ContactList } from "./contact-list"
 import { ChatWindow } from "./chat-window"
 import { Contact } from "@/types"
 import { Message } from "@/types/messenger"
+import type { Conversation } from "@/types/messenger"
 import { MessageSquareDashed, Loader2, SlidersHorizontal } from "lucide-react"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
@@ -38,6 +39,11 @@ export function MessengerView() {
   const createdAtParam = searchParams.get("created_at") || searchParams.get("ts")
 
   const { user: currentUser, isLoading } = useAuth()
+
+  const resolvePresenceStatus = (value: unknown, isOnlineFallback?: boolean): Contact["status"] => {
+    if (value === "online" || value === "busy" || value === "offline") return value
+    return isOnlineFallback ? "online" : "offline"
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(searchTerm.trim()), 300)
@@ -105,6 +111,40 @@ export function MessengerView() {
     () => (Array.isArray(contactsQuery.data) ? contactsQuery.data : contactsQuery.data?.results ?? []),
     [contactsQuery.data],
   )
+
+  const conversationQuery = useQuery<Conversation | null>({
+    queryKey: ["conversation", conversationId],
+    queryFn: async () => {
+      if (!conversationId) return null
+      const id = Number(conversationId)
+      if (!Number.isFinite(id)) return null
+      const res = await api.get<Conversation>(`/api/messenger/conversations/${id}/`)
+      return res.data
+    },
+    enabled: !!currentUser && !!conversationId,
+    staleTime: 30_000,
+  })
+
+  useEffect(() => {
+    if (!conversationId) return
+    if (selectedContact) return
+    const conv = conversationQuery.data
+    if (!conv) return
+    const label = conv.title || (conv.is_group ? `Conversa #${conv.id}` : `Conversa #${conv.id}`)
+    setSelectedContact({
+      id: 0,
+      username: label,
+      email: "",
+      first_name: undefined,
+      last_name: undefined,
+      is_online: false,
+      group_names: [],
+      is_staff: false,
+      avatar_url: null,
+      last_seen: null,
+      status: "offline",
+    })
+  }, [conversationId, conversationQuery.data, selectedContact])
 
   const contactByUsername = useMemo(() => {
     const map = new Map<string, Contact>()
@@ -292,7 +332,7 @@ export function MessengerView() {
               group_names: p?.group_names || [],
               is_staff: !!p?.is_staff,
               last_seen: p?.last_seen || null,
-              status: p?.status || (p?.is_online ? 'online' : 'offline'),
+              status: resolvePresenceStatus(p?.status, !!p?.is_online),
               first_name: p?.first_name || "",
               last_name: p?.last_name || ""
             }
@@ -341,11 +381,12 @@ export function MessengerView() {
                 <SlidersHorizontal className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[90vw] sm:w-[420px]">
-              <SheetHeader>
+            <SheetContent side="right" className="w-[90vw] sm:w-[420px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0">
+              <SheetHeader className="border-b bg-muted/30 px-4 py-4 text-left">
                 <SheetTitle>Filtros de busca</SheetTitle>
               </SheetHeader>
-              <div className="mt-6 space-y-4">
+              <div className="min-h-0 overflow-y-auto">
+                <div className="space-y-4 px-4 py-4">
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground">Tipo de resultado</label>
                   <div className="mt-2">
@@ -439,6 +480,7 @@ export function MessengerView() {
                   <Button className="w-full" onClick={() => setIsFiltersOpen(false)}>
                     Aplicar filtros
                   </Button>
+                </div>
                 </div>
               </div>
             </SheetContent>

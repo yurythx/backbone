@@ -4,7 +4,8 @@ import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { PresenceHeartbeat } from "@/components/layout/presence-heartbeat"
 import { PresenceProvider } from "@/hooks/use-presence"
 import * as React from "react"
-import { ensureHasSessionCookie } from "@/lib/session"
+import { clearClientSession, ensureHasSessionCookie } from "@/lib/session"
+import { CRMAttachmentOfflineSync } from "@/features/crm/offline-attachment-sync"
 
 /**
  * DashboardLayout — proteção primária feita via middleware.ts (server-side).
@@ -17,6 +18,12 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   React.useEffect(() => {
+    const hasTokens = Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"))
+    if (!hasTokens) {
+      clearClientSession()
+      window.location.href = "/login"
+      return
+    }
     ensureHasSessionCookie()
   }, [])
 
@@ -24,6 +31,7 @@ export default function DashboardLayout({
     <PresenceProvider>
       <DashboardShell>
         <PresenceHeartbeat />
+        <CRMAttachmentOfflineSync />
         {children}
       </DashboardShell>
     </PresenceProvider>

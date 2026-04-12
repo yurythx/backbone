@@ -1,6 +1,6 @@
 "use client"
 
-import { getDealColumnMeta, isDealDone, resolveColumnSemantics, type CRMColumn, type Deal } from "./use-crm"
+import { getDealColumnMeta, isDealDone, resolveColumnSemantics, getProgressValue, type CRMColumn, type Deal } from "./use-crm"
 
 export type DeadlineRisk = "none" | "done" | "overdue" | "today" | "near" | "ok"
 export type ProgressState = "not_started" | "starting" | "in_progress" | "almost_done" | "done"
@@ -124,17 +124,6 @@ export function getDeadlineMeta(closingDate?: string, isCompleted = false) {
     badgeClassName: "border-emerald-300 bg-emerald-100 text-emerald-800",
     pillClassName: "text-primary/70 bg-primary/5",
   }
-}
-
-export function getProgressValue(deal: Deal) {
-  const rawValue = deal.custom_fields?.progress_percentage
-  const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue)
-
-  if (!Number.isFinite(numericValue)) {
-    return 0
-  }
-
-  return Math.max(0, Math.min(100, numericValue))
 }
 
 export function getProgressMeta(progress: number) {

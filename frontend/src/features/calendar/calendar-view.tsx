@@ -17,12 +17,20 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { format } from 'date-fns'
+import { usePermission } from '@/hooks/use-permission'
+
+const COLOR_CATEGORIES = ["blue", "green", "red", "purple", "orange"] as const
+type ColorCategory = (typeof COLOR_CATEGORIES)[number]
+
+function normalizeColorCategory(value: unknown): ColorCategory {
+  return COLOR_CATEGORIES.includes(value as ColorCategory) ? (value as ColorCategory) : "blue"
+}
 
 const eventSchema = z.object({
   title: z.string().min(1, "Título é obrigatório"),
   start_datetime: z.string(),
   end_datetime: z.string(),
-  color_category: z.string().default("blue"),
+  color_category: z.enum(COLOR_CATEGORIES),
 })
 
 type EventFormValues = z.infer<typeof eventSchema>
@@ -32,6 +40,8 @@ export function CalendarView() {
   const { events, createEvent, updateEvent } = useCalendar(dateRange.start, dateRange.end)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const { hasPermission } = usePermission()
+  const canManageEvents = hasPermission("calendar.event_manage")
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema),
@@ -51,6 +61,7 @@ export function CalendarView() {
   }, [])
 
   const handleDateClick = (arg: { date: Date }) => {
+    if (!canManageEvents) return
     const start = arg.date
     const end = new Date(start.getTime() + 60 * 60 * 1000) // 1 hour default
     
@@ -68,13 +79,14 @@ export function CalendarView() {
   }
 
   const handleEventClick = (arg: { event: { id: string } }) => {
+    if (!canManageEvents) return
     const event = events.find(e => String(e.id) === arg.event.id)
     if (!event) return
 
     setSelectedEvent(event)
     form.reset({
       title: event.title,
-      color_category: event.color_category,
+      color_category: normalizeColorCategory(event.color_category),
       start_datetime: format(new Date(event.start_datetime), "yyyy-MM-dd'T'HH:mm"),
       end_datetime: format(new Date(event.end_datetime), "yyyy-MM-dd'T'HH:mm")
     })
@@ -82,6 +94,7 @@ export function CalendarView() {
   }
 
   const handleEventDrop = async (arg: { event: { id: string; startStr: string; endStr?: string | null }; revert: () => void }) => {
+     if (!canManageEvents) return
      const event = events.find(e => String(e.id) === arg.event.id)
      if (!event) return
 
@@ -99,6 +112,7 @@ export function CalendarView() {
 
   const onSubmit = async (data: EventFormValues) => {
     try {
+      if (!canManageEvents) return
       if (selectedEvent) {
         await updateEvent.mutateAsync({
           id: selectedEvent.id,
@@ -153,8 +167,8 @@ export function CalendarView() {
         }}
         locale={ptBrLocale}
         events={calendarEvents}
-        editable={true}
-        selectable={true}
+        editable={canManageEvents}
+        selectable={canManageEvents}
         selectMirror={true}
         dayMaxEvents={true}
         weekends={true}
@@ -173,16 +187,17 @@ export function CalendarView() {
       />
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[560px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr_auto]">
+          <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
             <DialogTitle>{selectedEvent ? 'Editar Evento' : 'Novo Evento'}</DialogTitle>
             <DialogDescription className="sr-only">
               Formulário de criação e edição de eventos da agenda.
             </DialogDescription>
           </DialogHeader>
           
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+            <Form {...form}>
+              <form id="calendar-event-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
                 name="title"
@@ -252,12 +267,13 @@ export function CalendarView() {
                 )}
               />
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                <Button type="submit">Salvar</Button>
-              </div>
             </form>
-          </Form>
+            </Form>
+          </div>
+          <div className="border-t bg-background/60 px-4 py-4 sm:px-6 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+            <Button type="submit" form="calendar-event-form" disabled={!canManageEvents}>Salvar</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </Card>

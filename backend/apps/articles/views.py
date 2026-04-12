@@ -95,7 +95,7 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
         # Usamos all_objects para poder filtrar manualmente o tenant se necessário (ex: acesso via slug público)
         from django.utils import timezone
         qs = Article.all_objects.filter(
-            status=Article.STATUS_PUBLISHED, 
+            status=Article.STATUS_PUBLISHED,
             published_at__isnull=False,
             published_at__lte=timezone.now()
         )
@@ -136,7 +136,22 @@ class PublicArticleViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             instance = self.get_object()
         except Article.MultipleObjectsReturned:
-            return Response({"error": "Multiple found."}, status=status.HTTP_400_BAD_REQUEST)
+            hint = request.query_params.get("company_slug") or request.headers.get("X-Company-Slug")
+            if not hint:
+                return Response(
+                    {
+                        "detail": "Mais de um artigo encontrado com este slug. Informe company_slug na URL.",
+                        "code": "ambiguous_slug",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            return Response(
+                {
+                    "detail": "Slug duplicado para este tenant. Ajuste o slug ou verifique o cadastro.",
+                    "code": "duplicate_slug",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         ArticleService.record_view(
             request.user if request.user.is_authenticated else None, instance, request.META.get("REMOTE_ADDR")
@@ -1272,6 +1287,10 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
     def get_queryset(self):
         from .models import Article
 
+        company = getattr(self.request, "company", None)
+        if not company:
+            return Comment.objects.none()
+
         qs = (
             Comment.objects.filter(is_approved=True, is_public=True, parent__isnull=True)
             .select_related("article", "author", "company")
@@ -1289,11 +1308,9 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         )
         article_slug = self.request.query_params.get("article_slug")
         article_id = self.request.query_params.get("article")
-        company = getattr(self.request, "company", None)
         if article_slug:
             article_qs = Article.objects.filter(slug=article_slug, is_public=True, status=Article.STATUS_PUBLISHED)
-            if company:
-                article_qs = article_qs.filter(company=company)
+            article_qs = article_qs.filter(company=company)
             article = article_qs.first()
             if article:
                 qs = qs.filter(article=article, company=article.company)
@@ -1301,8 +1318,7 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
                 qs = qs.none()
         elif article_id:
             qs = qs.filter(article_id=article_id)
-            if company:
-                qs = qs.filter(company=company)
+            qs = qs.filter(company=company)
         else:
             qs = qs.none()
         return qs
@@ -1344,6 +1360,8 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
         article_slug = data.get("article_slug")
         article_id = data.get("article")
         company = getattr(request, "company", None)
+        if not company:
+            return Response({"detail": "Contexto de empresa ausente."}, status=status.HTTP_400_BAD_REQUEST)
 
         forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         ip = (
@@ -1351,20 +1369,18 @@ class PublicCommentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, views
             if forwarded_for and isinstance(forwarded_for, str)
             else request.META.get("REMOTE_ADDR", "unknown")
         )
-        company_key = company.slug if company else "public"
+        company_key = company.slug
 
         # Resolver artigo
         article = None
         if article_slug:
-            article_qs = Article.objects.filter(slug=article_slug, is_public=True, status=Article.STATUS_PUBLISHED)
-            if company:
-                article_qs = article_qs.filter(company=company)
-            article = article_qs.first()
+            article = Article.objects.filter(
+                slug=article_slug, is_public=True, status=Article.STATUS_PUBLISHED, company=company
+            ).first()
         elif article_id:
-            article_qs = Article.objects.filter(pk=article_id, is_public=True, status=Article.STATUS_PUBLISHED)
-            if company:
-                article_qs = article_qs.filter(company=company)
-            article = article_qs.first()
+            article = Article.objects.filter(
+                pk=article_id, is_public=True, status=Article.STATUS_PUBLISHED, company=company
+            ).first()
 
         if not article:
             return Response({"detail": "Artigo não encontrado ou não público."}, status=status.HTTP_404_NOT_FOUND)

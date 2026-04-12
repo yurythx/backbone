@@ -3,8 +3,8 @@
 import { useMemo } from "react"
 
 import { Badge } from "@/components/ui/badge"
-import { getDealColumnId, getPipelineColumns, isDealDone, isDealInColumn, type Deal, type Pipeline } from "./use-crm"
-import { getDeadlineMeta, getProgressValue } from "./crm-visuals"
+import { getDealColumnId, getPipelineColumns, isDealDone, isDealInColumn, resolveDealProgress, type Deal, type Pipeline } from "./use-crm"
+import { getDeadlineMeta } from "./crm-visuals"
 
 interface CRMPipelineOverviewProps {
   pipeline: Pipeline
@@ -74,16 +74,23 @@ function getDeadlineRisk(deal: Deal) {
 
 export function CRMPipelineOverview({ pipeline, deals, overview, isLoading = false }: CRMPipelineOverviewProps) {
   const pipelineColumns = useMemo(() => getPipelineColumns(pipeline), [pipeline])
-  const stageIds = new Set(pipeline.stages.map((stage) => stage.id))
-  const columnIds = new Set(pipelineColumns.map((column) => column.id))
-  const pipelineDeals = deals.filter((deal) => columnIds.has(getDealColumnId(deal)) || stageIds.has(deal.stage))
+  const stageIds = useMemo(() => new Set(pipeline.stages.map((stage) => stage.id)), [pipeline.stages])
+  const columnIds = useMemo(() => new Set(pipelineColumns.map((column) => column.id)), [pipelineColumns])
+  const pipelineDeals = useMemo(() => {
+    return deals.filter((deal) => {
+      const columnId = getDealColumnId(deal)
+      if (typeof columnId === "number" && columnIds.has(columnId)) return true
+      if (typeof deal.stage === "number" && stageIds.has(deal.stage)) return true
+      return false
+    })
+  }, [columnIds, deals, stageIds])
 
   const localOverview = useMemo(
     () => {
       const summary = pipelineDeals.reduce(
         (acc, deal) => {
           const risk = getDeadlineRisk(deal)
-          const progress = getProgressValue(deal)
+          const progress = resolveDealProgress(deal, pipeline)
 
           acc.total += 1
           acc.totalValue += Number(deal.value || 0)
@@ -114,7 +121,7 @@ export function CRMPipelineOverview({ pipeline, deals, overview, isLoading = fal
           const stageDeals = pipelineDeals.filter((deal) => isDealInColumn(deal, column))
           const stageAverage =
             stageDeals.length > 0
-              ? Math.round(stageDeals.reduce((sum, deal) => sum + getProgressValue(deal), 0) / stageDeals.length)
+              ? Math.round(stageDeals.reduce((sum, deal) => sum + resolveDealProgress(deal, pipeline), 0) / stageDeals.length)
               : 0
           const stageOverdue = stageDeals.filter((deal) => getDeadlineRisk(deal) === "overdue").length
 
@@ -130,7 +137,7 @@ export function CRMPipelineOverview({ pipeline, deals, overview, isLoading = fal
         }),
       }
     },
-    [pipeline.stages, pipelineColumns, pipelineDeals]
+    [pipeline, pipelineColumns, pipelineDeals]
   )
   const resolvedOverview = overview
     ? {

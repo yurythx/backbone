@@ -1,70 +1,44 @@
 "use client"
 
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery } from "@tanstack/react-query"
 import { Article } from "@/types"
 import { PublicArticleCard } from "@/components/public/article-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
-import { Search, BookOpen, Filter, X } from "lucide-react"
+import { Search, BookOpen, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { api } from "@/lib/axios"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useDebounce } from "@/hooks/use-debounce"
-import { usePublicCompanySlug } from "@/hooks/use-public-company-slug"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
 
 export default function PublicArtigosPage() {
     const searchParams = useSearchParams()
     const router = useRouter()
 
-    const companySlugFromQuery = (searchParams.get("company_slug") || "").trim() || null
-    const { companySlug, isResolving } = usePublicCompanySlug()
+    useEffect(() => {
+        const hasTokens = Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"))
+        if (hasTokens) router.replace("/artigos")
+    }, [router])
 
+    const companySlugFromQuery = (searchParams.get("company_slug") || "").trim() || null
+    const filterCompanySlug = companySlugFromQuery
+
+    const searchFromQuery = useMemo(() => searchParams.get("search") ?? "", [searchParams])
     const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') ?? "")
     const debouncedSearchTerm = useDebounce(searchTerm, 500)
-    const [selectedCategory, setSelectedCategory] = useState<string>(() => searchParams.get('category') ?? "all")
 
     useEffect(() => {
-        const s = searchParams.get('search') ?? ""
-        const c = searchParams.get('category') ?? "all"
-        if (s !== searchTerm) setSearchTerm(s)
-        if (c !== selectedCategory) setSelectedCategory(c)
-    }, [searchParams, searchTerm, selectedCategory])
+        setSearchTerm(searchFromQuery)
+    }, [searchFromQuery])
 
     useEffect(() => {
         const params = new URLSearchParams()
-        if (debouncedSearchTerm.trim()) params.set('search', debouncedSearchTerm.trim())
-        if (selectedCategory && selectedCategory !== "all") params.set('category', selectedCategory)
-        if (companySlugFromQuery) params.set('company_slug', companySlugFromQuery)
+        const normalizedSearch = debouncedSearchTerm.trim()
+        if (normalizedSearch) params.set('search', normalizedSearch)
+        if (filterCompanySlug) params.set('company_slug', filterCompanySlug)
         const qs = params.toString()
-        router.replace(qs ? `?${qs}` : '?', { scroll: false })
-    }, [debouncedSearchTerm, selectedCategory, router, companySlugFromQuery])
-
-    type PublicCategory = { id: number; name: string; slug: string }
-
-    const { data: categories } = useQuery({
-        queryKey: ['public-article-categories', companySlug],
-        queryFn: async ({ signal }) => {
-            const params = new URLSearchParams()
-            if (companySlug) params.set("company_slug", companySlug)
-            const res = await api.get<PublicCategory[]>('/api/articles/public/categories/', {
-                signal,
-                params,
-                headers: companySlug ? { "X-Company-Slug": companySlug } : {},
-            })
-            const data = res.data
-            return Array.isArray(data) ? data : []
-        },
-        staleTime: 10 * 60 * 1000,
-        retry: 1,
-        enabled: !!companySlug,
-    })
+        router.replace(qs ? `?${qs}` : "/p/artigos", { scroll: false })
+    }, [debouncedSearchTerm, router, filterCompanySlug])
 
     const {
         data,
@@ -74,17 +48,17 @@ export default function PublicArtigosPage() {
         fetchNextPage,
         hasNextPage,
     } = useInfiniteQuery({
-        queryKey: ['public-articles', companySlug, debouncedSearchTerm, selectedCategory],
+        queryKey: ['public-articles', filterCompanySlug, debouncedSearchTerm],
         queryFn: async ({ pageParam, signal }) => {
             const params = new URLSearchParams()
             if (debouncedSearchTerm.trim()) params.set('search', debouncedSearchTerm.trim())
-            if (selectedCategory && selectedCategory !== "all") params.set('category', selectedCategory)
+            params.set('page_size', '30')
             if (pageParam) params.set('page', String(pageParam))
-            if (companySlug) params.set("company_slug", companySlug)
+            if (filterCompanySlug) params.set("company_slug", filterCompanySlug)
             const res = await api.get('/api/articles/public/articles/', {
                 params,
                 signal,
-                headers: companySlug ? { "X-Company-Slug": companySlug } : {},
+                headers: filterCompanySlug ? { "X-Company-Slug": filterCompanySlug } : {},
             })
             return res.data
         },
@@ -103,7 +77,7 @@ export default function PublicArtigosPage() {
         },
         staleTime: 5 * 60 * 1000,
         retry: 1,
-        enabled: !!companySlug,
+        enabled: true,
     })
 
     const articles: Article[] = useMemo(() => {
@@ -139,64 +113,32 @@ export default function PublicArtigosPage() {
                     </p>
                 </header>
 
-                {!companySlug && !isResolving && (
-                    <div className="text-center py-12 border-2 border-dashed rounded-3xl bg-muted/10" role="alert" aria-live="assertive">
-                        <h3 className="text-lg font-semibold mb-2">Empresa não selecionada</h3>
-                        <p className="text-muted-foreground max-w-md mx-auto">
-                            Selecione uma empresa para visualizar os artigos públicos.
-                        </p>
-                    </div>
-                )}
-
                 <div
-                    className="grid grid-cols-1 md:grid-cols-4 gap-4 sticky top-4 z-10 bg-background/80 backdrop-blur-md p-4 rounded-2xl border shadow-sm max-w-5xl mx-auto"
+                    className="sticky top-4 z-10 bg-background/80 backdrop-blur-md p-4 rounded-2xl border shadow-sm max-w-3xl mx-auto"
                     role="search"
-                    aria-label="Pesquisar e filtrar artigos"
+                    aria-label="Pesquisar artigos"
                 >
-                    <div className="md:col-span-2 relative group">
+                    <div className="relative group">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" aria-hidden="true" />
                         <Input
                             type="search"
-                            placeholder="Buscar por título, resumo ou categoria..."
+                            placeholder="Buscar por título ou conteúdo..."
                             className="pl-11 h-12 rounded-xl bg-card border-muted hover:border-primary/30 focus-visible:ring-primary/20 transition-all shadow-sm"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             aria-label="Buscar artigos"
-                            disabled={!companySlug}
                         />
+                        {searchTerm.trim() && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 inline-flex items-center justify-center rounded-xl hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                aria-label="Limpar busca"
+                            >
+                                <X className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        )}
                     </div>
-                    <div className="relative">
-                        <Select
-                            value={selectedCategory}
-                            onValueChange={setSelectedCategory}
-                            disabled={!companySlug}
-                        >
-                            <SelectTrigger className="pl-4 h-12 rounded-xl bg-card border-muted hover:border-primary/30 shadow-sm">
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Filter className="h-4 w-4" aria-hidden="true" />
-                                    <SelectValue placeholder="Categoria" />
-                                </div>
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border shadow-xl p-1">
-                                <SelectItem value="all" className="rounded-lg cursor-pointer">Todas as Categorias</SelectItem>
-                                {(categories ?? []).map((cat) => (
-                                    <SelectItem key={cat.id} value={String(cat.id)} className="rounded-lg cursor-pointer">
-                                        {cat.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {(searchTerm || selectedCategory !== "all") && (
-                        <button
-                            type="button"
-                            onClick={() => { setSearchTerm(""); setSelectedCategory("all") }}
-                            className="h-12 rounded-xl gap-2 hover:bg-destructive/10 hover:text-destructive transition-colors inline-flex items-center justify-center border border-transparent"
-                            disabled={!companySlug}
-                        >
-                            <X className="h-4 w-4" aria-hidden="true" /> Limpar
-                        </button>
-                    )}
                 </div>
 
                 {/* Error State */}
@@ -232,8 +174,8 @@ export default function PublicArtigosPage() {
                             role="list"
                             aria-label={`${articles.length} artigos encontrados`}
                         >
-                            {articles.map((article: Article) => (
-                                <PublicArticleCard key={article.id} article={article} />
+                            {articles.map((article: Article, idx: number) => (
+                                <PublicArticleCard key={article.id} article={article} priority={idx < 2} />
                             ))}
                         </div>
 
@@ -241,7 +183,6 @@ export default function PublicArtigosPage() {
                         <div className="text-center text-sm text-muted-foreground" role="status" aria-live="polite">
                             Mostrando {articles.length} {articles.length === 1 ? 'artigo' : 'artigos'}
                             {debouncedSearchTerm.trim() && ` com "${debouncedSearchTerm.trim()}"`}
-                            {selectedCategory !== "all" && ` na categoria selecionada`}
                         </div>
 
                         {hasNextPage && (
@@ -271,14 +212,14 @@ export default function PublicArtigosPage() {
                                 ? `Não encontramos artigos com "${debouncedSearchTerm.trim()}". Tente ajustar sua busca ou limpar o filtro.`
                                 : "Nenhum artigo público disponível no momento. Volte em breve!"}
                         </p>
-                        {(searchTerm || selectedCategory !== "all") && (
+                        {searchTerm.trim() && (
                             <button
                                 type="button"
-                                onClick={() => { setSearchTerm(""); setSelectedCategory("all") }}
+                                onClick={() => setSearchTerm("")}
                                 className="mt-4 text-primary hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-md"
                                 aria-label="Limpar busca"
                             >
-                                Limpar filtros
+                                Limpar busca
                             </button>
                         )}
                     </div>

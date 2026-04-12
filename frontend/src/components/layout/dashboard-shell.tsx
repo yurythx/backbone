@@ -2,7 +2,6 @@
 
 import { Header } from "@/components/layout/header"
 import { cn } from "@/lib/utils"
-import { usePathname } from "next/navigation"
 import dynamic from "next/dynamic"
 
 
@@ -21,30 +20,24 @@ export function DashboardShell({
 }: {
   children: React.ReactNode
 }) {
-  const pathname = usePathname()
   const { isSidebarCollapsed } = useUIStore()
 
-  const showSidebar = pathname?.startsWith('/settings') || pathname?.startsWith('/admin') || pathname?.startsWith('/insights')
+  const showSidebar = true
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sidebar fixa à esquerda */}
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header />
       {showSidebar && <Sidebar />}
-
-      {/* Wrapper do conteúdo principal que se ajusta à largura da sidebar */}
       <div
         className={cn(
-          "flex flex-col min-h-screen transition-all duration-300 ease-in-out",
-          // Correção Mobile: Padding só é aplicado em desktop (md:)
+          "flex flex-col flex-1 min-h-0 transition-all duration-300 ease-in-out",
           showSidebar ? (isSidebarCollapsed ? "md:pl-20" : "md:pl-72") : "pl-0"
         )}
       >
-        <Header />
         <SetupAlert />
 
-
         <main className="flex-1 px-4 py-6 sm:p-6 md:p-8 overflow-y-auto overflow-x-hidden" role="main" aria-label="Conteúdo principal do dashboard">
-          <div className="mx-auto w-full min-w-0 max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="w-full min-w-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {children}
           </div>
         </main>

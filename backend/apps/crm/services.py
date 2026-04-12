@@ -7,6 +7,42 @@ from shared_kernel.sanitization import sanitize_url
 
 logger = logging.getLogger(__name__)
 
+def user_has_permission(user, permission_slug: str) -> bool:
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    role = getattr(user, "role", None)
+    perms = getattr(role, "permissions", None) if role else None
+    if not isinstance(perms, list):
+        return False
+    if "*" in perms:
+        return True
+    return permission_slug in perms
+
+
+def get_accessible_pipelines(company, user):
+    from django.db.models import Q
+
+    from .models import Pipeline
+
+    if not company:
+        return Pipeline.all_objects.none()
+
+    if user_has_permission(user, "admin.settings_manage") or user_has_permission(user, "crm.pipeline_manage"):
+        return Pipeline.all_objects.filter(company=company)
+
+    group_ids = []
+    if user and getattr(user, "is_authenticated", False):
+        if not hasattr(user, "crm_groups"):
+            return Pipeline.all_objects.filter(company=company)
+        group_ids = list(user.crm_groups.values_list("id", flat=True))
+
+    base = Pipeline.all_objects.filter(company=company)
+    if not group_ids:
+        return base.filter(visibility="company")
+    return base.filter(Q(visibility="company") | Q(visibility="group", groups__in=group_ids)).distinct()
+
 
 def get_crm_integration_config(company):
     tenant_module = (

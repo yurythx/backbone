@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework import permissions, viewsets
 from rest_framework.response import Response
 
+from apps.accounts.permissions import ActionRolePermission
 from apps.module_manager.permissions import HasModuleAccess
 
 from .models import Event
@@ -17,8 +18,38 @@ logger = logging.getLogger(__name__)
 class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
-    permission_classes = [permissions.IsAuthenticated, HasModuleAccess]
+    permission_classes = [permissions.IsAuthenticated, HasModuleAccess, ActionRolePermission]
     module_code = "calendar"
+    pagination_class = None
+    required_permission = "calendar.event_view"
+    action_permissions = {
+        "list": "calendar.event_view",
+        "retrieve": "calendar.event_view",
+        "create": "calendar.event_manage",
+        "update": "calendar.event_manage",
+        "partial_update": "calendar.event_manage",
+        "destroy": "calendar.event_manage",
+    }
+
+    def get_queryset(self):
+        user = getattr(self.request, "user", None)
+        company = getattr(self.request, "company", None)
+        if not user or not user.is_authenticated:
+            return Event.all_objects.none()
+
+        if user.is_superuser:
+            if company:
+                return Event.all_objects.filter(company=company)
+            return Event.all_objects.all()
+
+        if not company:
+            return Event.all_objects.none()
+
+        qs = Event.all_objects.filter(company=company)
+        perms = getattr(getattr(user, "role", None), "permissions", None)
+        if isinstance(perms, list) and ("*" in perms or "calendar.event_manage" in perms):
+            return qs
+        return qs.filter(owner=user)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user, company=self.request.company)

@@ -28,6 +28,7 @@ interface TenantTheme {
 interface UserPreferences {
   theme_palette?: string
   use_tenant_theme: boolean
+  dark_mode_preference?: "light" | "dark" | "system"
   font_size?: string
 }
 
@@ -56,6 +57,7 @@ interface ThemeConfigShape {
   refreshConfig: () => Promise<void>
   updatePalette: (palette: string) => Promise<void>
   resetToTenantTheme: () => Promise<void>
+  updateDarkModePreference: (mode: "light" | "dark" | "system") => Promise<void>
 }
 
 // --- Context & Hook ---
@@ -106,9 +108,10 @@ function useThemeHooks(): ThemeConfigShape {
     try {
       // Check if user is logged in
       const token = typeof window !== "undefined" ? localStorage.getItem('accessToken') : null
-      const companySlug = typeof window !== "undefined" ? localStorage.getItem('companySlug') : null
-      const envCompany = process.env.NEXT_PUBLIC_COMPANY_SLUG
-      const effectiveCompany = companySlug || envCompany || 'unknown'
+      const effectiveCompany =
+        typeof window !== "undefined"
+          ? localStorage.getItem("companySlug") || process.env.NEXT_PUBLIC_COMPANY_SLUG || "unknown"
+          : process.env.NEXT_PUBLIC_COMPANY_SLUG || "unknown"
 
       // Fetch Tenant branding
       // Use public endpoint for public routes or when not authenticated to avoid 401 loops
@@ -125,14 +128,16 @@ function useThemeHooks(): ThemeConfigShape {
       // Fetch User preferences ONLY if not a public route AND user has token
       if (!isPublicRoute && token) {
         try {
-          const cachedUser = queryClient.getQueryData<{ theme_palette?: string; use_tenant_theme?: boolean }>(['auth', 'user', effectiveCompany])
-          const prefRes = cachedUser ? { data: cachedUser } : await api.get('/api/accounts/users/me/')
+          const cachedPrefs = queryClient.getQueryData<UserPreferences>(["accounts", "preferences", "theme", effectiveCompany])
+          const prefRes = cachedPrefs ? { data: cachedPrefs } : await api.get("/api/accounts/preferences/theme/current/")
           const prefs: UserPreferences = {
-            theme_palette: prefRes.data.theme_palette,
+            theme_palette: prefRes.data.theme_palette || undefined,
             use_tenant_theme: prefRes.data.use_tenant_theme !== false,
+            dark_mode_preference: prefRes.data.dark_mode_preference || "system",
           }
           setUserTheme(prefs)
           localStorage.setItem('backbone_user_preferences', JSON.stringify(prefs))
+          queryClient.setQueryData(["accounts", "preferences", "theme", effectiveCompany], prefs)
         } catch (e) {
           // Silent fail for user prefs if token is invalid, but don't break the app
           console.warn("Could not load user theme prefs", e)
@@ -151,10 +156,13 @@ function useThemeHooks(): ThemeConfigShape {
 
   const updatePalette = async (palette: string) => {
     try {
-      await api.patch('/api/accounts/users/update_me/', {
+      await api.patch("/api/accounts/preferences/theme/update_current/", {
         theme_palette: palette,
         use_tenant_theme: false
       })
+      if (typeof window !== "undefined") {
+        queryClient.invalidateQueries({ queryKey: ["accounts", "preferences", "theme"] })
+      }
       await fetchConfig()
     } catch (err) {
       console.error("Failed to update palette", err)
@@ -163,10 +171,25 @@ function useThemeHooks(): ThemeConfigShape {
 
   const resetToTenantTheme = async () => {
     try {
-      await api.patch('/api/accounts/users/update_me/', { use_tenant_theme: true })
+      await api.post("/api/accounts/preferences/theme/reset/")
+      if (typeof window !== "undefined") {
+        queryClient.invalidateQueries({ queryKey: ["accounts", "preferences", "theme"] })
+      }
       await fetchConfig()
     } catch (err) {
       console.error("Failed to reset theme", err)
+    }
+  }
+
+  const updateDarkModePreference = async (mode: "light" | "dark" | "system") => {
+    try {
+      await api.patch("/api/accounts/preferences/theme/update_current/", { dark_mode_preference: mode })
+      if (typeof window !== "undefined") {
+        queryClient.invalidateQueries({ queryKey: ["accounts", "preferences", "theme"] })
+      }
+      await fetchConfig()
+    } catch (err) {
+      console.error("Failed to update dark mode preference", err)
     }
   }
 
@@ -201,12 +224,13 @@ function useThemeHooks(): ThemeConfigShape {
     userTheme,
     refreshConfig: fetchConfig,
     updatePalette,
-    resetToTenantTheme
+    resetToTenantTheme,
+    updateDarkModePreference,
   }
 }
 
 function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
-  const { resolvedTheme } = useNextTheme()
+  const { resolvedTheme, theme, setTheme } = useNextTheme()
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -251,6 +275,15 @@ function ThemeEffects({ themeConfig }: { themeConfig: ThemeConfigShape }) {
       }
     }
   }, [themeConfig, resolvedTheme])
+
+  useEffect(() => {
+    if (themeConfig.isPublicRoute) return
+    const desired = themeConfig.userTheme?.dark_mode_preference
+    if (!desired) return
+    if (theme !== desired) {
+      setTheme(desired)
+    }
+  }, [setTheme, theme, themeConfig.isPublicRoute, themeConfig.userTheme?.dark_mode_preference])
 
   // Load dynamic Google Font
   useEffect(() => {

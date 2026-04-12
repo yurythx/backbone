@@ -29,7 +29,7 @@ import {
 import { notify } from "@/lib/notifications"
 
 const DataTable = dynamic(
-    () => import("@/components/ui/data-table").then((m) => m.DataTable),
+    () => import("@/components/ui/data-table").then((m) => m.DataTable<Page, unknown>),
     {
         ssr: false,
         loading: () => (

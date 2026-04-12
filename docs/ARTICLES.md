@@ -5,6 +5,7 @@ Este documento descreve arquitetura, modelos, endpoints públicos e privados, in
 
 ## Visão Geral
 
+
 - CMS de artigos com:
   - Categorias e tags por empresa (multi-tenant).
   - Artigos com status editorial (rascunho, pendente, publicado, rejeitado).

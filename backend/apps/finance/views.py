@@ -157,7 +157,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         instance: Transaction = self.get_object()
-        
+
         # Check if month is closed before update
         from .models import MonthClosing
         if MonthClosing.objects.filter(company=instance.company, month=instance.competence_date.month, year=instance.competence_date.year).exists():

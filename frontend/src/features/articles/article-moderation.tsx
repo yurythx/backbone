@@ -99,9 +99,10 @@ export function ArticleModeration() {
     queryKey: ["articles-moderation", status, visibility, categoryId, debounced],
     initialPageParam: 1,
     queryFn: async ({ pageParam, signal }) => {
+      const safePage = typeof pageParam === "number" ? pageParam : Number(pageParam)
       const params: Record<string, string | number> = {
         ordering: "-updated_at",
-        page: pageParam,
+        page: Number.isFinite(safePage) && safePage > 0 ? safePage : 1,
         page_size: 18,
       }
       if (status !== "all") params.status = status

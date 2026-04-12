@@ -1,11 +1,11 @@
-from rest_framework import permissions, viewsets, status
+from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasRolePermission
 from shared_kernel.audit import log_create, log_delete, log_update
 
-from .models import WebhookSubscription, WebhookDelivery
+from .models import WebhookDelivery, WebhookSubscription
 from .serializers import WebhookSubscriptionSerializer
 
 
@@ -37,7 +37,7 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
         """
         subscription = self.get_object()
         deliveries = WebhookDelivery.objects.filter(subscription=subscription)[:50]
-        
+
         data = [
             {
                 "id": d.id,

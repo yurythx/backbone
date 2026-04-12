@@ -27,6 +27,11 @@ class UsersFiltersTest(APITestCase):
         User.objects.create_user(
             username="hrgal", email="h@corp.com", password="pass", company=self.company, role=role_hr
         )
+        inactive = User.objects.create_user(
+            username="inactive", email="inactive@corp.com", password="pass", company=self.company, role=role_hr
+        )
+        inactive.is_active = False
+        inactive.save(update_fields=["is_active"])
 
         self.role_dev = role_dev
 
@@ -42,3 +47,10 @@ class UsersFiltersTest(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         usernames = [u["username"] for u in res.data["results"]]
         self.assertIn("devguy", usernames)
+
+    def test_filter_by_active_status(self):
+        res = self.client.get("/api/accounts/users/?active=false")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        usernames = [u["username"] for u in res.data["results"]]
+        self.assertIn("inactive", usernames)
+        self.assertNotIn("devguy", usernames)

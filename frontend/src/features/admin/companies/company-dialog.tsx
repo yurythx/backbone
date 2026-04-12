@@ -126,65 +126,72 @@ export function CompanyDialog({ company, open, onOpenChange }: CompanyDialogProp
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[460px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr_auto]">
+                <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
                     <DialogTitle>{company ? "Editar Empresa" : "Nova Empresa"}</DialogTitle>
                     <DialogDescription>
                         Configure as informações básicas da organização.
                     </DialogDescription>
                 </DialogHeader>
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-                        <FormField
-                            control={form.control}
-                            name="name"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Nome da Empresa</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Ex: Acme Corp" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="slug"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Slug</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="ex: acme-corp" {...field} disabled={!!company} />
-                                    </FormControl>
-                                    <FormDescription>
-                                        Identificador único na URL (ex: backbone.com/acme-corp)
-                                    </FormDescription>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="domain"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Domínio Customizado (Opcional)</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="ex: app.acme.com" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <DialogFooter>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {company ? "Salvar Alterações" : "Criar Empresa"}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </Form>
+                <div className="min-h-0 overflow-y-auto">
+                    <div className="px-4 py-4 sm:px-6">
+                        <Form {...form}>
+                            <form id="company-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                                <FormField
+                                    control={form.control}
+                                    name="name"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Nome da Empresa</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Ex: Acme Corp" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="slug"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Slug</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="ex: acme-corp" {...field} disabled={!!company} />
+                                            </FormControl>
+                                            <FormDescription>
+                                                Identificador único na URL (ex: backbone.com/acme-corp)
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="domain"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Domínio Customizado (Opcional)</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="ex: app.acme.com" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </form>
+                        </Form>
+                    </div>
+                </div>
+                <DialogFooter className="border-t bg-background/60 px-4 py-4 sm:px-6">
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+                        Cancelar
+                    </Button>
+                    <Button type="submit" form="company-form" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {company ? "Salvar Alterações" : "Criar Empresa"}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     )

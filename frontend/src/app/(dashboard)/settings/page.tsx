@@ -1,7 +1,7 @@
 "use client"
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Building, Settings2, Mail, Webhook } from "lucide-react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Building, Settings2, Mail, Webhook, PlugZap } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { useEffect, useMemo, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -68,11 +68,24 @@ const WebhookSettings = dynamic(
   }
 )
 
+const IntegrationSettings = dynamic(
+  () => import("@/features/integrations/integration-settings").then((m) => m.IntegrationSettings),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-56 rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+      </div>
+    ),
+  }
+)
+
 function SettingsContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const tabParam = searchParams.get("tab")
-    const allowedTabs = useMemo(() => new Set(["company", "branding", "email", "webhooks"]), [])
+    const allowedTabs = useMemo(() => new Set(["company", "branding", "email", "webhooks", "integrations"]), [])
     const [activeTab, setActiveTab] = useState("company")
 
   useEffect(() => {
@@ -137,6 +150,16 @@ function SettingsContent() {
                 Webhooks
               </TabsTrigger>
             </Protected>
+
+            <Protected requireStaff>
+              <TabsTrigger
+                value="integrations"
+                className="w-full md:flex-1 justify-start md:justify-center gap-3 px-4 py-3 rounded-xl data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all font-medium"
+              >
+                <PlugZap className="h-4 w-4" aria-hidden="true" />
+                Integrações
+              </TabsTrigger>
+            </Protected>
           </TabsList>
         </div>
 
@@ -149,6 +172,7 @@ function SettingsContent() {
               {activeTab === "branding" && <BrandingSettings isOnboarding={false} />}
               {activeTab === "email" && <SmtpSettings isOnboarding={false} />}
               {activeTab === "webhooks" && <WebhookSettings />}
+              {activeTab === "integrations" && <IntegrationSettings />}
             </Protected>
         </div>
       </Tabs>

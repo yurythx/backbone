@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -16,16 +17,12 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-} from "@/components/ui/dialog"
+import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { notify } from "@/lib/notifications"
-import { Shield, Lock, CheckCircle2 } from "lucide-react"
+import { Shield, Lock, CheckCircle2, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Role } from "@/types"
+import { AxiosError } from "axios"
 
 const formSchema = z.object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres."),
@@ -43,6 +40,22 @@ interface RoleFormProps {
     initialData?: Role | null
     onSuccess: () => void
     onCancel: () => void
+}
+
+function PermissionCheckbox({ checked }: { checked: boolean }) {
+    return (
+        <span
+            role="checkbox"
+            aria-checked={checked ? "true" : "false"}
+            data-state={checked ? "checked" : "unchecked"}
+            className={cn(
+                "h-5 w-5 rounded-lg border-2 flex items-center justify-center pointer-events-none",
+                checked ? "bg-primary border-primary text-primary-foreground" : "bg-background border-primary/40 text-transparent"
+            )}
+        >
+            <Check className="h-4 w-4" aria-hidden="true" />
+        </span>
+    )
 }
 
 function normalizeStringArray(value: unknown): string[] {
@@ -70,13 +83,34 @@ function normalizeStringArray(value: unknown): string[] {
 
 export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
     const queryClient = useQueryClient()
-    const { data: availablePermissions = [], isLoading: isLoadingPermissions } = useQuery<Permission[]>({
+    const openUnauthorized = (message: string) => {
+        if (typeof window === "undefined") return
+        window.dispatchEvent(new CustomEvent("app-unauthorized", { detail: { message } }))
+    }
+    const {
+        data: availablePermissions,
+        isLoading: isLoadingPermissions,
+        isError: isPermissionsError,
+        error: permissionsError,
+    } = useQuery<Permission[]>({
         queryKey: ['available-permissions'],
         queryFn: async () => {
             const { data } = await api.get<Permission[]>('/api/accounts/roles/permissions/')
             return data
-        }
+        },
+        retry: false,
     })
+
+    useEffect(() => {
+        if (!isPermissionsError) return
+        if (permissionsError instanceof AxiosError && permissionsError.response?.status === 403) {
+            openUnauthorized("Você não possui autorização para visualizar/alterar permissões.")
+            return
+        }
+        notify.error("Erro ao carregar permissões", permissionsError)
+    }, [isPermissionsError, permissionsError])
+
+    const permissions = availablePermissions ?? []
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -102,7 +136,11 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
             queryClient.invalidateQueries({ queryKey: ['auth', 'user'] })
             onSuccess()
         },
-        onError: (error) => {
+        onError: (error: unknown) => {
+            if (error instanceof AxiosError && error.response?.status === 403) {
+                openUnauthorized("Você não possui autorização para alterar permissões deste perfil.")
+                return
+            }
             notify.error("Erro ao salvar papel", error)
         }
     })
@@ -178,30 +216,34 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                                 control={form.control}
                                 name="permissions"
                                 render={({ field }) => {
+                                    const selectedPermissions = normalizeStringArray(field.value)
                                     const togglePermission = (permissionId: string) => {
-                                        const current = normalizeStringArray(field.value)
-                                        const next = current.includes(permissionId)
-                                            ? current.filter((id: string) => id !== permissionId)
-                                            : [...current, permissionId]
+                                        const next = selectedPermissions.includes(permissionId)
+                                            ? selectedPermissions.filter((id: string) => id !== permissionId)
+                                            : [...selectedPermissions, permissionId]
                                         field.onChange(next)
                                     }
 
                                     return (
                                         <div className="grid grid-cols-1 gap-3">
-                                            {availablePermissions.map((permission) => (
+                                            {permissions.map((permission) => (
                                                 <div
                                                     key={permission.id}
+                                                    role="button"
+                                                    tabIndex={0}
                                                     className={cn(
-                                                        "flex flex-row items-center space-x-3 space-y-0 p-4 rounded-2xl border transition-all cursor-pointer hover:border-primary/50",
-                                                        field.value?.includes(permission.id) ? "bg-primary/5 border-primary/30" : "bg-muted/10 border-transparent"
+                                                        "flex w-full flex-row items-center space-x-3 space-y-0 p-4 rounded-2xl border transition-all hover:border-primary/50 text-left",
+                                                        selectedPermissions.includes(permission.id) ? "bg-primary/5 border-primary/30" : "bg-muted/10 border-transparent"
                                                     )}
                                                     onClick={() => togglePermission(permission.id)}
+                                                    onKeyDown={(event) => {
+                                                        if (event.key === "Enter" || event.key === " ") {
+                                                            event.preventDefault()
+                                                            togglePermission(permission.id)
+                                                        }
+                                                    }}
                                                 >
-                                                    <Checkbox
-                                                        checked={field.value?.includes(permission.id)}
-                                                        onCheckedChange={() => { }} // Row click handles it
-                                                        className="h-5 w-5 rounded-lg border-2 pointer-events-none"
-                                                    />
+                                                    <PermissionCheckbox checked={selectedPermissions.includes(permission.id)} />
                                                     <div className="space-y-1">
                                                         <FormLabel className="text-sm font-bold cursor-pointer">
                                                             {permission.label}
@@ -210,7 +252,7 @@ export function RoleForm({ initialData, onSuccess, onCancel }: RoleFormProps) {
                                                             {permission.description}
                                                         </p>
                                                     </div>
-                                                    {field.value?.includes(permission.id) && (
+                                                    {selectedPermissions.includes(permission.id) && (
                                                         <CheckCircle2 className="h-4 w-4 text-primary ml-auto" aria-hidden="true" />
                                                     )}
                                                 </div>

@@ -24,6 +24,7 @@ import { Search, Filter, X } from "lucide-react"
 import Link from "next/link"
 import { VisibilityBadge } from "@/components/articles/visibility-badge"
 import { notify } from "@/lib/notifications"
+import { fixImageUrl } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,8 +71,8 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await api.delete(`/api/articles/articles/${id}/`)
+    mutationFn: async (slug: string) => {
+      await api.delete(`/api/articles/articles/${encodeURIComponent(slug)}/`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['articles'] })
@@ -181,11 +182,12 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
               <div className="relative aspect-video overflow-hidden bg-muted">
                 {article.cover_image || article.image ? (
                   <Image
-                    src={(article.cover_image || article.image) ?? ""}
+                    src={fixImageUrl(article.cover_image || article.image) ?? ""}
                     alt={article.title || "Capa do artigo"}
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    unoptimized
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full w-full bg-gradient-to-br from-primary/5 to-primary/10">
@@ -230,10 +232,7 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
                       href={{
                         pathname: `/p/artigos/${article.slug}`,
                         query: {
-                          company_slug:
-                            typeof window !== 'undefined'
-                              ? (localStorage.getItem('companySlug') || undefined)
-                              : undefined,
+                          company_slug: article.company_slug || undefined,
                         },
                       }}
                       target="_blank"
@@ -313,7 +312,7 @@ export function ArticleList({ onEdit, onCreate }: ArticleListProps) {
               disabled={deleteMutation.isPending}
               onClick={() => {
                 if (!articleToDelete) return
-                deleteMutation.mutate(articleToDelete.id)
+                deleteMutation.mutate(articleToDelete.slug)
                 setArticleToDelete(null)
               }}
             >

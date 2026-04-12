@@ -1,8 +1,10 @@
-import uuid
 import unicodedata
+import uuid
+
 from django.conf import settings
-from django.db import models
 from django.contrib.postgres.indexes import GinIndex
+from django.db import models
+from django.utils.text import slugify
 
 from shared_kernel.models import BaseTenantModel
 
@@ -90,11 +92,39 @@ class Contact(BaseTenantModel):
         return self.name
 
 
+class CRMGroup(BaseTenantModel):
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=140)
+
+    class Meta:
+        verbose_name = "CRM Group"
+        verbose_name_plural = "CRM Groups"
+        unique_together = [
+            ("company", "slug"),
+            ("company", "name"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)[:140] or "grupo"
+        super().save(*args, **kwargs)
+
+
 class Pipeline(BaseTenantModel):
     """Fluxo de trabalho (ex: Suporte TI, Comercial, Projetos)."""
 
+    VISIBILITY_CHOICES = [
+        ("company", "Empresa"),
+        ("group", "Grupo"),
+    ]
+
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default="company")
+    groups = models.ManyToManyField(CRMGroup, blank=True, related_name="pipelines")
 
     class Meta:
         verbose_name = "Pipeline"
@@ -241,6 +271,14 @@ class Deal(BaseTenantModel):
     # Campos Customizados Flexíveis (JSON)
     custom_fields = models.JSONField(default=dict, blank=True, help_text="Campos dinâmicos do deal")
 
+    messenger_conversation = models.ForeignKey(
+        "messenger.Conversation",
+        on_delete=models.SET_NULL,
+        related_name="crm_deals",
+        null=True,
+        blank=True,
+    )
+
     class Meta:
         verbose_name = "Deal"
         verbose_name_plural = "Deals"
@@ -254,6 +292,41 @@ class Deal(BaseTenantModel):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        # Cálculo automático de progresso baseado na coluna
+        resolved_column = self.column or getattr(self.stage, "column", None)
+        if resolved_column:
+            pipeline = resolved_column.pipeline
+            all_columns = list(Column.objects.filter(pipeline=pipeline).order_by("order"))
+            if all_columns:
+                try:
+                    current_index = all_columns.index(resolved_column)
+                    # Progresso = (índice_atual / (total - 1)) * 100
+                    # Se for a última coluna (ou marks_done), garante 100%
+                    if resolved_column.marks_done or current_index == len(all_columns) - 1:
+                        progress = 100
+                    else:
+                        progress = int((current_index / (len(all_columns) - 1)) * 100)
+
+                    # Se progresso é 100% ou a coluna marca como concluído, fecha o card
+                    if progress >= 100 or resolved_column.marks_done:
+                        self.is_closed = True
+                        progress = 100
+                    else:
+                        self.is_closed = False
+
+                    if self.custom_fields is None:
+                        self.custom_fields = {}
+
+                    # Garante que o Django detecte a mudança no JSONField reatribuindo o dicionário
+                    updated_custom_fields = dict(self.custom_fields)
+                    updated_custom_fields["progress_percentage"] = progress
+                    self.custom_fields = updated_custom_fields
+                except ValueError:
+                    pass
+
+        super().save(*args, **kwargs)
 
 
 class DealActivity(BaseTenantModel):
@@ -279,3 +352,76 @@ class DealActivity(BaseTenantModel):
 
     def __str__(self):
         return f"{self.activity_type} - {self.deal.title}"
+
+
+class DealAttachment(BaseTenantModel):
+    PHASE_CHOICES = [
+        ("before", "Antes"),
+        ("during", "Durante"),
+        ("after", "Depois"),
+    ]
+
+    KIND_CHOICES = [
+        ("photo", "Foto"),
+        ("file", "Arquivo"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    deal = models.ForeignKey(Deal, on_delete=models.CASCADE, related_name="attachments")
+    media = models.ForeignKey("media.Media", on_delete=models.CASCADE, related_name="deal_attachments")
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default="photo")
+    phase = models.CharField(max_length=20, choices=PHASE_CHOICES, default="during")
+    caption = models.CharField(max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_deal_attachments",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["company", "deal", "created_at"]),
+            models.Index(fields=["company", "media", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.deal_id} - {self.media_id}"
+
+
+class IntegrationInboundStatus(models.TextChoices):
+    RECEIVED = "received", "Recebido"
+    PROCESSED = "processed", "Processado"
+    FAILED = "failed", "Falhou"
+
+
+class IntegrationInboundEvent(BaseTenantModel):
+    source = models.CharField(max_length=50)
+    event_type = models.CharField(max_length=80, default="ticket.upsert")
+    external_id = models.CharField(max_length=255)
+    request_payload = models.JSONField(default=dict, blank=True)
+
+    status = models.CharField(max_length=20, choices=IntegrationInboundStatus.choices, default=IntegrationInboundStatus.RECEIVED)
+    replayed_from = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="replays",
+    )
+    processed_deal = models.ForeignKey(Deal, on_delete=models.SET_NULL, null=True, blank=True, related_name="integration_events")
+    response_status_code = models.IntegerField(null=True, blank=True)
+    error = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["company", "source", "created_at"]),
+            models.Index(fields=["company", "source", "external_id"]),
+            models.Index(fields=["company", "status", "created_at"]),
+        ]

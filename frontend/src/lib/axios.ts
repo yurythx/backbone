@@ -25,7 +25,7 @@ let failedQueue: FailedRequest[] = [];
 let isRedirectingToLogin = false;
 
 // Public routes that should never trigger auth redirects
-const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/404', '/500'];
+const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/accept-invite', '/servicos', '/404', '/500'];
 const isPublicRoute = (pathname: string) => {
   if (!pathname) return true;
   return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith('/p/'));
@@ -46,12 +46,10 @@ const processQueue = (error: unknown, token: string | null = null) => {
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     const url = config.url || ''
-    const method = (config.method || 'get').toLowerCase()
     const isPublicApiRequest =
       url.includes('/api/articles/public/') ||
       url.includes('/api/pages/public/') ||
-      url.includes('/api/core/companies/public_list/') ||
-      (url.includes('/api/modules/my-modules/') && (method === 'get' || method === 'head' || method === 'options'))
+      url.includes('/api/core/companies/public_list/')
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     const companySlug = typeof window !== 'undefined' ? localStorage.getItem('companySlug') : null;
@@ -98,7 +96,7 @@ api.interceptors.request.use(
       (config.headers['X-Company-Slug'] as string | undefined) ||
       (config.headers['x-company-slug'] as string | undefined);
 
-    if (!existingCompanyHeader && effectiveCompany) {
+    if (!existingCompanyHeader && effectiveCompany && !isPublicApiRequest) {
       config.headers['X-Company-Slug'] = effectiveCompany;
     }
 
@@ -122,6 +120,17 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    if (error.response?.status === 403 && typeof window !== 'undefined' && !isPublicRoute(window.location.pathname)) {
+      const data = error.response.data as unknown
+      let message = 'Acesso negado.'
+      if (data && typeof data === 'object') {
+        const obj = data as Record<string, unknown>
+        if (typeof obj.message === 'string' && obj.message.trim()) message = obj.message
+        else if (typeof obj.detail === 'string' && obj.detail.trim()) message = obj.detail
+      }
+      window.dispatchEvent(new CustomEvent('app-unauthorized', { detail: { message } }))
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Do not intercept authentication requests

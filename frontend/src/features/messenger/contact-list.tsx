@@ -465,83 +465,85 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
                   <Archive className="h-5 w-5" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[480px]">
-                <DialogHeader>
+              <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[520px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr]">
+                <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
                   <DialogTitle>Conversas arquivadas</DialogTitle>
                   <DialogDescription>Restaure conversas arquivadas para a lista principal.</DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="h-[320px] border rounded-md p-2">
-                  {archivedLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    </div>
-                  ) : (archivedConversationsRaw?.length ? (
-                    <div className="grid gap-1">
-                      {archivedConversationsRaw.map((conv) => {
-                        const title = conv.is_group
-                          ? (conv.title || "Grupo sem nome")
-                          : (conv.participants_list?.find((u) => u !== currentUser?.username) || "Conversa")
-                        return (
-                          <div key={conv.id} className="flex items-center justify-between gap-2 rounded-md px-3 py-2 hover:bg-muted/50">
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold truncate">{title}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {conv.last_message?.content || (conv.last_message?.file_name ? "📎 Arquivo" : "")}
+                <div className="min-h-0 p-4 sm:p-6">
+                  <ScrollArea className="h-full border rounded-md p-2">
+                    {archivedLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      </div>
+                    ) : (archivedConversationsRaw?.length ? (
+                      <div className="grid gap-1">
+                        {archivedConversationsRaw.map((conv) => {
+                          const title = conv.is_group
+                            ? (conv.title || "Grupo sem nome")
+                            : (conv.participants_list?.find((u) => u !== currentUser?.username) || "Conversa")
+                          return (
+                            <div key={conv.id} className="flex items-center justify-between gap-2 rounded-md px-3 py-2 hover:bg-muted/50">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold truncate">{title}</div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {conv.last_message?.content || (conv.last_message?.file_name ? "📎 Arquivo" : "")}
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setIsArchivedDialogOpen(false)
-                                  openConversation(conv)
-                                }}
-                              >
-                                Abrir
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-destructive"
-                                onClick={async () => {
-                                  try {
-                                    await deleteConversationForMeFromArchived(conv)
-                                  } catch {
-                                    toast.error("Erro ao remover conversa")
-                                  }
-                                }}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Remover
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  try {
-                                    await unarchiveConversation(conv.id)
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
                                     setIsArchivedDialogOpen(false)
                                     openConversation(conv)
-                                  } catch {
-                                    toast.error("Erro ao desarquivar conversa")
-                                  }
-                                }}
-                              >
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                                Desarquivar
-                              </Button>
+                                  }}
+                                >
+                                  Abrir
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-destructive"
+                                  onClick={async () => {
+                                    try {
+                                      await deleteConversationForMeFromArchived(conv)
+                                    } catch {
+                                      toast.error("Erro ao remover conversa")
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remover
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    try {
+                                      await unarchiveConversation(conv.id)
+                                      setIsArchivedDialogOpen(false)
+                                      openConversation(conv)
+                                    } catch {
+                                      toast.error("Erro ao desarquivar conversa")
+                                    }
+                                  }}
+                                >
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                  Desarquivar
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                      Nenhuma conversa arquivada.
-                    </div>
-                  ))}
-                </ScrollArea>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                        Nenhuma conversa arquivada.
+                      </div>
+                    ))}
+                  </ScrollArea>
+                </div>
               </DialogContent>
             </Dialog>
             <Dialog open={isDeletedDialogOpen} onOpenChange={setIsDeletedDialogOpen}>
@@ -550,82 +552,84 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
                   <Trash2 className="h-5 w-5" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[480px]">
-                <DialogHeader>
+              <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[520px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr]">
+                <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
                   <DialogTitle>Conversas removidas</DialogTitle>
                   <DialogDescription>Restaure conversas removidas da sua lista.</DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="h-[320px] border rounded-md p-2">
-                  {deletedLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    </div>
-                  ) : (deletedConversationsRaw?.length ? (
-                    <div className="grid gap-1">
-                      {deletedConversationsRaw.map((conv) => {
-                        const title = conv.is_group
-                          ? (conv.title || "Grupo sem nome")
-                          : (conv.participants_list?.find((u) => u !== currentUser?.username) || "Conversa")
-                        return (
-                          <div key={conv.id} className="flex items-center justify-between gap-2 rounded-md px-3 py-2 hover:bg-muted/50">
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold truncate">{title}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {conv.last_message?.content || (conv.last_message?.file_name ? "📎 Arquivo" : "")}
+                <div className="min-h-0 p-4 sm:p-6">
+                  <ScrollArea className="h-full border rounded-md p-2">
+                    {deletedLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      </div>
+                    ) : (deletedConversationsRaw?.length ? (
+                      <div className="grid gap-1">
+                        {deletedConversationsRaw.map((conv) => {
+                          const title = conv.is_group
+                            ? (conv.title || "Grupo sem nome")
+                            : (conv.participants_list?.find((u) => u !== currentUser?.username) || "Conversa")
+                          return (
+                            <div key={conv.id} className="flex items-center justify-between gap-2 rounded-md px-3 py-2 hover:bg-muted/50">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold truncate">{title}</div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {conv.last_message?.content || (conv.last_message?.file_name ? "📎 Arquivo" : "")}
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setIsDeletedDialogOpen(false)
-                                  openConversation(conv)
-                                }}
-                              >
-                                Abrir
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  try {
-                                    await archiveConversationFromDeleted(conv)
-                                  } catch {
-                                    toast.error("Erro ao arquivar conversa")
-                                  }
-                                }}
-                              >
-                                <Archive className="mr-2 h-4 w-4" />
-                                Arquivar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  try {
-                                    await restoreConversation(conv.id)
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
                                     setIsDeletedDialogOpen(false)
                                     openConversation(conv)
-                                  } catch {
-                                    toast.error("Erro ao restaurar conversa")
-                                  }
-                                }}
-                              >
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                                Restaurar
-                              </Button>
+                                  }}
+                                >
+                                  Abrir
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    try {
+                                      await archiveConversationFromDeleted(conv)
+                                    } catch {
+                                      toast.error("Erro ao arquivar conversa")
+                                    }
+                                  }}
+                                >
+                                  <Archive className="mr-2 h-4 w-4" />
+                                  Arquivar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    try {
+                                      await restoreConversation(conv.id)
+                                      setIsDeletedDialogOpen(false)
+                                      openConversation(conv)
+                                    } catch {
+                                      toast.error("Erro ao restaurar conversa")
+                                    }
+                                  }}
+                                >
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                  Restaurar
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                      Nenhuma conversa removida.
-                    </div>
-                  ))}
-                </ScrollArea>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                        Nenhuma conversa removida.
+                      </div>
+                    ))}
+                  </ScrollArea>
+                </div>
               </DialogContent>
             </Dialog>
             <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
@@ -634,47 +638,51 @@ export function ContactList({ onSelectContact, selectedContactId, currentUser }:
                   <Plus className="h-5 w-5" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
+              <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[460px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 grid grid-rows-[auto_1fr_auto]">
+                <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
                   <DialogTitle>Criar Novo Grupo</DialogTitle>
                   <DialogDescription>Dê um nome ao grupo e selecione os participantes.</DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <label htmlFor="group-name" className="text-sm font-medium">Nome do Grupo</label>
-                    <Input
-                      id="group-name"
-                      value={groupName}
-                      onChange={(e) => setGroupName(e.target.value)}
-                      placeholder="Ex: Projeto Backbone"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium">Participantes</label>
-                    <ScrollArea className="h-[200px] border rounded-md p-2">
-                      {contactList.map((contact) => (
-                        <div key={contact.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
-                          <Checkbox
-                            id={`g-contact-${contact.id}`}
-                            checked={selectedContactsForGroup.includes(contact.id)}
-                            onCheckedChange={() => toggleContactSelection(contact.id)}
-                          />
-                          <label
-                            htmlFor={`g-contact-${contact.id}`}
-                            className="text-sm font-medium flex items-center gap-2 cursor-pointer w-full"
-                          >
-                            <Avatar className="h-6 w-6">
-                              <AvatarImage src={contact.avatar_url || undefined} alt={contact.username} />
-                              <AvatarFallback>{contact.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            {contact.username}
-                          </label>
-                        </div>
-                      ))}
-                    </ScrollArea>
+                <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <label htmlFor="group-name" className="text-sm font-medium">Nome do Grupo</label>
+                      <Input
+                        id="group-name"
+                        value={groupName}
+                        onChange={(e) => setGroupName(e.target.value)}
+                        placeholder="Ex: Projeto Backbone"
+                      />
+                    </div>
+                    <div className="grid gap-2 min-h-0">
+                      <label className="text-sm font-medium">Participantes</label>
+                      <div className="min-h-0 border rounded-md">
+                        <ScrollArea className="h-[200px] p-2">
+                          {contactList.map((contact) => (
+                            <div key={contact.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
+                              <Checkbox
+                                id={`g-contact-${contact.id}`}
+                                checked={selectedContactsForGroup.includes(contact.id)}
+                                onCheckedChange={() => toggleContactSelection(contact.id)}
+                              />
+                              <label
+                                htmlFor={`g-contact-${contact.id}`}
+                                className="text-sm font-medium flex items-center gap-2 cursor-pointer w-full"
+                              >
+                                <Avatar className="h-6 w-6">
+                                  <AvatarImage src={contact.avatar_url || undefined} alt={contact.username} />
+                                  <AvatarFallback>{contact.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                                {contact.username}
+                              </label>
+                            </div>
+                          ))}
+                        </ScrollArea>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="border-t bg-background/60 px-4 py-4 sm:px-6">
                   <Button variant="outline" onClick={() => setIsGroupDialogOpen(false)}>Cancelar</Button>
                   <Button onClick={() => createGroupMutation.mutate()} disabled={createGroupMutation.isPending}>
                     {createGroupMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

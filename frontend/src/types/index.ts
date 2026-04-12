@@ -13,14 +13,26 @@ export interface User {
   first_name?: string;
   last_name?: string;
   groups: string[];
+  crm_groups?: number[];
   role?: number;
   role_details?: Role;
   is_superuser?: boolean;
+  is_staff?: boolean;
+  is_active?: boolean;
   avatar?: string | null;
   avatar_url?: string | null;
   bio?: string | null;
   status: 'online' | 'busy' | 'offline';
   company?: number | Company;
+  last_login?: string | null;
+  date_joined?: string;
+  last_seen?: string | null;
+}
+
+export interface CRMGroup {
+  id: number
+  name: string
+  slug: string
 }
 
 export interface Contact {
@@ -180,7 +192,7 @@ export interface Article {
   excerpt?: string;
   is_public?: boolean; // Visibility control: public (true) or private (false)
   published_at?: string;
-  status: 'draft' | 'pending' | 'published' | 'rejected';
+  status: 'draft' | 'pending' | 'published' | 'rejected' | 'scheduled';
 
   author: number; // ID
   category: number | null; // ID

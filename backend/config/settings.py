@@ -146,12 +146,14 @@ SIMPLE_JWT = {
 
 # Health check behavior in development
 HEALTH_IGNORE_REDIS = env.bool("HEALTH_IGNORE_REDIS", default=False)
+LICENSING_ENFORCE = env.bool("LICENSING_ENFORCE", default=False)
+WEBHOOKS_ALLOW_PRIVATE_ENDPOINTS = env.bool("WEBHOOKS_ALLOW_PRIVATE_ENDPOINTS", default=False)
 
 SENTRY_DSN = env("SENTRY_DSN", default="")
 if SENTRY_DSN and not TESTING:
     import sentry_sdk
-    from sentry_sdk.integrations.django import DjangoIntegration
     from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.django import DjangoIntegration
     from sentry_sdk.integrations.redis import RedisIntegration
 
     sentry_sdk.init(
@@ -212,6 +214,8 @@ CSRF_TRUSTED_ORIGINS = env.list(
         "https://api.projetoravenna.cloud",
         "http://192.168.1.121:3005",
         "http://192.168.1.121:8005",
+        "http://192.168.29.69:3005",
+        "http://192.168.29.69:8005",
         "http://localhost:3000",
         "http://localhost:3005",
         "http://localhost:8005",
@@ -232,6 +236,7 @@ ALLOWED_HOSTS = env.list(
         "backbone_backend",
         "backbone_frontend",
         "192.168.1.121",
+        "192.168.29.69",
         "localhost",
         "127.0.0.1",
     ],

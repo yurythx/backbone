@@ -1,7 +1,19 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import CRMSavedView, Column, Contact, Deal, DealActivity, Pipeline, Stage, get_column_semantic_defaults
+from .models import (
+    Column,
+    Contact,
+    CRMGroup,
+    CRMSavedView,
+    Deal,
+    DealActivity,
+    DealAttachment,
+    IntegrationInboundEvent,
+    Pipeline,
+    Stage,
+    get_column_semantic_defaults,
+)
 
 User = get_user_model()
 
@@ -37,6 +49,33 @@ class DealActivitySerializer(serializers.ModelSerializer):
         model = DealActivity
         fields = "__all__"
         read_only_fields = ["id", "company", "deal", "actor", "created_at"]
+
+
+class DealAttachmentSerializer(serializers.ModelSerializer):
+    media_file_url = serializers.CharField(source="media.file.url", read_only=True)
+    media_file_type = serializers.CharField(source="media.file_type", read_only=True)
+    media_file_size = serializers.IntegerField(source="media.file_size", read_only=True)
+    media_title = serializers.CharField(source="media.title", read_only=True)
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+
+    class Meta:
+        model = DealAttachment
+        fields = [
+            "id",
+            "deal",
+            "media",
+            "media_file_url",
+            "media_file_type",
+            "media_file_size",
+            "media_title",
+            "kind",
+            "phase",
+            "caption",
+            "created_by",
+            "created_by_username",
+            "created_at",
+        ]
+        read_only_fields = fields
 
 
 class ContactSerializer(serializers.ModelSerializer):
@@ -150,6 +189,32 @@ class PipelineSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["id", "company"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        company = getattr(request, "company", None) if request else None
+        if company is not None:
+            self.fields["groups"].queryset = CRMGroup.all_objects.filter(company=company)
+
+    def validate(self, attrs):
+        visibility = attrs.get("visibility", getattr(self.instance, "visibility", "company"))
+        groups = attrs.get("groups")
+        if groups is None and self.instance is not None:
+            groups = getattr(self.instance, "groups", None).all() if hasattr(self.instance, "groups") else None
+        if visibility == "group" and not groups:
+            raise serializers.ValidationError({"groups": "Selecione ao menos um grupo para pipelines com visibilidade por grupo."})
+        return attrs
+
+
+class CRMGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CRMGroup
+        fields = ["id", "name", "slug"]
+        read_only_fields = ["id"]
+        extra_kwargs = {
+            "slug": {"required": False, "allow_blank": True},
+        }
+
 
 class CRMSavedViewSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source="owner.username", read_only=True)
@@ -164,7 +229,9 @@ class CRMSavedViewSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         company = getattr(request, "company", None) if request else None
         if company is not None:
-            self.fields["pipeline"].queryset = Pipeline.all_objects.filter(company=company)
+            from .services import get_accessible_pipelines
+
+            self.fields["pipeline"].queryset = get_accessible_pipelines(company=company, user=getattr(request, "user", None))
 
     def validate_filters(self, value):
         return value if isinstance(value, dict) else {}
@@ -219,6 +286,8 @@ class DealSerializer(serializers.ModelSerializer):
     column_title = serializers.CharField(source="column.title", read_only=True)
     column_data = ColumnSummarySerializer(source="column", read_only=True)
     activities = DealActivitySerializer(many=True, read_only=True)
+    attachments = DealAttachmentSerializer(many=True, read_only=True)
+    messenger_conversation = serializers.IntegerField(source="messenger_conversation_id", read_only=True)
     owner = serializers.PrimaryKeyRelatedField(queryset=User.all_objects.none(), required=False)
     tecnico_responsavel = serializers.PrimaryKeyRelatedField(queryset=User.all_objects.none(), required=False, allow_null=True)
 
@@ -239,8 +308,16 @@ class DealSerializer(serializers.ModelSerializer):
             company = getattr(self.instance, "company", None)
 
         if company is not None:
-            self.fields["owner"].queryset = User.all_objects.filter(company=company)
-            self.fields["tecnico_responsavel"].queryset = User.all_objects.filter(company=company)
+            # Usuarios da empresa + Superusuarios (Suporte Global)
+            from django.db.models import Q
+            global_staff_q = Q(company=company) | Q(is_superuser=True)
+            self.fields["owner"].queryset = User.all_objects.filter(global_staff_q)
+            self.fields["tecnico_responsavel"].queryset = User.all_objects.filter(global_staff_q)
+            from .services import get_accessible_pipelines
+
+            allowed_pipelines = get_accessible_pipelines(company=company, user=getattr(request, "user", None))
+            self.fields["stage"].queryset = Stage.all_objects.filter(company=company, pipeline__in=allowed_pipelines)
+            self.fields["column"].queryset = Column.all_objects.filter(company=company, pipeline__in=allowed_pipelines)
 
         if not should_include_legacy_stage_fields(self.context) and not hasattr(self, "initial_data"):
             self.fields.pop("stage", None)
@@ -371,3 +448,138 @@ class IntegrationSyncCardSerializer(serializers.Serializer):
             attrs["contact"] = contact
 
         return attrs
+
+
+class IntegrationGLPITicketWebhookSerializer(serializers.Serializer):
+    ticket = serializers.DictField(required=False)
+
+    ticket_id = serializers.CharField(max_length=255, required=False)
+    external_id = serializers.CharField(max_length=255, required=False)
+
+    title = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    priority = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    priority_level = serializers.IntegerField(required=False, allow_null=True)
+
+    requester = serializers.DictField(required=False)
+    custom_fields = serializers.JSONField(required=False)
+
+    pipeline_id = serializers.IntegerField(required=False, allow_null=True)
+    column_id = serializers.IntegerField(required=False, allow_null=True)
+    owner_id = serializers.IntegerField(required=False, allow_null=True)
+    tecnico_responsavel_id = serializers.IntegerField(required=False, allow_null=True)
+    contact_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def _normalize_priority(self, raw_priority, raw_level):
+        if isinstance(raw_priority, str) and raw_priority.upper() in {"LOW", "MEDIUM", "HIGH", "URGENT"}:
+            return raw_priority.upper()
+        if raw_level is None:
+            return "MEDIUM"
+        try:
+            level = int(raw_level)
+        except (TypeError, ValueError):
+            return "MEDIUM"
+        if level <= 2:
+            return "LOW"
+        if level == 3:
+            return "MEDIUM"
+        if level == 4:
+            return "HIGH"
+        return "URGENT"
+
+    def validate(self, attrs):
+        ticket = attrs.get("ticket") or {}
+
+        ticket_id = attrs.get("ticket_id") or ticket.get("id") or ticket.get("ticket_id")
+        if ticket_id in (None, ""):
+            raise serializers.ValidationError({"ticket_id": "Informe o ID do chamado (ticket_id)."})
+
+        title = attrs.get("title") or ticket.get("name") or ticket.get("title") or ""
+        if not str(title).strip():
+            raise serializers.ValidationError({"title": "Informe o título do chamado (title)."})
+
+        description = attrs.get("description")
+        if description is None:
+            description = ticket.get("content") or ticket.get("description")
+
+        raw_priority = attrs.get("priority") or ticket.get("priority")
+        raw_level = attrs.get("priority_level") or ticket.get("urgency") or ticket.get("priority_level")
+
+        attrs["ticket_id"] = str(ticket_id)
+        attrs["external_id"] = attrs.get("external_id") or f"glpi:{attrs['ticket_id']}"
+        attrs["title"] = str(title).strip()
+        attrs["description"] = description
+        attrs["integration_source"] = "glpi"
+        attrs["priority"] = self._normalize_priority(raw_priority, raw_level)
+
+        requester = attrs.get("requester") or ticket.get("requester") or {}
+        if requester and isinstance(requester, dict):
+            attrs["requester"] = requester
+
+        custom_fields = attrs.get("custom_fields")
+        if not isinstance(custom_fields, dict):
+            custom_fields = {}
+        if ticket and isinstance(ticket, dict):
+            custom_fields.setdefault("glpi", {})
+            if isinstance(custom_fields["glpi"], dict):
+                for k in ("url", "status", "category", "type", "itilcategories_id"):
+                    if k in ticket and k not in custom_fields["glpi"]:
+                        custom_fields["glpi"][k] = ticket.get(k)
+        if requester and isinstance(requester, dict):
+            custom_fields.setdefault("requester", requester)
+        attrs["custom_fields"] = custom_fields
+
+        return attrs
+
+
+class CRMIntegrationPipelineOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Pipeline
+        fields = ["id", "name"]
+
+
+class CRMIntegrationColumnOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Column
+        fields = ["id", "pipeline", "title", "order", "marks_done"]
+
+
+class CRMIntegrationUserOptionSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "display_name"]
+
+    def get_display_name(self, obj):
+        full_name = (obj.get_full_name() or "").strip()
+        return full_name or obj.username
+
+
+class CRMIntegrationContactOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = ["id", "name", "email"]
+
+
+class CRMIntegrationInboundEventSerializer(serializers.ModelSerializer):
+    processed_deal_id = serializers.IntegerField(source="processed_deal.id", read_only=True)
+    processed_deal_title = serializers.CharField(source="processed_deal.title", read_only=True)
+    replayed_from_id = serializers.IntegerField(source="replayed_from.id", read_only=True)
+
+    class Meta:
+        model = IntegrationInboundEvent
+        fields = [
+            "id",
+            "source",
+            "event_type",
+            "external_id",
+            "status",
+            "response_status_code",
+            "error",
+            "replayed_from_id",
+            "processed_deal_id",
+            "processed_deal_title",
+            "created_at",
+        ]

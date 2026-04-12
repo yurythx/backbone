@@ -5,6 +5,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import Invitation, Role
 from apps.core.models import Company
+from apps.crm.models import CRMGroup
 from apps.licensing.models import Feature, License, Plan, PlanFeature
 
 User = get_user_model()
@@ -49,3 +50,35 @@ class InvitationFlowTest(APITestCase):
         }
         res2 = self.client.post("/api/accounts/invitations/accept/", payload, format="json")
         self.assertEqual(res2.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invitation_assigns_crm_groups_on_accept(self):
+        group = CRMGroup.all_objects.create(company=self.company, name="Suporte", slug="suporte")
+        self.assertTrue(CRMGroup.all_objects.filter(id=group.id, company=self.company).exists())
+        res = self.client.post(
+            "/api/accounts/invitations/",
+            {"email": "groups@corp.com", "role": self.role.id, "crm_groups": [group.id]},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        inv = Invitation.objects.latest("created_at")
+        self.assertEqual(
+            list(inv.crm_groups.through.objects.filter(invitation_id=inv.id).values_list("crmgroup_id", flat=True)),
+            [group.id],
+        )
+
+        self.client.logout()
+        payload = {
+            "token": inv.token,
+            "first_name": "Group",
+            "last_name": "User",
+            "password": "secretpass",
+            "confirm_password": "secretpass",
+        }
+        res2 = self.client.post("/api/accounts/invitations/accept/", payload, format="json")
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+
+        created = User.all_objects.get(email="groups@corp.com")
+        self.assertEqual(
+            list(created.crm_groups.through.objects.filter(user_id=created.id).values_list("crmgroup_id", flat=True)),
+            [group.id],
+        )

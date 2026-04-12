@@ -16,6 +16,17 @@ export interface CalendarEvent {
   original_event_id?: number
 }
 
+function ensureIsoDateTime(value: string | undefined) {
+  if (!value) return value
+  const trimmed = value.trim()
+  if (!trimmed) return value
+  const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(trimmed)
+  if (hasTimezone) return trimmed
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) return trimmed
+  return date.toISOString()
+}
+
 export function useCalendar(startStr?: string, endStr?: string) {
   const queryClient = useQueryClient()
 
@@ -35,7 +46,11 @@ export function useCalendar(startStr?: string, endStr?: string) {
   // Create Event
   const createEvent = useMutation({
     mutationFn: async (newEvent: Partial<CalendarEvent>) => {
-      const response = await api.post('/api/calendar/events/', newEvent)
+      const response = await api.post('/api/calendar/events/', {
+        ...newEvent,
+        start_datetime: ensureIsoDateTime(newEvent.start_datetime),
+        end_datetime: ensureIsoDateTime(newEvent.end_datetime),
+      })
       return response.data
     },
     onSuccess: () => {
@@ -70,7 +85,11 @@ export function useCalendar(startStr?: string, endStr?: string) {
            throw new Error("Cannot update recurring event instance without original ID")
       }
 
-      const response = await api.patch(`/api/calendar/events/${realId}/`, data)
+      const response = await api.patch(`/api/calendar/events/${realId}/`, {
+        ...data,
+        start_datetime: ensureIsoDateTime(data.start_datetime),
+        end_datetime: ensureIsoDateTime(data.end_datetime),
+      })
       return response.data
     },
     onSuccess: () => {

@@ -247,7 +247,7 @@ export function RoleList() {
             </div>
 
             <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-3xl p-0 border-none shadow-2xl">
+                <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[620px] max-h-[calc(100vh-1.5rem)] overflow-y-auto overflow-x-hidden rounded-3xl p-0 border-none shadow-2xl">
                     <RoleForm
                         key={editingRole ? `edit-${editingRole.id}` : 'create-new'}
                         initialData={editingRole}

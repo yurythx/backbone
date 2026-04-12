@@ -3,6 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
     Table,
     TableBody,
@@ -34,7 +36,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import type { User as UserType, Role as RoleType } from "@/types"
+import type { CRMGroup, User as UserType, Role as RoleType } from "@/types"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermission } from "@/hooks/use-permission"
 
@@ -43,12 +45,25 @@ interface UserListProps {
     initialDialog?: 'create' | 'invite' | null
 }
 
+function parseListResponse<T>(data: unknown): T[] {
+    if (Array.isArray(data)) return data as T[]
+    if (typeof data === "object" && data !== null && "results" in data) {
+        const results = (data as { results?: unknown }).results
+        return Array.isArray(results) ? (results as T[]) : []
+    }
+    return []
+}
+
 export function UserList({ onEdit, initialDialog }: UserListProps) {
     const [isUserFormOpen, setIsUserFormOpen] = useState(false)
     const [isInviteFormOpen, setIsInviteFormOpen] = useState(false)
     const [editingUser, setEditingUser] = useState<UserType | null>(null)
     const [userToDelete, setUserToDelete] = useState<UserType | null>(null)
     const [inviteToCancel, setInviteToCancel] = useState<Invite | null>(null)
+    const [search, setSearch] = useState("")
+    const [roleFilter, setRoleFilter] = useState<string>("all")
+    const [activeFilter, setActiveFilter] = useState<"active" | "inactive" | "all">("active")
+    const [crmGroupFilter, setCrmGroupFilter] = useState<string>("all")
     const queryClient = useQueryClient()
     // A8: obter usuário atual via hook (não localStorage)
     const { user: currentUser } = useAuth()
@@ -60,15 +75,21 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
         id: number
         email: string
         role_name: string
+        crm_groups?: number[]
         status: 'pending' | 'accepted' | 'expired' | 'canceled'
     }
 
     const { data: users } = useQuery<UserType[]>({
-        queryKey: ['users'],
+        queryKey: ['users', search, roleFilter, activeFilter],
         queryFn: async () => {
-            const res = await api.get<UserType[] | { results: UserType[] }>('/api/accounts/users/')
-            const data = Array.isArray(res.data) ? res.data : (res.data.results || [])
-            return Array.isArray(data) ? data : []
+            const res = await api.get<UserType[] | { results: UserType[] }>('/api/accounts/users/', {
+                params: {
+                    q: search.trim() || undefined,
+                    role: roleFilter !== "all" ? roleFilter : undefined,
+                    active: activeFilter === "all" ? undefined : activeFilter === "active" ? "true" : "false",
+                },
+            })
+            return parseListResponse<UserType>(res.data)
         },
         enabled: canManageUsers,
     })
@@ -107,6 +128,19 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
         }
     })
 
+    const resendInviteMutation = useMutation({
+        mutationFn: async (id: number) => {
+            await api.post(`/api/accounts/invitations/${id}/resend/`)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['invites'] })
+            notify.success("Convite reenviado")
+        },
+        onError: (error: unknown) => {
+            notify.error("Erro ao reenviar convite", error)
+        }
+    })
+
     const deleteUserMutation = useMutation({
         mutationFn: async (id: number) => {
             await api.delete(`/api/accounts/users/${id}/`)
@@ -121,6 +155,26 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
     })
 
     const currentUserFormatted = currentUser
+
+    const { data: crmGroups = [] } = useQuery<CRMGroup[]>({
+        queryKey: ["crm-groups"],
+        queryFn: async () => {
+            const res = await api.get<CRMGroup[] | { results: CRMGroup[] }>("/api/crm/groups/")
+            return parseListResponse<CRMGroup>(res.data)
+        },
+        staleTime: 30_000,
+        enabled: canManageUsers,
+    })
+
+    const crmGroupById = new Map(crmGroups.map((group) => [group.id, group]))
+
+    const filteredUsers = safeUsers.filter((user) => {
+        if (crmGroupFilter === "all") return true
+        const groupId = Number(crmGroupFilter)
+        if (!Number.isFinite(groupId)) return true
+        const ids = Array.isArray(user.crm_groups) ? user.crm_groups : []
+        return ids.includes(groupId)
+    })
 
     useEffect(() => {
         if (!canManageUsers) return
@@ -163,10 +217,57 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                 </div>
             </div>
 
+            <div className="rounded-2xl border bg-card shadow-sm p-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                    <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Buscar por nome, username ou email..."
+                        className="glass"
+                    />
+                    <Select value={roleFilter} onValueChange={setRoleFilter}>
+                        <SelectTrigger className="glass">
+                            <SelectValue placeholder="Papel" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos os papéis</SelectItem>
+                            {safeRoles.map((role) => (
+                                <SelectItem key={role.id} value={String(role.id)}>
+                                    {role.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={crmGroupFilter} onValueChange={setCrmGroupFilter}>
+                        <SelectTrigger className="glass">
+                            <SelectValue placeholder="CRM • Grupo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos os grupos</SelectItem>
+                            {crmGroups.map((group) => (
+                                <SelectItem key={group.id} value={String(group.id)}>
+                                    {group.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={activeFilter} onValueChange={(value) => setActiveFilter(value as typeof activeFilter)}>
+                        <SelectTrigger className="glass">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="active">Ativos</SelectItem>
+                            <SelectItem value="inactive">Bloqueados</SelectItem>
+                            <SelectItem value="all">Todos</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
             <Tabs defaultValue="active" className="w-full">
                 <TabsList className="bg-muted/50 p-1 rounded-xl mb-4">
                     <TabsTrigger value="active" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-6">
-                        Membros Ativos ({safeUsers.length})
+                        Membros ({filteredUsers.length})
                     </TabsTrigger>
                     <TabsTrigger value="pending" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-6">
                         Convites Pendentes ({safeInvites.filter((i: Invite) => i && i.status === 'pending').length})
@@ -176,7 +277,7 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                 <TabsContent value="active">
                     <div className="rounded-2xl border bg-card shadow-sm">
                         <div className="sm:hidden p-4 space-y-3">
-                            {safeUsers.length > 0 ? safeUsers.map((user: UserType) => (
+                            {filteredUsers.length > 0 ? filteredUsers.map((user: UserType) => (
                                 <div key={user.id} className="rounded-2xl border border-border/50 bg-background/60 p-4">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
@@ -187,6 +288,11 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                                 @{user.username} · {user.email}
                                             </div>
                                             <div className="mt-2 flex flex-wrap gap-2">
+                                                {user.is_active === false && (
+                                                    <Badge variant="destructive" className="rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                        Bloqueado
+                                                    </Badge>
+                                                )}
                                                 {user.is_superuser && (
                                                     <Badge variant="default" className="gap-1.5 bg-indigo-600 text-white border-none rounded-lg text-[10px] font-bold uppercase tracking-wider">
                                                         <ShieldCheck className="h-3 w-3" aria-hidden="true" />
@@ -200,6 +306,11 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                                     </Badge>
                                                 ) : !user.is_superuser && (
                                                     <span className="text-xs text-muted-foreground italic">Sem papel definido</span>
+                                                )}
+                                                {Array.isArray(user.crm_groups) && user.crm_groups.length > 0 && (
+                                                    <Badge variant="secondary" className="rounded-lg text-[10px] font-medium">
+                                                        CRM: {user.crm_groups.length}
+                                                    </Badge>
                                                 )}
                                             </div>
                                             <div className="mt-2">
@@ -276,7 +387,7 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {safeUsers.length > 0 ? safeUsers.map((user: UserType) => (
+                                {filteredUsers.length > 0 ? filteredUsers.map((user: UserType) => (
                                     <TableRow key={user.id} className="group hover:bg-muted/30 transition-colors">
                                         <TableCell className="py-4">
                                             <div className="flex items-center gap-3">
@@ -292,6 +403,11 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                         <TableCell className="text-sm">{user.email}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-wrap gap-2">
+                                                {user.is_active === false && (
+                                                    <Badge variant="destructive" className="rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                        Bloqueado
+                                                    </Badge>
+                                                )}
                                                 {user.is_superuser && (
                                                     <Badge variant="default" className="gap-1.5 bg-indigo-600 text-white border-none rounded-lg text-[10px] font-bold uppercase tracking-wider">
                                                         <ShieldCheck className="h-3 w-3" aria-hidden="true" />
@@ -305,6 +421,16 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                                     </Badge>
                                                 ) : !user.is_superuser && (
                                                     <span className="text-xs text-muted-foreground italic">Sem papel definido</span>
+                                                )}
+                                                {Array.isArray(user.crm_groups) && user.crm_groups.length > 0 && (
+                                                    <Badge variant="secondary" className="rounded-lg text-[10px] font-medium">
+                                                        CRM: {user.crm_groups
+                                                            .slice(0, 2)
+                                                            .map((id) => crmGroupById.get(id)?.name)
+                                                            .filter(Boolean)
+                                                            .join(", ")}
+                                                        {user.crm_groups.length > 2 ? ` +${user.crm_groups.length - 2}` : ""}
+                                                    </Badge>
                                                 )}
                                             </div>
                                         </TableCell>
@@ -392,6 +518,16 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                                 <Badge variant="secondary" className="capitalize text-[10px] font-bold rounded-lg bg-orange-100 text-orange-700 border-none">
                                                     {invite.status}
                                                 </Badge>
+                                                {Array.isArray(invite.crm_groups) && invite.crm_groups.length > 0 ? (
+                                                    <Badge variant="secondary" className="rounded-lg text-[10px] font-medium">
+                                                        CRM: {invite.crm_groups
+                                                            .slice(0, 2)
+                                                            .map((id) => crmGroupById.get(id)?.name)
+                                                            .filter(Boolean)
+                                                            .join(", ")}
+                                                        {invite.crm_groups.length > 2 ? ` +${invite.crm_groups.length - 2}` : ""}
+                                                    </Badge>
+                                                ) : null}
                                             </div>
                                         </div>
                                         <DropdownMenu>
@@ -401,6 +537,13 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                                                <DropdownMenuItem
+                                                    onClick={() => resendInviteMutation.mutate(invite.id)}
+                                                    className="cursor-pointer"
+                                                    disabled={resendInviteMutation.isPending}
+                                                >
+                                                    <Mail className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" /> Reenviar
+                                                </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => setInviteToCancel(invite)} className="text-destructive focus:text-destructive cursor-pointer">
                                                     <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Cancelar Convite
                                                 </DropdownMenuItem>
@@ -430,9 +573,21 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                     <TableRow key={invite.id} className="group hover:bg-muted/30 transition-colors">
                                         <TableCell className="py-4 font-medium">{invite.email}</TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className="rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                                                {invite.role_name}
-                                            </Badge>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Badge variant="outline" className="rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                    {invite.role_name}
+                                                </Badge>
+                                                {Array.isArray(invite.crm_groups) && invite.crm_groups.length > 0 ? (
+                                                    <Badge variant="secondary" className="rounded-lg text-[10px] font-medium">
+                                                        CRM: {invite.crm_groups
+                                                            .slice(0, 2)
+                                                            .map((id) => crmGroupById.get(id)?.name)
+                                                            .filter(Boolean)
+                                                            .join(", ")}
+                                                        {invite.crm_groups.length > 2 ? ` +${invite.crm_groups.length - 2}` : ""}
+                                                    </Badge>
+                                                ) : null}
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant="secondary" className="capitalize text-[10px] font-bold rounded-lg bg-orange-100 text-orange-700 border-none">
@@ -447,6 +602,13 @@ export function UserList({ onEdit, initialDialog }: UserListProps) {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                                                    <DropdownMenuItem
+                                                        onClick={() => resendInviteMutation.mutate(invite.id)}
+                                                        className="cursor-pointer"
+                                                        disabled={resendInviteMutation.isPending}
+                                                    >
+                                                        <Mail className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" /> Reenviar
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => setInviteToCancel(invite)} className="text-destructive focus:text-destructive cursor-pointer">
                                                         <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Cancelar Convite
                                                     </DropdownMenuItem>

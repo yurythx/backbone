@@ -4,7 +4,14 @@
 
 ---
 
-## 🚀 Início Rápido (Deploy Oficial)
+## � Documentação
+
+- Visão geral (índice): [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)
+- Capacidades do produto (features): [docs/FEATURES.md](docs/FEATURES.md)
+- Deploy com Docker (dev e produção): [docs/DEPLOY_DOCKER.md](docs/DEPLOY_DOCKER.md)
+- Cloudflare Tunnel (produção): [ops/DEPLOY_CLOUDFLARE.md](ops/DEPLOY_CLOUDFLARE.md)
+
+## �🚀 Início Rápido (Deploy Oficial)
 
 A forma oficial e mais rápida de colocar o Backbone em produção é utilizando o nosso script de automação.
 
@@ -23,6 +30,8 @@ chmod +x scripts/deploy.sh
 ./scripts/deploy.sh
 ```
 
+Se você estiver no Windows ou preferir um deploy manual, siga: [docs/DEPLOY_DOCKER.md](docs/DEPLOY_DOCKER.md).
+
 ### 🌍 Acesso Pós-Deploy
 *   **Frontend**: `https://projetoravenna.cloud`
 *   **Backend API**: `https://api.projetoravenna.cloud`
@@ -33,6 +42,8 @@ Para detalhes sobre a configuração do Cloudflare Tunnel, veja o guia: [Manual 
 ---
 
 ## ✨ Funcionalidades
+
+Para uma lista completa e atualizada: [docs/FEATURES.md](docs/FEATURES.md).
 
 ### 🏢 Multi-Tenancy & White-Label
 - **Isolamento de Empresas**: Separação completa de dados por cliente.
@@ -63,6 +74,7 @@ Para detalhes sobre a configuração do Cloudflare Tunnel, veja o guia: [Manual 
 - **Autenticação Segura**: JWT em cookies HttpOnly.
 - **Autenticação LDAP**: Integração corporativa multi-tenant.
 - **RBAC (Controle de Acesso)**: Permissões granulares baseadas em papéis, com suporte a wildcard (`*`).
+- **Grupos CRM**: Separação adicional de acesso em pipelines por grupos (além do tenant).
 - **Onboarding**: Fluxo guiado para novas empresas.
 
 ### 💳 Licenciamento & Monetização
@@ -117,11 +129,13 @@ Se você deseja rodar o projeto para desenvolvimento:
 
 ```bash
 # Usando Docker Compose de Dev
-docker-compose up -d --build
+docker compose up -d --build
 
 # Backend disponível em: http://localhost:8005
 # Frontend disponível em: http://localhost:3005
 ```
+
+Para passo a passo com seed/migrações e troubleshooting: [docs/DEPLOY_DOCKER.md](docs/DEPLOY_DOCKER.md).
 
 ---
 
@@ -130,11 +144,39 @@ docker-compose up -d --build
 ```bash
 # Testes do Backend
 cd backend
-pytest
+python -m pytest
 
 # Testes do Frontend
 cd frontend
-npm test
+npm run test
+```
+
+## ✅ Qualidade (lint/typecheck)
+
+```bash
+# Backend (lint)
+cd backend
+python -m ruff check .
+
+# Frontend
+cd frontend
+npm run lint
+npx tsc -p tsconfig.json --noEmit
+```
+
+## 🧰 Bootstrap (primeira instalação)
+
+Em um banco vazio, o comando abaixo cria um tenant padrão (`raiz`) e usuários iniciais (inclui `suporte/suporte123`):
+
+```bash
+cd backend
+python manage.py seed_system
+```
+
+Para popular ambiente local com dados de exemplo:
+
+```bash
+python manage.py seed_local
 ```
 
 ---

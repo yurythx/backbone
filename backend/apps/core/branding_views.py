@@ -65,7 +65,6 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                         "logo": None,
                         "icon": None,
                         "theme_palette": "slate-gray",
-                        "custom_css": "",
                     }
                 )
 
@@ -85,7 +84,6 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
                     "logo": None,
                     "icon": None,
                     "theme_palette": "slate-gray",
-                    "custom_css": "",
                 }
             )
 
@@ -109,8 +107,11 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["put"])
     def update_current(self, request):
         """Atualiza branding do tenant atual (apenas admins)"""
-        if not request.user.is_staff:
-            return Response({"error": "Only admins can modify branding"}, status=status.HTTP_403_FORBIDDEN)
+        role = getattr(request.user, "role", None)
+        perms = getattr(role, "permissions", None)
+        allowed = request.user.is_superuser or request.user.is_staff or (isinstance(perms, list) and ("*" in perms or "admin.settings_manage" in perms))
+        if not allowed:
+            return Response({"error": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
 
         company = get_current_company()
         if not company:
@@ -131,8 +132,11 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="upload-logo")
     def upload_logo(self, request):
         """Upload de logo da empresa"""
-        if not request.user.is_staff:
-            return Response({"error": "Only admins can upload logo"}, status=status.HTTP_403_FORBIDDEN)
+        role = getattr(request.user, "role", None)
+        perms = getattr(role, "permissions", None)
+        allowed = request.user.is_superuser or request.user.is_staff or (isinstance(perms, list) and ("*" in perms or "admin.settings_manage" in perms))
+        if not allowed:
+            return Response({"error": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
 
         company = get_current_company()
         if not company:
@@ -157,8 +161,11 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="upload-icon")
     def upload_icon(self, request):
         """Upload de ícone/favicon da empresa"""
-        if not request.user.is_staff:
-            return Response({"error": "Only admins can upload icon"}, status=status.HTTP_403_FORBIDDEN)
+        role = getattr(request.user, "role", None)
+        perms = getattr(role, "permissions", None)
+        allowed = request.user.is_superuser or request.user.is_staff or (isinstance(perms, list) and ("*" in perms or "admin.settings_manage" in perms))
+        if not allowed:
+            return Response({"error": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
 
         company = get_current_company()
         if not company:
@@ -183,8 +190,12 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get", "put"])
     def email_config(self, request):
         """Gerencia configurações de SMTP do tenant atual"""
-        if request.method == "PUT" and not request.user.is_staff:
-            return Response({"error": "Only admins can modify email config"}, status=status.HTTP_403_FORBIDDEN)
+        if request.method == "PUT":
+            role = getattr(request.user, "role", None)
+            perms = getattr(role, "permissions", None)
+            allowed = request.user.is_superuser or request.user.is_staff or (isinstance(perms, list) and ("*" in perms or "admin.settings_manage" in perms))
+            if not allowed:
+                return Response({"error": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
 
         company = get_current_company()
         from .models import TenantEmailConfig
@@ -205,8 +216,11 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"])
     def test_smtp(self, request):
         """Testa as configurações de SMTP enviando um e-mail de teste"""
-        if not request.user.is_staff:
-            return Response({"error": "Only admins can test SMTP"}, status=status.HTTP_403_FORBIDDEN)
+        role = getattr(request.user, "role", None)
+        perms = getattr(role, "permissions", None)
+        allowed = request.user.is_superuser or request.user.is_staff or (isinstance(perms, list) and ("*" in perms or "admin.settings_manage" in perms))
+        if not allowed:
+            return Response({"error": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
 
         company = get_current_company()
         from .models import TenantEmailConfig
@@ -236,8 +250,8 @@ class TenantBrandingViewSet(viewsets.ModelViewSet):
             )
             email.send()
             return Response({"message": "E-mail de teste enviado com sucesso!"})
-        except Exception as e:
-            return Response({"error": f"Falha ao enviar e-mail: {e!s}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"error": "Falha ao enviar e-mail. Verifique host, porta e credenciais."}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["get"], permission_classes=[permissions.AllowAny], authentication_classes=[])
     def palettes(self, request):

@@ -76,22 +76,23 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                 setTimeout(() => setStep('details'), 300)
             }
         }}>
-            <DialogContent className="sm:max-w-[450px] overflow-hidden glass-morphism border-0 shadow-2xl p-0">
-                {step === 'details' && (
-                        <div className="p-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <DialogHeader>
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                                        <CreditCard className="h-5 w-5" aria-hidden="true" />
-                                    </div>
-                                    <div>
-                                        <DialogTitle className="text-xl font-black uppercase tracking-tighter">Finalizar Upgrade</DialogTitle>
-                                        <DialogDescription className="text-xs">Assinatura Segura processada pelo Backbone Pay</DialogDescription>
-                                    </div>
-                                </div>
-                            </DialogHeader>
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[480px] max-h-[calc(100vh-1.5rem)] overflow-hidden glass-morphism border-0 shadow-2xl p-0 grid grid-rows-[auto_1fr_auto]">
+                <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                            <CreditCard className="h-5 w-5" aria-hidden="true" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-xl font-black uppercase tracking-tighter">Finalizar Upgrade</DialogTitle>
+                            <DialogDescription className="text-xs">Assinatura Segura processada pelo Backbone Pay</DialogDescription>
+                        </div>
+                    </div>
+                </DialogHeader>
 
-                            <div className="mt-6 space-y-6">
+                <div className="min-h-0 overflow-y-auto">
+                    {step === 'details' ? (
+                        <div className="px-4 py-4 sm:px-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="space-y-6">
                                 <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-between">
                                     <div>
                                         <p className="text-[10px] font-black uppercase tracking-widest text-primary/70">Plano Selecionado</p>
@@ -140,21 +141,8 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                                     Ambiente seguro com criptografia de ponta a ponta
                                 </div>
                             </div>
-
-                            <DialogFooter className="mt-8">
-                                <Button variant="ghost" onClick={onClose} disabled={purchaseMutation.isPending}>Cancelar</Button>
-                                <Button
-                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 shadow-lg shadow-primary/20"
-                                    onClick={handleConfirm}
-                                    disabled={purchaseMutation.isPending}
-                                >
-                                    Confirmar Assinatura
-                                </Button>
-                            </DialogFooter>
                         </div>
-                    )}
-
-                    {step === 'processing' && (
+                    ) : step === 'processing' ? (
                         <div
                             className="p-12 flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in zoom-in duration-300"
                             role="status"
@@ -172,9 +160,7 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                                 <p className="text-sm text-muted-foreground">Validando dados do cartão e ativando sua licença...</p>
                             </div>
                         </div>
-                    )}
-
-                    {step === 'success' && (
+                    ) : (
                         <div className="p-12 flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in zoom-in duration-300">
                             <div className="h-20 w-20 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
                                 <CheckCircle2 className="h-12 w-12 text-green-500" aria-hidden="true" />
@@ -183,14 +169,34 @@ export function CheckoutModal({ plan, isOpen, onClose }: CheckoutModalProps) {
                                 <h3 className="text-2xl font-black uppercase tracking-tighter text-green-500">Sucesso Absoluto!</h3>
                                 <p className="text-sm text-muted-foreground">Seu plano foi atualizado com sucesso. O sistema está liberando seus novos recursos agora mesmo.</p>
                             </div>
-                            <Button
-                                className="mt-4 w-full bg-green-500 hover:bg-green-600 font-black uppercase tracking-widest"
-                                onClick={onClose}
-                            >
-                                Começar a Usar
-                            </Button>
                         </div>
                     )}
+                </div>
+
+                {step === "details" ? (
+                    <DialogFooter className="border-t bg-background/60 px-4 py-4 sm:px-6">
+                        <Button variant="outline" type="button" onClick={onClose} disabled={purchaseMutation.isPending}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 shadow-lg shadow-primary/20"
+                            onClick={handleConfirm}
+                            disabled={purchaseMutation.isPending}
+                        >
+                            Confirmar Assinatura
+                        </Button>
+                    </DialogFooter>
+                ) : (
+                    <DialogFooter className="border-t bg-background/60 px-4 py-4 sm:px-6">
+                        <Button
+                            className="w-full bg-green-500 hover:bg-green-600 font-black uppercase tracking-widest"
+                            onClick={onClose}
+                            disabled={purchaseMutation.isPending}
+                        >
+                            {step === "success" ? "Começar a Usar" : "Aguarde..."}
+                        </Button>
+                    </DialogFooter>
+                )}
             </DialogContent>
         </Dialog>
     )

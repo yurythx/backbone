@@ -2,6 +2,12 @@
 
 Este índice reúne apenas o que é necessário para operar e manter os módulos do produto.
 
+## Deploy e Operação
+
+- Deploy com Docker (dev e produção): [DEPLOY_DOCKER.md](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/docs/DEPLOY_DOCKER.md)
+- Cloudflare Tunnel (produção): [DEPLOY_CLOUDFLARE.md](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/ops/DEPLOY_CLOUDFLARE.md)
+- Capacidades do produto (features): [FEATURES.md](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/docs/FEATURES.md)
+
 ## Guias dos Módulos
 
 - Messenger: [MESSENGER.md](file:///c:/Users/yuri.menezes/Desktop/Projetos/backbone/docs/MESSENGER.md)

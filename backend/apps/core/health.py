@@ -26,9 +26,12 @@ def health_check(request):
         all_healthy = False
 
     redis_status = check_redis()
-    health["redis"] = "ok" if (redis_status["status"] == "healthy") else "error"
-    if health["redis"] != "ok":
-        all_healthy = False
+    if redis_status["status"] == "healthy":
+        health["redis"] = "ok"
+    else:
+        health["redis"] = "warning" if settings.DEBUG else "error"
+        if not settings.DEBUG:
+            all_healthy = False
 
     if getattr(settings, "USE_S3", False):
         minio_status = check_minio()

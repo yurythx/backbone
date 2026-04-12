@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Category, Transaction, MonthClosing, TransactionAttachment
+from .models import Category, MonthClosing, Transaction, TransactionAttachment
 
 
 class MonthClosingSerializer(serializers.ModelSerializer):

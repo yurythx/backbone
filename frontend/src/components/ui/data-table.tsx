@@ -133,14 +133,14 @@ function DataTableInner<TData, TValue>({
   return (
     <div className="w-full space-y-4">
       {/* Filters and Search */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {searchKey && (
-          <div className="flex items-center py-4">
+          <div className="flex items-center">
             <Input
               placeholder={searchPlaceholder}
               value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
               onChange={onSearchChange}
-              className="max-w-sm"
+              className="w-full sm:max-w-sm"
               role="searchbox"
               aria-label={searchPlaceholder || "Filtrar resultados"}
             />
@@ -149,7 +149,7 @@ function DataTableInner<TData, TValue>({
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto" aria-label="Alternar colunas visíveis">
+            <Button variant="outline" className="sm:ml-auto" aria-label="Alternar colunas visíveis">
               Columns <ChevronDown className="ml-2 h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
@@ -175,7 +175,7 @@ function DataTableInner<TData, TValue>({
       </div>
 
       {/* Table Content */}
-      <div className="rounded-md border bg-card">
+      <div className="rounded-md border bg-card overflow-x-auto">
         <Table aria-label="Tabela de resultados">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

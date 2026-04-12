@@ -10,9 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 
@@ -99,6 +98,16 @@ function normalizeColumnPayload(column: CRMColumn) {
   }
 }
 
+function getErrorDetail(error: unknown) {
+  if (typeof error !== "object" || error === null) return null
+  const response = (error as { response?: unknown }).response
+  if (typeof response !== "object" || response === null) return null
+  const data = (response as { data?: unknown }).data
+  if (typeof data !== "object" || data === null) return null
+  const detail = (data as { detail?: unknown }).detail
+  return typeof detail === "string" ? detail : null
+}
+
 export function ColumnGovernanceSheet({ pipeline, deals }: ColumnGovernanceSheetProps) {
   const queryClient = useQueryClient()
   const columns = useMemo(() => getPipelineColumns(pipeline), [pipeline])
@@ -167,9 +176,8 @@ export function ColumnGovernanceSheet({ pipeline, deals }: ColumnGovernanceSheet
       queryClient.invalidateQueries({ queryKey: ["crm-pipeline-overview", pipeline.id] })
       toast.success("Governança da coluna atualizada!")
     },
-    onError: (error: any) => {
-      const detail = error?.response?.data?.detail
-      toast.error(detail || "Não foi possível atualizar a governança da coluna.")
+    onError: (error: unknown) => {
+      toast.error(getErrorDetail(error) || "Não foi possível atualizar a governança da coluna.")
     },
   })
 
@@ -188,24 +196,24 @@ export function ColumnGovernanceSheet({ pipeline, deals }: ColumnGovernanceSheet
   )
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <Settings2 className="h-4 w-4" />
           Governança das colunas
         </Button>
-      </SheetTrigger>
+      </DialogTrigger>
 
-      <SheetContent side="right" className="w-full overflow-hidden p-0 sm:max-w-[760px]">
-        <SheetHeader className="border-b bg-muted/30 px-6 py-5 text-left">
-          <SheetTitle>Governança do board</SheetTitle>
-          <SheetDescription>
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[920px] max-h-[calc(100vh-1.5rem)] overflow-hidden p-0 glass grid grid-rows-[auto_1fr]">
+        <DialogHeader className="border-b bg-muted/30 px-4 py-4 text-left sm:px-6 sm:py-5">
+          <DialogTitle>Governança do board</DialogTitle>
+          <DialogDescription>
             Configure limite WIP, origens permitidas e obrigatoriedades operacionais das colunas do pipeline.
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <ScrollArea className="h-[calc(100vh-88px)]">
-          <div className="space-y-6 p-6">
+        <div className="min-h-0 h-full overflow-y-auto">
+          <div className="space-y-6 p-4 sm:p-6">
             <section className="rounded-2xl border bg-card p-5 shadow-sm">
               <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
                 <div className="space-y-2">
@@ -461,8 +469,8 @@ export function ColumnGovernanceSheet({ pipeline, deals }: ColumnGovernanceSheet
               </>
             )}
           </div>
-        </ScrollArea>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

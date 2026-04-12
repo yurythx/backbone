@@ -88,7 +88,7 @@ class CookieTokenObtainView(generics.GenericAPIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
-    
+
     from rest_framework.throttling import ScopedRateThrottle
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'login_attempt'

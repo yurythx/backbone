@@ -51,10 +51,12 @@ def publish_scheduled_articles():
     Periodic task to check for scheduled articles and publish them if their time has come.
     """
     from django.utils import timezone
+
+    from apps.accounts.models import User
+
     from .models import Article
     from .services import ArticleService
-    from apps.accounts.models import User
-    
+
     now = timezone.now()
     # Pega os artigos agendados que já passaram da hora
     scheduled_articles = Article.all_objects.filter(

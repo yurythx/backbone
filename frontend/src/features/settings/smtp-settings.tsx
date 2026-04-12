@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import axios from "axios"
 import { api } from "@/lib/axios"
 import { H3, P, Muted } from "@/components/ui/typography"
 import { Button } from "@/components/ui/button"
@@ -48,14 +47,12 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                         smtp_host: data.smtp_host ?? "",
                         smtp_port: data.smtp_port ?? 587,
                         smtp_user: data.smtp_user ?? "",
-                        smtp_password: data.smtp_password ?? "",
+                        smtp_password: "",
                         smtp_use_tls: data.smtp_use_tls ?? true,
                         from_email: data.from_email ?? ""
                     })
                 }
-            } catch (error) {
-                if (axios.isCancel(error)) return
-                console.error("Failed to fetch email config", error)
+            } catch {
             } finally {
                 if (!controller.signal.aborted) {
                     setIsLoading(false)
@@ -72,7 +69,11 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
     const handleSave = async () => {
         try {
             setIsLoading(true)
-            await api.put('/api/core/branding/email_config/', config)
+            const payload: Record<string, unknown> = { ...config }
+            if (!String(config.smtp_password || "").trim()) {
+                delete payload.smtp_password
+            }
+            await api.put('/api/core/branding/email_config/', payload)
             toast({
                 title: "Configurações salvas",
                 description: "As configurações de SMTP foram atualizadas com sucesso.",
@@ -171,7 +172,10 @@ export function SmtpSettings({ isOnboarding }: SmtpSettingsProps) {
                         type="number"
                         placeholder="587"
                         value={config.smtp_port}
-                        onChange={(e) => setConfig({ ...config, smtp_port: parseInt(e.target.value) })}
+                        onChange={(e) => {
+                            const parsed = Number(e.target.value)
+                            setConfig({ ...config, smtp_port: Number.isFinite(parsed) ? parsed : 587 })
+                        }}
                         className="rounded-xl h-12"
                     />
                 </div>
