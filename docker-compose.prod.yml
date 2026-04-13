@@ -130,7 +130,7 @@ services:
   # Garante que o bucket 'backbone-media' exista na inicialização.
   # ──────────────────────────────────────────────────────────
   createbuckets:
-    image: minio/mc:latest
+    image: minio/mc:RELEASE.2024-11-21T17-21-54Z
     container_name: backbone_minio_setup
     depends_on:
       minio:
@@ -273,9 +273,9 @@ services:
     cap_drop:
       - ALL
 
-    # Saúde: Verifica se o túnel está operacional
+    # Saúde: Verifica se o túmel está operacional via endpoint de métricas
     healthcheck:
-      test: [ "CMD", "/usr/bin/cloudflared", "--version" ]
+      test: ["CMD-SHELL", "curl -sf http://localhost:2000/metrics | grep -q 'cloudflared' || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

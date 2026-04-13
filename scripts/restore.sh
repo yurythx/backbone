@@ -4,7 +4,7 @@
 # Restores PostgreSQL database and MinIO storage from backup
 # Usage: ./restore.sh <backup_name>
 
-set -e  # Exit on error
+set -euo pipefail  # Exit on error, unset vars, pipe failures
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -29,18 +29,43 @@ log_warning() {
 if [ -z "$1" ]; then
     log_error "Usage: $0 <backup_name>"
     log_info "Available backups:"
-    ls -1 /backups | grep "backup_" || echo "  No backups found"
+    BACKUP_DIR="${BACKUP_DIR:-/backups}"
+    ls -1 "$BACKUP_DIR" | grep "backup_" || echo "  No backups found"
     exit 1
 fi
 
 BACKUP_NAME="$1"
-BACKUP_DIR="/backups/${BACKUP_NAME}"
+BACKUP_DIR="${BACKUP_DIR:-/backups}"
+BACKUP_DIR_FULL="${BACKUP_DIR}/${BACKUP_NAME}"
+
+# Detect env file
+ENV_FILE="${ENV_FILE:-.env.prod}"
+if [ ! -f "$ENV_FILE" ]; then
+    ENV_FILE=".env"
+fi
+
+# Carregar credenciais do env file
+DB_USER="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "backbone_user")"
+DB_NAME="$(awk -F= '/^POSTGRES_DB=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "backbone_prod")"
+MINIO_USER="$(awk -F= '/^MINIO_ROOT_USER=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "minioadmin")"
+MINIO_PASS="$(awk -F= '/^MINIO_ROOT_PASSWORD=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "minioadmin")"
+BUCKET_NAME="$(awk -F= '/^AWS_STORAGE_BUCKET_NAME=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "backbone-media")"
+
+# Detect compose command
+if docker compose version &>/dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+elif command -v docker-compose &>/dev/null; then
+    COMPOSE_CMD="docker-compose"
+else
+    log_error "Neither 'docker compose' nor 'docker-compose' found!"
+    exit 1
+fi
 
 # Check if backup exists
-if [ ! -d "$BACKUP_DIR" ]; then
-    log_error "Backup not found: ${BACKUP_DIR}"
+if [ ! -d "$BACKUP_DIR_FULL" ]; then
+    log_error "Backup not found: ${BACKUP_DIR_FULL}"
     log_info "Available backups:"
-    ls -1 /backups | grep "backup_" || echo "  No backups found"
+    ls -1 "${BACKUP_DIR}" | grep "backup_" || echo "  No backups found"
     exit 1
 fi
 
@@ -55,7 +80,7 @@ if [ "$confirmation" != "yes" ]; then
     exit 0
 fi
 
-cd "$BACKUP_DIR"
+cd "$BACKUP_DIR_FULL"
 
 # Show backup info
 if [ -f "backup_info.txt" ]; then
@@ -76,27 +101,24 @@ fi
 
 log_info "Found backup: ${POSTGRES_BACKUP}"
 
-if command -v docker-compose &> /dev/null; then
-    # Using docker-compose
-    gunzip -c "$POSTGRES_BACKUP" | docker-compose exec -T db psql -U postgres
-    
+if command -v docker &> /dev/null; then
+    if [ -n "${COMPOSE_CMD}" ]; then
+        gunzip -c "$POSTGRES_BACKUP" | $COMPOSE_CMD exec -T db psql -U "$DB_USER" -d "$DB_NAME"
+    else
+        CONTAINER_ID=$(docker ps --filter "name=backbone_db" --format "{{.ID}}" | head -n 1)
+        if [ -z "$CONTAINER_ID" ]; then
+            log_error "PostgreSQL container not found!"
+            exit 1
+        fi
+        gunzip -c "$POSTGRES_BACKUP" | docker exec -i $CONTAINER_ID psql -U "$DB_USER" -d "$DB_NAME"
+    fi
+
     if [ $? -eq 0 ]; then
         log_info "✓ PostgreSQL restore completed"
     else
         log_error "✗ PostgreSQL restore failed!"
         exit 1
     fi
-elif command -v docker &> /dev/null; then
-    # Using docker directly
-    CONTAINER_ID=$(docker ps --filter "name=backbone_db" --format "{{.ID}}" | head -n 1)
-    
-    if [ -z "$CONTAINER_ID" ]; then
-        log_error "PostgreSQL container not found!"
-        exit 1
-    fi
-    
-    gunzip -c "$POSTGRES_BACKUP" | docker exec -i $CONTAINER_ID psql -U postgres
-    log_info "✓ PostgreSQL restore completed"
 else
     log_error "Docker not found! Cannot restore database."
     exit 1
@@ -117,10 +139,10 @@ else
         tar -xzf "$MINIO_BACKUP"
         
         # Configure mc alias
-        mc alias set backbone-minio http://localhost:9000 minioadmin minioadmin 2>/dev/null || true
+        mc alias set backbone-minio http://localhost:9000 "$MINIO_USER" "$MINIO_PASS" 2>/dev/null || true
         
         # Mirror backup to bucket
-        mc mirror --overwrite minio_backup backbone-minio/backbone-media
+        mc mirror --overwrite minio_backup backbone-minio/${BUCKET_NAME}
         
         # Clean up
         rm -rf minio_backup
@@ -162,7 +184,7 @@ log_info "━━━━━━━━━━━━━━━━━━━━━━━�
 log_info "Restore completed successfully!"
 log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 log_warning "Reminder: You may need to restart services:"
-log_info "  docker-compose restart"
+log_info "  $COMPOSE_CMD restart"
 log_info ""
 log_warning "Verify data integrity before proceeding!"
 

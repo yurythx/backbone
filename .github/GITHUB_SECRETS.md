@@ -58,6 +58,6 @@ Configure o environment `production` com reviewer obrigatório:
 - [ ] `cloudflared` instalado e serviço rodando (`systemctl status cloudflared`)
 - [ ] DNS configurado no Cloudflare (CNAME apontando para o tunnel)
 - [ ] Primeiro deploy manual executado: `SKIP_BACKUP=1 ./scripts/deploy.sh`
-- [ ] Superusuário criado: `docker compose -f docker-compose.cloudflare.yml --env-file .env.prod exec backend python manage.py createsuperuser`
+- [ ] Superusuário criado: `docker compose -f docker-compose.prod.yml --env-file .env.prod exec backend python manage.py createsuperuser`
 - [ ] Health check respondendo: `curl http://localhost:8005/api/core/health/`
 - [ ] Site acessível em: `https://seudominio.com`

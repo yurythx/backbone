@@ -4,13 +4,26 @@
 # Backs up PostgreSQL database and MinIO storage
 # Usage: ./backup.sh [backup_name]
 
-set -e  # Exit on error
+set -euo pipefail  # Exit on error, unset vars, pipe failures
 
 # Configuration
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_NAME="${1:-backup_${TIMESTAMP}}"
+
+# Detect env file (prefer .env.prod, fallback to .env)
+ENV_FILE="${ENV_FILE:-.env.prod}"
+if [ ! -f "$ENV_FILE" ]; then
+    ENV_FILE=".env"
+fi
+
+# Carregar credenciais do env file
+DB_USER="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "backbone_user")"
+DB_NAME="$(awk -F= '/^POSTGRES_DB=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "backbone_prod")"
+MINIO_USER="$(awk -F= '/^MINIO_ROOT_USER=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "minioadmin")"
+MINIO_PASS="$(awk -F= '/^MINIO_ROOT_PASSWORD=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "minioadmin")"
+BUCKET_NAME="$(awk -F= '/^AWS_STORAGE_BUCKET_NAME=/{print $2}' "$ENV_FILE" 2>/dev/null | tr -d '"\r' | xargs || echo "backbone-media")"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -41,27 +54,31 @@ log_info "Backup directory: ${BACKUP_DIR}/${BACKUP_NAME}"
 # 1. Backup PostgreSQL
 log_info "Backing up PostgreSQL database..."
 
-if command -v docker-compose &> /dev/null; then
-    # Using docker-compose
-    docker-compose exec -T db pg_dumpall -U postgres | gzip > postgres_${TIMESTAMP}.sql.gz
-    
+if command -v docker &> /dev/null; then
+    # Prefer 'docker compose' (v2) over deprecated 'docker-compose' (v1)
+    if docker compose version &>/dev/null 2>&1; then
+        COMPOSE_CMD="docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
+    fi
+
+    if [ -n "${COMPOSE_CMD:-}" ]; then
+        $COMPOSE_CMD exec -T db pg_dump -U "$DB_USER" "$DB_NAME" | gzip > postgres_${TIMESTAMP}.sql.gz
+    else
+        CONTAINER_ID=$(docker ps --filter "name=backbone_db" --format "{{.ID}}" | head -n 1)
+        if [ -z "$CONTAINER_ID" ]; then
+            log_error "PostgreSQL container not found!"
+            exit 1
+        fi
+        docker exec -t $CONTAINER_ID pg_dump -U "$DB_USER" "$DB_NAME" | gzip > postgres_${TIMESTAMP}.sql.gz
+    fi
+
     if [ $? -eq 0 ]; then
         log_info "✓ PostgreSQL backup completed: postgres_${TIMESTAMP}.sql.gz"
     else
         log_error "✗ PostgreSQL backup failed!"
         exit 1
     fi
-elif command -v docker &> /dev/null; then
-    # Using docker directly
-    CONTAINER_ID=$(docker ps --filter "name=backbone_db" --format "{{.ID}}" | head -n 1)
-    
-    if [ -z "$CONTAINER_ID" ]; then
-        log_error "PostgreSQL container not found!"
-        exit 1
-    fi
-    
-    docker exec -t $CONTAINER_ID pg_dumpall -U postgres | gzip > postgres_${TIMESTAMP}.sql.gz
-    log_info "✓ PostgreSQL backup completed: postgres_${TIMESTAMP}.sql.gz"
 else
     log_error "Docker not found! Cannot backup database."
     exit 1
@@ -71,12 +88,11 @@ fi
 log_info "Backing up MinIO storage..."
 
 if command -v mc &> /dev/null; then
-    # Using MinIO client (mc)
-    # Configure mc alias if not exists
-    mc alias set backbone-minio http://localhost:9000 minioadmin minioadmin 2>/dev/null || true
+    # Configure mc alias
+    mc alias set backbone-minio http://localhost:9000 "$MINIO_USER" "$MINIO_PASS" 2>/dev/null || true
     
     # Mirror bucket to backup directory
-    mc mirror backbone-minio/backbone-media ./minio_backup
+    mc mirror backbone-minio/${BUCKET_NAME} ./minio_backup
     
     # Create tar.gz archive
     tar -czf minio_${TIMESTAMP}.tar.gz minio_backup
@@ -125,9 +141,10 @@ log_info "Total backup size: ${BACKUP_SIZE}"
 # 6. Clean old backups (retention policy)
 log_info "Cleaning old backups (retention: ${RETENTION_DAYS} days)..."
 
+# Contar ANTES de remover para o log ser correto
+REMOVED_COUNT=$(find "${BACKUP_DIR}" -maxdepth 1 -name "backup_*" -type d -mtime +${RETENTION_DAYS} | wc -l)
 find "${BACKUP_DIR}" -maxdepth 1 -name "backup_*" -type d -mtime +${RETENTION_DAYS} -exec rm -rf {} \; 2>/dev/null || true
 
-REMOVED_COUNT=$(find "${BACKUP_DIR}" -maxdepth 1 -name "backup_*" -type d -mtime +${RETENTION_DAYS} | wc -l)
 if [ "$REMOVED_COUNT" -gt 0 ]; then
     log_info "✓ Removed ${REMOVED_COUNT} old backup(s)"
 else

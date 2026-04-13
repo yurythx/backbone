@@ -34,8 +34,8 @@ cloudflared daemon ─── roteamento por hostname/path
    │
    └── /* (resto)                          →  localhost:3005 (Next.js)
 
-localhost:8005 → container backbone_backend (porta interna 8000)
-localhost:3005 → container backbone_frontend (porta interna 3000)
+localhost:8005 → container backbone_backend (porta interna 8005)
+localhost:3005 → container backbone_frontend (porta interna 3005)
 
 Serviços internos (invisíveis externamente):
   backbone_db     (PostgreSQL)

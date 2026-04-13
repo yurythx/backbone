@@ -7,7 +7,15 @@
 # ============================================================
 
 set -Eeuo pipefail
-# trap 'error_handler $LINENO' ERR
+
+# ── Error Handler ───────────────────────────────────────────
+error_handler() {
+    local line=$1
+    echo -e "\n${NEON_GREEN}${BOLD}   [FATAL] Erro na linha ${line}. Abortando deploy.${RESET}" >&2
+    echo -e "${DARK_GREEN}   Verifique os logs em ./logs/ para detalhes.${RESET}" >&2
+    exit 1
+}
+trap 'error_handler $LINENO' ERR
 
 # ── Cores Matrix (Verde Neon e Preto) ───────────────────────
 RESET='\033[0m'
@@ -87,6 +95,11 @@ if ! command -v git &> /dev/null; then
     exit 1
 fi
 
+if ! command -v curl &> /dev/null; then
+    echo -e "${NEON_GREEN}   [ERROR] curl não encontrado! Instale com: apt-get install -y curl${RESET}"
+    exit 1
+fi
+
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "${NEON_GREEN}   [ERROR] Arquivo $ENV_FILE não encontrado!${RESET}"
     exit 1
@@ -97,6 +110,7 @@ if ! $DC config > logs/compose_config.log 2>&1; then
     tail -n 20 logs/compose_config.log || true
     exit 1
 fi
+
 echo -e "${NEON_GREEN}   ✔ Sistema pronto para deploy${RESET}\n"
 
 # 1. Backup
@@ -105,7 +119,10 @@ mkdir -p ./backups
 BACKUP_FILE="./backups/backup_$(date +%F_%H-%M-%S).sql"
 
 # Tenta fazer backup apenas se o DB estiver rodando
-if $DC ps db 2>/dev/null | grep -q "Up"; then
+# Use SKIP_BACKUP=1 para o primeiro deploy (quando o banco ainda não existe)
+if [[ "${SKIP_BACKUP:-0}" == "1" ]]; then
+    echo -e "${DARK_GREEN}   ⚠ SKIP_BACKUP=1 detectado, backup ignorado (modo primeiro deploy).${RESET}\n"
+elif $DC ps db 2>/dev/null | grep -q "Up"; then
     DB_USER="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs || echo "backbone_user")"
     DB_NAME="$(awk -F= '/^POSTGRES_DB=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs || echo "backbone_prod")"
     
@@ -159,10 +176,10 @@ else
     simulate_loading "BUILDING IMAGES" 2
 fi
 
-# 3.1 Infraestrutura básica (DB e Redis)
+# 3.1 Infraestrutura básica (DB, Redis e MinIO)
 echo -e "${GRAY}   Iniciando infraestrutura básica...${RESET}"
-$DC up -d db redis >/dev/null 2>&1
-simulate_loading "INFRA: DB & REDIS" 4
+$DC up -d db redis minio >/dev/null 2>&1
+simulate_loading "INFRA: DB, REDIS & MINIO" 4
 
 # Aguarda DB ficar saudável
 echo -n "   Aguardando DB..."
@@ -184,6 +201,11 @@ if [[ "$DB_READY" -ne 1 ]]; then
     $DC logs db --tail=200 || true
     exit 1
 fi
+
+# Garante bucket do MinIO (serviço roda apenas uma vez e sai)
+echo -e "${GRAY}   Garantindo bucket do MinIO...${RESET}"
+$DC up -d createbuckets >/dev/null 2>&1
+simulate_loading "MINIO BUCKETS" 2
 
 # Garante usuário e banco consistentes (evita erros por whitespace/mismatch em .env)
 DB_USER_CHECK="$(awk -F= '/^POSTGRES_USER=/{print $2}' "$ENV_FILE" | tr -d '\"\r' | xargs)"
@@ -234,11 +256,16 @@ fi
 simulate_loading "DATABASE MIGRATIONS" 3
 echo -e "${NEON_GREEN}   ✔ Banco de dados sincronizado${RESET}\n"
 
-# 3.3 Subir Aplicação
+# 3.3 Arquivos estáticos (ANTES de subir o backend, para que já estejam disponíveis)
 echo -e "${WHITE}:: FASE 5: STARTUP DA APLICAÇÃO${RESET}"
+echo -n "   Coletando arquivos estáticos..."
+$DC run --rm backend python manage.py collectstatic --noinput > /dev/null 2>&1
+simulate_loading "STATIC FILES" 2
+echo -e "${NEON_GREEN}   ✔ Assets compilados${RESET}\n"
 
-# Subir tudo (Docker reinicia apenas o necessário)
-$DC up -d backend frontend cloudflared celery_worker celery_beat >/dev/null 2>&1
+# 3.4 Subir Aplicação
+# Subir aplicação (tunnel por último — depende de health do backend/frontend)
+$DC up -d backend celery_worker celery_beat frontend > /dev/null 2>&1
 simulate_loading "STARTING APP SERVICES" 5
 
 echo -e "${NEON_GREEN}   ✔ Todos os containers operacionais.${RESET}\n"
@@ -260,12 +287,29 @@ for i in {1..15}; do
     fi
 done
 
-# 5. Estáticos
+echo -n "   Aguardando Frontend..."
+for i in {1..30}; do
+    if curl -sf http://localhost:3005/api/health >/dev/null 2>&1; then
+        echo -e "${NEON_GREEN} [ONLINE]${RESET}"
+        break
+    fi
+    sleep 2
+    echo -n "."
+    if [ $i -eq 30 ]; then
+        echo -e "\n${NEON_GREEN}   [ERROR] Frontend não respondeu a tempo!${RESET}"
+        $DC logs frontend --tail=80
+        exit 1
+    fi
+done
+
+echo -e "${GRAY}   Iniciando Cloudflare Tunnel...${RESET}"
+$DC up -d cloudflared >/dev/null 2>&1
+simulate_loading "CLOUDFLARE TUNNEL" 2
+
+# 5. Finalização
 echo -e "${WHITE}:: FASE 7: FINALIZAÇÃO${RESET}"
-echo -n "   Coletando arquivos estáticos..."
-$DC exec -T backend python manage.py collectstatic --noinput >/dev/null 2>&1
-simulate_loading "STATIC FILES" 2
-echo -e "${NEON_GREEN}   ✔ Assets compilados${RESET}\n"
+echo -e "${NEON_GREEN}   ✔ Deploy realizado com sucesso!${RESET}"
+echo ""
 
 echo -e "${NEON_GREEN}${BOLD}DEPLOY CONCLUÍDO COM SUCESSO.${RESET}"
 echo -e "${DARK_GREEN}Siga o coelho branco...${RESET}"

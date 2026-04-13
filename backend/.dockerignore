@@ -5,8 +5,9 @@ __pycache__
 .Python
 env/
 venv/
+.venv/
 .env
-.venv
+.env.*
 pip-log.txt
 pip-delete-this-directory.txt
 .tox/
@@ -18,9 +19,22 @@ coverage.xml
 *.cover
 *.log
 .git
+.gitignore
 .mypy_cache
 .pytest_cache
+.ruff_cache
 .hypotheses
 db.sqlite3
 media/
 staticfiles/
+# Arquivos de desenvolvimento/debug — nunca devem ir para a imagem
+check_users.py
+generate_*.py
+*.txt
+celerybeat-schedule
+docs/
+scripts/
+README.md
+mypy_report.txt
+coverage_report/
+htmlcov/
